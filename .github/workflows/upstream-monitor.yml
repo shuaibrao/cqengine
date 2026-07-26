@@ -1,0 +1,98 @@
+name: Upstream monitor
+
+on:
+  schedule:
+    - cron: "29 6 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: upstream-monitor
+  cancel-in-progress: false
+
+jobs:
+  inspect:
+    name: Inspect original CQEngine upstream
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      issues: write
+
+    steps:
+      - name: Check out continuation history
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Compare with the original upstream
+        id: compare
+        env:
+          BASELINE: a06923bca69719c51c622543fa0c2d63e71e8fab
+        run: |
+          git fetch --no-tags --quiet https://github.com/npgall/cqengine.git master
+          if ! git merge-base --is-ancestor "$BASELINE" FETCH_HEAD; then
+            echo "the configured baseline is not an ancestor of upstream master" >&2
+            exit 1
+          fi
+
+          count=$(git rev-list --count "$BASELINE..FETCH_HEAD")
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+          echo "upstream_head=$(git rev-parse FETCH_HEAD)" >> "$GITHUB_OUTPUT"
+
+          {
+            echo "## Original upstream maintenance intake"
+            echo
+            echo "Automated comparison of the preserved CQEngine baseline against \`npgall/cqengine\`."
+            echo
+            echo "- Preserved baseline: \`$BASELINE\`"
+            echo "- Observed upstream head: \`$(git rev-parse FETCH_HEAD)\`"
+            echo "- Commits after the baseline: **$count**"
+            echo
+            echo "No code is imported by this workflow. Each change requires an independent review and implementation decision."
+            if [ "$count" -gt 0 ]; then
+              echo
+              echo "### Upstream commits"
+              echo
+              git log --reverse --format='- [`%h`](https://github.com/npgall/cqengine/commit/%H) %s' \
+                "$BASELINE..FETCH_HEAD" --max-count=100
+              if [ "$count" -gt 100 ]; then
+                echo
+                echo "Only the first 100 commits are listed; use the comparison link for the complete set."
+              fi
+              echo
+              echo "[Open the complete comparison](https://github.com/npgall/cqengine/compare/$BASELINE...master)"
+            fi
+          } > "$RUNNER_TEMP/upstream-intake.md"
+
+          cat "$RUNNER_TEMP/upstream-intake.md" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Open or update the maintenance intake issue
+        if: steps.compare.outputs.count != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_TITLE: "Maintenance: original upstream changes"
+          UPSTREAM_HEAD: ${{ steps.compare.outputs.upstream_head }}
+        run: |
+          issue_number=$(gh issue list \
+            --state open \
+            --search 'in:title "Maintenance: original upstream changes"' \
+            --json number,title \
+            --jq '.[] | select(.title == "Maintenance: original upstream changes") | .number' \
+            | head -n 1)
+
+          if [ -n "$issue_number" ]; then
+            if gh issue view "$issue_number" --json comments --jq '.comments[].body' \
+              | grep --fixed-strings --quiet "$UPSTREAM_HEAD"; then
+              echo "The open intake issue already records upstream head $UPSTREAM_HEAD." \
+                >> "$GITHUB_STEP_SUMMARY"
+            else
+              gh issue comment "$issue_number" --body-file "$RUNNER_TEMP/upstream-intake.md"
+            fi
+          else
+            gh issue create \
+              --title "$ISSUE_TITLE" \
+              --body-file "$RUNNER_TEMP/upstream-intake.md"
+          fi

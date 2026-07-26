@@ -1,0 +1,18 @@
+# Repository-wide fallback. More specific entries make sensitive review surfaces explicit.
+* @shuaibrao
+
+/.github/ @shuaibrao
+/.agent/ @shuaibrao
+/scripts/ @shuaibrao
+/build.gradle.kts @shuaibrao
+/settings.gradle.kts @shuaibrao
+/gradle.properties @shuaibrao
+/gradle/ @shuaibrao
+/config/ @shuaibrao
+/src/ @shuaibrao
+/benchmarks/ @shuaibrao
+/stress-tests/ @shuaibrao
+/LICENSE.txt @shuaibrao
+/THIRD-PARTY-NOTICES @shuaibrao
+/SECURITY.md @shuaibrao
+/RELEASING.md @shuaibrao

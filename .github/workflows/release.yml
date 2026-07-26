@@ -1,0 +1,376 @@
+name: Qualify and stage release
+
+on:
+  repository_dispatch:
+    types: [cqengine-release]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.event.client_payload.version }}
+  cancel-in-progress: false
+
+jobs:
+  qualify:
+    name: Authoritative qualification
+    runs-on: [self-hosted, linux, x64, cqengine-release]
+    timeout-minutes: 360
+    environment: release
+
+    steps:
+      - name: Check out the protected main commit
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+
+      - name: Validate release selection
+        env:
+          RELEASE_VERSION: ${{ github.event.client_payload.version }}
+          CONFIRM_VERSION: ${{ github.event.client_payload.confirm_version }}
+          CENTRAL_ACTION: ${{ github.event.client_payload.central_action }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          WORKFLOW_REF: ${{ github.ref }}
+          REPOSITORY: ${{ github.repository }}
+          ACTOR: ${{ github.actor }}
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
+          MACHINE_LABEL: ${{ github.event.client_payload.benchmark_machine_label }}
+        run: |
+          if [ "$REPOSITORY" != shuaibrao/cqengine ]; then
+            echo "releases are permitted only from shuaibrao/cqengine" >&2
+            exit 1
+          fi
+          if [ "$ACTOR" != "$REPOSITORY_OWNER" ]; then
+            echo "only the repository owner may request a release" >&2
+            exit 1
+          fi
+          if [ "$WORKFLOW_REF" != "refs/heads/$DEFAULT_BRANCH" ] || [ "$DEFAULT_BRANCH" != main ]; then
+            echo "release workflow must be dispatched from protected main" >&2
+            exit 1
+          fi
+          if [[ ! "$RELEASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z][0-9A-Za-z.-]*)?$ ]]; then
+            echo "version must use SemVer without a leading v" >&2
+            exit 1
+          fi
+          if [ "$RELEASE_VERSION" != "$CONFIRM_VERSION" ]; then
+            echo "version confirmation does not match" >&2
+            exit 1
+          fi
+          configured_version=$(sed -n 's/^version=//p' gradle.properties)
+          if [ "$RELEASE_VERSION" != "$configured_version" ]; then
+            echo "requested version does not match gradle.properties" >&2
+            exit 1
+          fi
+          case "$RELEASE_VERSION" in
+            *-SNAPSHOT) echo "Maven Central does not accept snapshot releases" >&2; exit 1 ;;
+          esac
+          if [ "$CENTRAL_ACTION" != qualify-only ] && [ "$CENTRAL_ACTION" != upload-user-managed ]; then
+            echo "central_action must be qualify-only or upload-user-managed" >&2
+            exit 1
+          fi
+          if git show-ref --verify --quiet "refs/tags/v$RELEASE_VERSION" &&
+             { [ "$(git cat-file -t "refs/tags/v$RELEASE_VERSION")" != tag ] ||
+               [ "$(git rev-parse "refs/tags/v$RELEASE_VERSION^{commit}")" != "$GITHUB_SHA" ]; }; then
+            echo "release tag exists but is not the expected annotated tag at this commit" >&2
+            exit 1
+          fi
+          if [ ! -f "config/benchmark-hosts/$MACHINE_LABEL.properties" ]; then
+            echo "no committed benchmark-host record exists for $MACHINE_LABEL" >&2
+            exit 1
+          fi
+          if [ -z "${JAVA_HOME:-}" ] || [ "${JAVA_HOME#/}" = "$JAVA_HOME" ]; then
+            echo "the release runner must provide an absolute JAVA_HOME" >&2
+            exit 1
+          fi
+          if [ ! -x scripts/qualify-candidate.sh ]; then
+            echo "the authoritative qualification wrapper is not executable" >&2
+            exit 1
+          fi
+
+      - name: Verify Maven Central version is absent
+        env:
+          RELEASE_VERSION: ${{ github.event.client_payload.version }}
+        run: |
+          url="https://repo1.maven.org/maven2/io/github/shuaibrao/cqengine/$RELEASE_VERSION/cqengine-$RELEASE_VERSION.pom"
+          status=$(curl --proto '=https' --tlsv1.2 --silent --show-error --output /dev/null --write-out '%{http_code}' "$url")
+          case "$status" in
+            404) ;;
+            200) echo "io.github.shuaibrao:cqengine:$RELEASE_VERSION already exists in Maven Central" >&2; exit 1 ;;
+            *) echo "could not prove Maven Central version absence (HTTP $status)" >&2; exit 1 ;;
+          esac
+
+      - name: Validate Gradle wrapper
+        uses: gradle/actions/wrapper-validation@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2
+
+      - name: Normalize hosted provenance remotes
+        run: |
+          while IFS= read -r key; do
+            normalized=${key,,}
+            case "$normalized" in
+              core.repositoryformatversion|core.filemode|core.bare|core.logallrefupdates|\
+              core.autocrlf|core.eol|remote.origin.url|remote.origin.fetch|\
+              remote.upstream.url|remote.upstream.fetch) ;;
+              *) git config --local --unset-all "$key" || true ;;
+            esac
+          done < <(git config --local --name-only --list)
+          git config --local core.repositoryformatversion 0
+          git config --local core.filemode true
+          git config --local core.bare false
+          git config --local core.logallrefupdates true
+          git config --local core.autocrlf false
+          git config --local core.eol lf
+          git remote set-url origin https://github.com/shuaibrao/cqengine.git
+          git config --local remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'
+          git remote remove upstream 2>/dev/null || true
+          git remote add upstream https://github.com/npgall/cqengine.git
+
+      - name: Run authoritative release qualification
+        env:
+          CQENGINE_JMH_MACHINE_LABEL: ${{ github.event.client_payload.benchmark_machine_label }}
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+        run: |
+          if [ -z "$NVD_API_KEY" ]; then
+            echo "NVD_API_KEY is required for release qualification" >&2
+            exit 1
+          fi
+          scripts/qualify-candidate.sh
+
+      - name: Retain qualified repository and evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: qualified-${{ github.event.client_payload.version }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            build/local-repository/
+            build/local-release-evidence/
+            build/reports/
+            benchmarks/build/reports/
+          if-no-files-found: error
+          retention-days: 30
+
+  prepare:
+    name: Sign exact qualified bytes
+    needs: qualify
+    if: github.event.client_payload.central_action == 'upload-user-managed'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: release-signing
+    permissions:
+      contents: read
+
+    steps:
+      - name: Check out the qualified commit
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+
+      - name: Download qualified candidate
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: qualified-${{ github.event.client_payload.version }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: candidate
+
+      - name: Restore retained publication outputs
+        env:
+          RELEASE_VERSION: ${{ github.event.client_payload.version }}
+        run: |
+          completion=candidate/build/local-release-evidence/qualification/wrapper-completion.properties
+          readiness=candidate/build/local-release-evidence/qualification/local-readiness-manifest.txt
+          if [ ! -f "$completion" ] || [ ! -f "$readiness" ]; then
+            echo "qualified candidate has no complete readiness evidence" >&2
+            exit 1
+          fi
+          if ! grep -Fxq 'status=passed' "$completion" || ! grep -Fxq 'validationStatus=passed' "$completion"; then
+            echo "qualification completion record is not successful" >&2
+            exit 1
+          fi
+          if ! grep -Fxq "sourceCommit=$GITHUB_SHA" "$completion" ||
+             ! grep -Fxq "sourceCommit=$GITHUB_SHA" "$readiness"; then
+            echo "qualified evidence does not identify the selected commit" >&2
+            exit 1
+          fi
+          if ! grep -Fxq "coordinate=io.github.shuaibrao:cqengine:$RELEASE_VERSION" "$readiness"; then
+            echo "qualified evidence does not identify the selected coordinate" >&2
+            exit 1
+          fi
+          mkdir -p build
+          cp -a candidate/build/local-repository build/local-repository
+          cp -a candidate/build/local-release-evidence build/local-release-evidence
+          cp -a candidate/build/reports build/reports
+
+      - name: Import the protected signing key
+        env:
+          SIGNING_KEY: ${{ secrets.MAVEN_CENTRAL_SIGNING_KEY }}
+        run: |
+          if [ -z "$SIGNING_KEY" ]; then
+            echo "MAVEN_CENTRAL_SIGNING_KEY is required" >&2
+            exit 1
+          fi
+          export GNUPGHOME="$RUNNER_TEMP/cqengine-gnupg"
+          mkdir -m 700 "$GNUPGHOME"
+          printf '%s' "$SIGNING_KEY" | env -u SIGNING_KEY gpg --batch --import
+          unset SIGNING_KEY
+          echo "GNUPGHOME=$GNUPGHOME" >> "$GITHUB_ENV"
+
+      - name: Prepare signed Central Portal bundle
+        env:
+          CQENGINE_GPG_KEY_ID: ${{ secrets.MAVEN_CENTRAL_SIGNING_KEY_ID }}
+          CQENGINE_GPG_PASSPHRASE: ${{ secrets.MAVEN_CENTRAL_SIGNING_PASSWORD }}
+        run: scripts/prepare-central-bundle.py
+
+      - name: Retain signed bundle
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: central-prepared-${{ github.event.client_payload.version }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/central/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Remove imported signing material
+        if: always()
+        run: |
+          if [ -n "${GNUPGHOME:-}" ] && [[ "$GNUPGHOME" == "$RUNNER_TEMP"/* ]]; then
+            gpgconf --kill all || true
+            rm -rf -- "$GNUPGHOME"
+          fi
+
+  tag:
+    name: Create immutable release tag
+    needs: [qualify, prepare, central]
+    if: github.event.client_payload.central_action == 'upload-user-managed'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: release-tag
+    permissions:
+      contents: write
+
+    steps:
+      - name: Check out the qualified commit
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: true
+
+      - name: Create and push immutable release tag
+        env:
+          RELEASE_VERSION: ${{ github.event.client_payload.version }}
+        run: |
+          verify_existing_tag() {
+            if [ "$(git cat-file -t "refs/tags/v$RELEASE_VERSION")" != tag ] ||
+               [ "$(git rev-parse "refs/tags/v$RELEASE_VERSION^{commit}")" != "$GITHUB_SHA" ]; then
+              echo "existing release tag is not the expected annotated tag at the qualified commit" >&2
+              exit 1
+            fi
+          }
+          if git show-ref --verify --quiet "refs/tags/v$RELEASE_VERSION"; then
+            verify_existing_tag
+            echo "release tag already identifies this qualified commit"
+            exit 0
+          fi
+          set +e
+          git ls-remote --exit-code --tags origin "refs/tags/v$RELEASE_VERSION" >/dev/null 2>&1
+          tag_lookup_status=$?
+          set -e
+          if [ "$tag_lookup_status" -eq 0 ]; then
+            git fetch --no-tags origin \
+              "refs/tags/v$RELEASE_VERSION:refs/tags/v$RELEASE_VERSION"
+            verify_existing_tag
+            echo "release tag appeared during qualification and identifies the same commit"
+            exit 0
+          elif [ "$tag_lookup_status" -ne 2 ]; then
+            echo "could not prove release tag absence" >&2
+            exit 1
+          fi
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git tag -a "v$RELEASE_VERSION" -m "CQEngine $RELEASE_VERSION" "$GITHUB_SHA"
+          if [ "$(git rev-parse "v$RELEASE_VERSION^{commit}")" != "$GITHUB_SHA" ]; then
+            echo "annotated release tag does not target the qualified commit" >&2
+            exit 1
+          fi
+          git push origin "refs/tags/v$RELEASE_VERSION"
+
+  central:
+    name: Submit signed bundle to Central Portal
+    needs: [qualify, prepare]
+    if: github.event.client_payload.central_action == 'upload-user-managed'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: release-publication
+    permissions:
+      contents: read
+    outputs:
+      deployment_state: ${{ steps.central-status.outputs.deployment_state }}
+
+    steps:
+      - name: Check out trusted publication tooling
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Download signed bundle
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: central-prepared-${{ github.event.client_payload.version }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/central
+
+      - name: Submit bundle to Central Portal
+        id: central-upload
+        env:
+          CENTRAL_TOKEN_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          CENTRAL_TOKEN_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          RELEASE_VERSION: ${{ github.event.client_payload.version }}
+        run: |
+          bundle="build/central/cqengine-$RELEASE_VERSION-central-bundle.zip"
+          deployment_id=$(scripts/central-portal.sh upload \
+            "$bundle" \
+            "cqengine-$RELEASE_VERSION-$GITHUB_RUN_ID" \
+            USER_MANAGED)
+          printf '%s\n' "$deployment_id" > build/central/deployment-id.txt
+          echo "deployment_id=$deployment_id" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for the requested Central state
+        id: central-status
+        env:
+          CENTRAL_TOKEN_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          CENTRAL_TOKEN_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          DEPLOYMENT_ID: ${{ steps.central-upload.outputs.deployment_id }}
+          RELEASE_VERSION: ${{ github.event.client_payload.version }}
+        run: |
+          expected=VALIDATED
+          expected_purl="pkg:maven/io.github.shuaibrao/cqengine@$RELEASE_VERSION"
+          central_username=$CENTRAL_TOKEN_USERNAME
+          central_password=$CENTRAL_TOKEN_PASSWORD
+          unset CENTRAL_TOKEN_USERNAME CENTRAL_TOKEN_PASSWORD
+          for attempt in $(seq 1 120); do
+            response=$(CENTRAL_TOKEN_USERNAME="$central_username" \
+              CENTRAL_TOKEN_PASSWORD="$central_password" \
+              scripts/central-portal.sh status "$DEPLOYMENT_ID")
+            state=$(python3 -c 'import json,sys; d=json.load(sys.stdin); s=d["deploymentState"]; p=d.get("purls", []); d.get("deploymentId") == sys.argv[1] or sys.exit("different deployment"); (not p or p == [sys.argv[2]]) or sys.exit("different coordinate"); (s != "VALIDATED" or p == [sys.argv[2]]) or sys.exit("validated deployment has no coordinate"); print(s)' "$DEPLOYMENT_ID" "$expected_purl" <<<"$response")
+            case "$state" in
+              "$expected") echo "deployment_state=$state" >> "$GITHUB_OUTPUT"; exit 0 ;;
+              FAILED) printf '%s\n' "$response" >&2; exit 1 ;;
+              PENDING|VALIDATING) ;;
+              *) echo "unexpected Central deployment state: $state" >&2; exit 1 ;;
+            esac
+            sleep 10
+          done
+          echo "Central deployment did not reach $expected before timeout" >&2
+          exit 1
+
+      - name: Retain signed bundle and deployment record
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: central-submitted-${{ github.event.client_payload.version }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/central/
+          if-no-files-found: error
+          retention-days: 30

@@ -1,0 +1,31 @@
+name: Set up CQEngine build environment
+description: Install the supported JDK toolchains, validate the Gradle Wrapper, and configure Gradle caching.
+
+inputs:
+  java-versions:
+    description: Newline-separated Java versions to install.
+    required: false
+    default: |
+      21
+      25
+  cache-read-only:
+    description: Whether this job may only read the shared Gradle cache.
+    required: false
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Java toolchains
+      uses: actions/setup-java@0f481fcb613427c0f801b606911222b5b6f3083a # v5.5.0
+      with:
+        distribution: temurin
+        java-version: ${{ inputs.java-versions }}
+
+    - name: Validate Gradle wrapper
+      uses: gradle/actions/wrapper-validation@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2
+
+    - name: Set up Gradle
+      uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2
+      with:
+        cache-read-only: ${{ inputs.cache-read-only }}

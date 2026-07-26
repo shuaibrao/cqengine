@@ -1,0 +1,77 @@
+name: Performance evidence
+
+on:
+  schedule:
+    - cron: "17 4 1 * *"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Run a smoke check or the full report-only Java 21/25 suites
+        required: true
+        default: smoke
+        type: choice
+        options:
+          - smoke
+          - report-only
+
+permissions:
+  contents: read
+
+concurrency:
+  group: performance-evidence
+  cancel-in-progress: false
+
+jobs:
+  benchmark:
+    name: ${{ inputs.mode || 'smoke' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    env:
+      CQENGINE_JMH_MACHINE_LABEL: github-hosted-report-only
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+
+      - name: Set up build environment
+        uses: ./.github/actions/setup-build-env
+        with:
+          cache-read-only: "true"
+
+      - name: Record evidence boundary
+        run: |
+          {
+            echo "## Report-only benchmark run"
+            echo
+            echo "GitHub-hosted runners are not approved benchmark hosts."
+            echo "These results are retained for diagnostics only and are not synchronized into project documentation."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Run JMH smoke checks
+        if: github.event_name == 'schedule' || inputs.mode == 'smoke'
+        run: >-
+          ./gradlew jmhSmoke
+          --no-daemon
+          --dependency-verification strict
+          --console=plain
+
+      - name: Run complete report-only suites
+        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'report-only'
+        run: >-
+          ./gradlew jmhJava21 jmhJava25
+          --no-daemon
+          --dependency-verification strict
+          --console=plain
+
+      - name: Retain unapproved-host diagnostics
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: report-only-performance-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            benchmarks/build/reports/jmh*/
+            !benchmarks/build/reports/jmh-publication/
+          if-no-files-found: warn
+          retention-days: 14
