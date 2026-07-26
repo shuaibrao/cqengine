@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +24,7 @@ import java.util.TimeZone;
 
 /**
  * Parses date math expressions into {@link java.util.Date} objects, using {@link ApacheSolrDataMathParser}.
- * <p/>
+ * <p>
  * Examples:
  * <pre>
  *   /HOUR
@@ -65,15 +66,15 @@ public class DateMathParser extends ValueParser<Date> {
     }
 
     public DateMathParser(TimeZone timeZone, Locale locale, Date now) {
-        this.timeZone = timeZone;
+        this.timeZone = timeZone == null ? null : (TimeZone) timeZone.clone();
         this.locale = locale;
-        this.now = now;
+        this.now = now == null ? null : new Date(now.getTime());
     }
 
     @Override
     protected Date parse(Class<? extends Date> valueType, String stringValue) {
         try {
-            ApacheSolrDataMathParser solrParser = new ApacheSolrDataMathParser();
+            ApacheSolrDataMathParser solrParser = new ApacheSolrDataMathParser(timeZone, locale);
             if (now != null) {
                 solrParser.setNow(now);
             }

@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +19,7 @@ package com.googlecode.cqengine.query.parser.common;
 /**
  * @author Niall Gallagher
  */
+@SuppressWarnings("serial") // Retain the upstream computed identity; apiCompatibility guards drift.
 public class InvalidQueryException extends IllegalStateException {
 
     public InvalidQueryException(String s) {

@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +19,9 @@ package com.googlecode.cqengine.query.parser.sql;
 import com.googlecode.cqengine.attribute.Attribute;
 import com.googlecode.cqengine.query.parser.common.InvalidQueryException;
 import com.googlecode.cqengine.query.parser.common.ParseResult;
+import com.googlecode.cqengine.query.parser.common.ParserLimits;
 import com.googlecode.cqengine.query.parser.common.QueryParser;
+import com.googlecode.cqengine.query.parser.common.RegexPolicy;
 import com.googlecode.cqengine.query.parser.sql.grammar.SQLGrammarLexer;
 import com.googlecode.cqengine.query.parser.sql.grammar.SQLGrammarParser;
 import com.googlecode.cqengine.query.parser.sql.support.FallbackValueParser;
@@ -37,27 +40,34 @@ import java.util.Map;
 public class SQLParser<O> extends QueryParser<O> {
 
     public SQLParser(Class<O> objectType) {
-        super(objectType);
+        this(objectType, ParserLimits.defaults());
+    }
+
+    /**
+     * Creates a parser with finite resource limits.
+     */
+    public SQLParser(Class<O> objectType, ParserLimits parserLimits) {
+        super(objectType, parserLimits, RegexPolicy.TRUSTED_JAVA_UTIL_REGEX);
         StringParser stringParser = new StringParser();
-        super.registerValueParser(String.class, stringParser);
-        super.registerFallbackValueParser(new FallbackValueParser(stringParser));
+        valueParsers.put(String.class, stringParser);
+        fallbackValueParser = new FallbackValueParser(stringParser);
     }
 
     @Override
     public ParseResult<O> parse(String query) {
         try {
-            if (query == null) {
-                throw new IllegalArgumentException("Query was null");
-            }
-            SQLGrammarLexer lexer = new SQLGrammarLexer(new ANTLRInputStream(query));
+            ParserLimits limits = validateQueryInput(query);
+            SQLGrammarLexer lexer = new SQLGrammarLexer(CharStreams.fromString(query));
             lexer.removeErrorListeners();
             lexer.addErrorListener(SYNTAX_ERROR_LISTENER);
 
-            CommonTokenStream tokens = new CommonTokenStream(lexer);
+            CommonTokenStream tokens = createTokenStream(lexer, limits);
 
             SQLGrammarParser parser = new SQLGrammarParser(tokens);
             parser.removeErrorListeners();
             parser.addErrorListener(SYNTAX_ERROR_LISTENER);
+            enforceNestingLimit(
+                    parser, limits, SQLGrammarParser.RULE_query, SQLGrammarParser.RULE_simpleQuery);
 
             SQLGrammarParser.StartContext queryContext = parser.start();
 
@@ -83,6 +93,10 @@ public class SQLParser<O> extends QueryParser<O> {
         return new SQLParser<O>(pojoClass);
     }
 
+    public static <O> SQLParser<O> forPojo(Class<O> pojoClass, ParserLimits parserLimits) {
+        return new SQLParser<O>(pojoClass, parserLimits);
+    }
+
     /**
      * Creates a new SQLParser for the given POJO class, and registers the given attributes with it.
      * @param pojoClass The type of object stored in the collection
@@ -91,6 +105,15 @@ public class SQLParser<O> extends QueryParser<O> {
      */
     public static <O> SQLParser<O> forPojoWithAttributes(Class<O> pojoClass, Map<String, ? extends Attribute<O, ?>> attributes) {
         SQLParser<O> parser = forPojo(pojoClass);
+        parser.registerAttributes(attributes);
+        return parser;
+    }
+
+    public static <O> SQLParser<O> forPojoWithAttributes(
+            Class<O> pojoClass,
+            Map<String, ? extends Attribute<O, ?>> attributes,
+            ParserLimits parserLimits) {
+        SQLParser<O> parser = forPojo(pojoClass, parserLimits);
         parser.registerAttributes(attributes);
         return parser;
     }

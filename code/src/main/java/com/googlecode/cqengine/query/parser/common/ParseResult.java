@@ -21,7 +21,7 @@ import com.googlecode.cqengine.query.option.QueryOptions;
 /**
  * Encapsulates the result of parsing a string-based query: the parsed query itself, and any query options associated
  * with the query.
- * <p/>
+ * <p>
  * Query options specify optional non-query parameters which might have been parsed along with the query, such as how
  * results should be ordered etc.
  *
@@ -48,7 +48,7 @@ public class ParseResult<O> {
     /**
      * Returns the parsed query options, which may include {@link com.googlecode.cqengine.query.option.OrderByOption}
      * if ordering was specified in the string query.
-     * <p/>
+     * <p>
      * If no query options were specified in the string then the returned query options will not be null, but will be
      * empty.
      *

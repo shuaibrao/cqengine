@@ -21,7 +21,7 @@ import java.lang.reflect.Method;
 
 /**
  * Parses values using a static {@code valueOf()} method in the type's class.
- * <p/>
+ * <p>
  * Created by npgall on 25/05/2015.
  */
 public class FallbackValueParser extends ValueParser<Object> {

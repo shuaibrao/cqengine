@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -87,7 +88,7 @@ public class SQLAntlrListener<O> extends SQLGrammarBaseListener {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"rawtypes", "unchecked"}) // Runtime-resolved comparable type bridges self-bounded query APIs.
     public void exitLessThanOrEqualToQuery(SQLGrammarParser.LessThanOrEqualToQueryContext ctx) {
         Attribute<O, Comparable> attribute = queryParser.getAttribute(ctx.attributeName(), Comparable.class);
         Comparable value = queryParser.parseValue(attribute, ctx.queryParameter());
@@ -95,7 +96,7 @@ public class SQLAntlrListener<O> extends SQLGrammarBaseListener {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"rawtypes", "unchecked"}) // Runtime-resolved comparable type bridges self-bounded query APIs.
     public void exitLessThanQuery(SQLGrammarParser.LessThanQueryContext ctx) {
         Attribute<O, Comparable> attribute = queryParser.getAttribute(ctx.attributeName(), Comparable.class);
         Comparable value = queryParser.parseValue(attribute, ctx.queryParameter());
@@ -103,7 +104,7 @@ public class SQLAntlrListener<O> extends SQLGrammarBaseListener {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"rawtypes", "unchecked"}) // Runtime-resolved comparable type bridges self-bounded query APIs.
     public void exitGreaterThanOrEqualToQuery(SQLGrammarParser.GreaterThanOrEqualToQueryContext ctx) {
         Attribute<O, Comparable> attribute = queryParser.getAttribute(ctx.attributeName(), Comparable.class);
         Comparable value = queryParser.parseValue(attribute, ctx.queryParameter());
@@ -111,7 +112,7 @@ public class SQLAntlrListener<O> extends SQLGrammarBaseListener {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"rawtypes", "unchecked"}) // Runtime-resolved comparable type bridges self-bounded query APIs.
     public void exitGreaterThanQuery(SQLGrammarParser.GreaterThanQueryContext ctx) {
         Attribute<O, Comparable> attribute = queryParser.getAttribute(ctx.attributeName(), Comparable.class);
         Comparable value = queryParser.parseValue(attribute, ctx.queryParameter());
@@ -119,7 +120,7 @@ public class SQLAntlrListener<O> extends SQLGrammarBaseListener {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"rawtypes", "unchecked"}) // Runtime-resolved comparable type bridges self-bounded query APIs.
     public void exitBetweenQuery(SQLGrammarParser.BetweenQueryContext ctx) {
         Attribute<O, Comparable> attribute = queryParser.getAttribute(ctx.attributeName(), Comparable.class);
         List<? extends ParseTree> queryParameters = ctx.queryParameter();
@@ -129,7 +130,7 @@ public class SQLAntlrListener<O> extends SQLGrammarBaseListener {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"rawtypes", "unchecked"}) // Runtime-resolved comparable type bridges self-bounded query APIs.
     public void exitNotBetweenQuery(SQLGrammarParser.NotBetweenQueryContext ctx) {
         Attribute<O, Comparable> attribute = queryParser.getAttribute(ctx.attributeName(), Comparable.class);
         List<? extends ParseTree> queryParameters = ctx.queryParameter();
@@ -213,6 +214,7 @@ public class SQLAntlrListener<O> extends SQLGrammarBaseListener {
     }
 
     @Override
+    @SuppressWarnings("rawtypes") // Runtime-resolved comparable type feeds AttributeOrder's legacy API.
     public void exitOrderByClause(SQLGrammarParser.OrderByClauseContext ctx) {
         List<AttributeOrder<O>> attributeOrders = new ArrayList<AttributeOrder<O>>();
         for (SQLGrammarParser.AttributeOrderContext orderContext : ctx.attributeOrder()) {
@@ -264,6 +266,7 @@ public class SQLAntlrListener<O> extends SQLGrammarBaseListener {
         return orderByOption != null ? QueryFactory.queryOptions(orderByOption) : QueryFactory.noQueryOptions();
     }
 
+    @SuppressWarnings("rawtypes") // Retains the legacy protected parser-support signature.
     protected Class[] getAndOrNotContextClasses() {
         return new Class[] {SQLGrammarParser.AndQueryContext.class, SQLGrammarParser.OrQueryContext.class, SQLGrammarParser.NotQueryContext.class};
     }

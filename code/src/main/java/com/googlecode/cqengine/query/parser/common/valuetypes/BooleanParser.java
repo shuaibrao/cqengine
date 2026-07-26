@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,14 +28,30 @@ public class BooleanParser extends ValueParser<Boolean> {
 
     @Override
     public Boolean parse(Class<? extends Boolean> valueType, String stringValue) {
-        if (TRUE_STR.equalsIgnoreCase(stringValue)) {
+        if (equalsAsciiIgnoreCase(TRUE_STR, stringValue)) {
             return true;
         }
-        else if (FALSE_STR.equalsIgnoreCase(stringValue)) {
+        else if (equalsAsciiIgnoreCase(FALSE_STR, stringValue)) {
             return false;
         }
         else {
             throw new IllegalStateException("Could not parse value as boolean: " + stringValue);
         }
+    }
+
+    private static boolean equalsAsciiIgnoreCase(String expectedLowerCase, String actual) {
+        if (actual == null || actual.length() != expectedLowerCase.length()) {
+            return false;
+        }
+        for (int i = 0; i < expectedLowerCase.length(); i++) {
+            char character = actual.charAt(i);
+            if (character >= 'A' && character <= 'Z') {
+                character = (char) (character + ('a' - 'A'));
+            }
+            if (character != expectedLowerCase.charAt(i)) {
+                return false;
+            }
+        }
+        return true;
     }
 }

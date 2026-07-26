@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,8 +23,11 @@ import com.googlecode.cqengine.query.option.QueryOptions;
 import com.googlecode.cqengine.query.parser.common.valuetypes.*;
 import com.googlecode.cqengine.resultset.ResultSet;
 import org.antlr.v4.runtime.BaseErrorListener;
+import org.antlr.v4.runtime.CommonTokenStream;
+import org.antlr.v4.runtime.Parser;
 import org.antlr.v4.runtime.RecognitionException;
 import org.antlr.v4.runtime.Recognizer;
+import org.antlr.v4.runtime.TokenSource;
 import org.antlr.v4.runtime.misc.ParseCancellationException;
 import org.antlr.v4.runtime.tree.ParseTree;
 
@@ -31,10 +35,11 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * A service provider interface for parsers which can convert string queries to CQEngine native queries.
- * <p/>
+ * <p>
  * Subclasses can implement this to support string-based queries in various dialects,
  * such as SQL or a string representation of a CQEngine native query.
  *
@@ -43,6 +48,8 @@ import java.util.Map;
 public abstract class QueryParser<O> {
 
     protected final Class<O> objectType;
+    protected final ParserLimits parserLimits;
+    protected final RegexPolicy regexPolicy;
     protected final Map<String, Attribute<O, ?>> attributes = new HashMap<String, Attribute<O, ?>>();
     protected final Map<Class<?>, ValueParser<?>> valueParsers = new HashMap<Class<?>, ValueParser<?>>();
     protected volatile ValueParser<Object> fallbackValueParser = null;
@@ -56,17 +63,23 @@ public abstract class QueryParser<O> {
     };
 
     public QueryParser(Class<O> objectType) {
-        registerValueParser(Boolean.class, new BooleanParser());
-        registerValueParser(Byte.class, new ByteParser());
-        registerValueParser(Character.class, new CharacterParser());
-        registerValueParser(Short.class, new ShortParser());
-        registerValueParser(Integer.class, new IntegerParser());
-        registerValueParser(Long.class, new LongParser());
-        registerValueParser(Float.class, new FloatParser());
-        registerValueParser(Double.class, new DoubleParser());
-        registerValueParser(BigInteger.class, new BigIntegerParser());
-        registerValueParser(BigDecimal.class, new BigDecimalParser());
+        this(objectType, ParserLimits.defaults(), RegexPolicy.TRUSTED_JAVA_UTIL_REGEX);
+    }
+
+    protected QueryParser(Class<O> objectType, ParserLimits parserLimits, RegexPolicy regexPolicy) {
+        valueParsers.put(Boolean.class, new BooleanParser());
+        valueParsers.put(Byte.class, new ByteParser());
+        valueParsers.put(Character.class, new CharacterParser());
+        valueParsers.put(Short.class, new ShortParser());
+        valueParsers.put(Integer.class, new IntegerParser());
+        valueParsers.put(Long.class, new LongParser());
+        valueParsers.put(Float.class, new FloatParser());
+        valueParsers.put(Double.class, new DoubleParser());
+        valueParsers.put(BigInteger.class, new BigIntegerParser());
+        valueParsers.put(BigDecimal.class, new BigDecimalParser());
         this.objectType = objectType;
+        this.parserLimits = Objects.requireNonNull(parserLimits, "parserLimits");
+        this.regexPolicy = Objects.requireNonNull(regexPolicy, "regexPolicy");
     }
 
     public <A> void registerAttribute(Attribute<O, A> attribute) {
@@ -93,6 +106,51 @@ public abstract class QueryParser<O> {
 
     public Class<O> getObjectType() {
         return objectType;
+    }
+
+    /**
+     * Returns the immutable limits configured for this parser.
+     */
+    public ParserLimits getParserLimits() {
+        return parserLimits;
+    }
+
+    /**
+     * Returns the regular-expression policy configured for this parser.
+     */
+    public RegexPolicy getRegexPolicy() {
+        return regexPolicy;
+    }
+
+    /**
+     * Applies the configured regular-expression policy to a parsed clause.
+     */
+    public <A extends CharSequence> Query<O> createRegexQuery(Attribute<O, A> attribute, String expression) {
+        Query<O> query = regexPolicy.createQuery(attribute, expression);
+        if (query == null) {
+            throw new InvalidQueryException("Regex policy returned a null query");
+        }
+        return query;
+    }
+
+    protected ParserLimits validateQueryInput(String query) {
+        if (query == null) {
+            throw new InvalidQueryException("Query was null");
+        }
+        parserLimits.validateQueryLength(query);
+        return parserLimits;
+    }
+
+    protected CommonTokenStream createTokenStream(TokenSource lexer, ParserLimits limits) {
+        CommonTokenStream tokens = new CommonTokenStream(new BoundedTokenSource(lexer, limits.getMaxTokens()));
+        tokens.fill();
+        return tokens;
+    }
+
+    protected void enforceNestingLimit(
+            Parser parser, ParserLimits limits, int queryRuleIndex, int simpleQueryRuleIndex) {
+        parser.addParseListener(new QueryNestingDepthListener(
+                limits.getMaxNestingDepth(), queryRuleIndex, simpleQueryRuleIndex));
     }
 
     public <A> Attribute<O, A> getAttribute(ParseTree attributeNameContext, Class<A> expectedSuperType) {

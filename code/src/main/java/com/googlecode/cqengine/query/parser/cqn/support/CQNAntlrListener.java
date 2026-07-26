@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -84,7 +85,7 @@ public class CQNAntlrListener<O> extends CQNGrammarBaseListener {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"rawtypes", "unchecked"}) // Runtime-resolved comparable type bridges self-bounded query APIs.
     public void exitLessThanOrEqualToQuery(CQNGrammarParser.LessThanOrEqualToQueryContext ctx) {
         Attribute<O, Comparable> attribute = queryParser.getAttribute(ctx.attributeName(), Comparable.class);
         Comparable value = queryParser.parseValue(attribute, ctx.queryParameter());
@@ -92,7 +93,7 @@ public class CQNAntlrListener<O> extends CQNGrammarBaseListener {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"rawtypes", "unchecked"}) // Runtime-resolved comparable type bridges self-bounded query APIs.
     public void exitLessThanQuery(CQNGrammarParser.LessThanQueryContext ctx) {
         Attribute<O, Comparable> attribute = queryParser.getAttribute(ctx.attributeName(), Comparable.class);
         Comparable value = queryParser.parseValue(attribute, ctx.queryParameter());
@@ -100,7 +101,7 @@ public class CQNAntlrListener<O> extends CQNGrammarBaseListener {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"rawtypes", "unchecked"}) // Runtime-resolved comparable type bridges self-bounded query APIs.
     public void exitGreaterThanOrEqualToQuery(CQNGrammarParser.GreaterThanOrEqualToQueryContext ctx) {
         Attribute<O, Comparable> attribute = queryParser.getAttribute(ctx.attributeName(), Comparable.class);
         Comparable value = queryParser.parseValue(attribute, ctx.queryParameter());
@@ -108,7 +109,7 @@ public class CQNAntlrListener<O> extends CQNGrammarBaseListener {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"rawtypes", "unchecked"}) // Runtime-resolved comparable type bridges self-bounded query APIs.
     public void exitGreaterThanQuery(CQNGrammarParser.GreaterThanQueryContext ctx) {
         Attribute<O, Comparable> attribute = queryParser.getAttribute(ctx.attributeName(), Comparable.class);
         Comparable value = queryParser.parseValue(attribute, ctx.queryParameter());
@@ -116,7 +117,7 @@ public class CQNAntlrListener<O> extends CQNGrammarBaseListener {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"rawtypes", "unchecked"}) // Runtime-resolved comparable type bridges self-bounded query APIs.
     public void exitVerboseBetweenQuery(CQNGrammarParser.VerboseBetweenQueryContext ctx) {
         Attribute<O, Comparable> attribute = queryParser.getAttribute(ctx.attributeName(), Comparable.class);
         List<? extends ParseTree> queryParameters = ctx.queryParameter(), booleanParameters = ctx.BooleanLiteral();
@@ -128,7 +129,7 @@ public class CQNAntlrListener<O> extends CQNGrammarBaseListener {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"rawtypes", "unchecked"}) // Runtime-resolved comparable type bridges self-bounded query APIs.
     public void exitBetweenQuery(CQNGrammarParser.BetweenQueryContext ctx) {
         Attribute<O, Comparable> attribute = queryParser.getAttribute(ctx.attributeName(), Comparable.class);
         List<? extends ParseTree> queryParameters = ctx.queryParameter();
@@ -182,7 +183,7 @@ public class CQNAntlrListener<O> extends CQNGrammarBaseListener {
     public void exitMatchesRegexQuery(CQNGrammarParser.MatchesRegexQueryContext ctx) {
         Attribute<O, String> attribute = queryParser.getAttribute(ctx.attributeName(), String.class);
         String value = queryParser.parseValue(attribute, ctx.stringQueryParameter());
-        addParsedQuery(ctx, QueryFactory.matchesRegex(attribute, value));
+        addParsedQuery(ctx, queryParser.createRegexQuery(attribute, value));
     }
 
     @Override
@@ -225,6 +226,7 @@ public class CQNAntlrListener<O> extends CQNGrammarBaseListener {
     }
 
     @Override
+    @SuppressWarnings("rawtypes") // Runtime-resolved comparable type feeds AttributeOrder's legacy API.
     public void exitOrderByOption(CQNGrammarParser.OrderByOptionContext ctx) {
         for (CQNGrammarParser.AttributeOrderContext attributeOrderContext : ctx.attributeOrder()) {
             Attribute<O, Comparable> attribute = queryParser.getAttribute(attributeOrderContext.attributeName(), Comparable.class);
@@ -269,6 +271,7 @@ public class CQNAntlrListener<O> extends CQNGrammarBaseListener {
         return attributeOrders.isEmpty() ? noQueryOptions() : queryOptions(orderBy(attributeOrders));
     }
 
+    @SuppressWarnings("rawtypes") // Retains the legacy protected parser-support signature.
     protected Class[] getAndOrNotContextClasses() {
         return new Class[] {CQNGrammarParser.AndQueryContext.class, CQNGrammarParser.OrQueryContext.class, CQNGrammarParser.NotQueryContext.class};
     }

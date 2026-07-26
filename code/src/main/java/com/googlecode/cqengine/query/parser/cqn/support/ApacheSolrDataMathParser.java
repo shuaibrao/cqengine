@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -167,6 +168,7 @@ public class ApacheSolrDataMathParser {
      * @exception IllegalArgumentException if unit isn't recognized.
      * @see #CALENDAR_UNITS
      */
+    @SuppressWarnings("fallthrough")
     public static void round(Calendar c, String unit) {
         Integer uu = CALENDAR_UNITS.get(unit);
         if (null == uu) {
@@ -236,7 +238,7 @@ public class ApacheSolrDataMathParser {
     public ApacheSolrDataMathParser(TimeZone tz, Locale l) {
         loc = (l == null) ? DEFAULT_MATH_LOCALE : l;
         tz = (tz == null) ? DEFAULT_MATH_TZ : tz;
-        zone = tz;
+        zone = (TimeZone) tz.clone();
     }
 
     /**
@@ -244,7 +246,7 @@ public class ApacheSolrDataMathParser {
      * @see #getNow
      */
     public void setNow(Date n) {
-        now = n;
+        now = n == null ? null : new Date(n.getTime());
     }
 
     /**
@@ -309,7 +311,7 @@ public class ApacheSolrDataMathParser {
                     }
                     int val = 0;
                     try {
-                        val = Integer.valueOf(ops[pos++]);
+                        val = Integer.parseInt(ops[pos++]);
                     } catch (NumberFormatException e) {
                         throw new ParseException
                                 ("Not a Number: \"" + ops[pos-1] + "\"", pos-1);
