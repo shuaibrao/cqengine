@@ -21,7 +21,7 @@ import java.util.List;
 
 /**
  * Methods called by generated attributes to perform common type conversions.
- * <p/>
+ * <p>
  * Attributes will uniformly call {@code GeneratedAttributeSupport.valueOf()}, and during compilation the compiler will
  * take care of compiling the attribute to call the most specific {@code valueOf()} method for the type of the
  * value read by the attribute automatically.
@@ -63,7 +63,7 @@ public class GeneratedAttributeSupport {
     /**
      * Returns a modifiable List-based view of an array, which may be an object array or a primitive array.
      * If a primitive array is supplied, the List implementation will take care of autoboxing automatically.
-     * <p/>
+     * <p>
      * This method does not copy the array: all operations read-through and write-through to the given array.
      *
      * @param array An array of any type (primitive or object)

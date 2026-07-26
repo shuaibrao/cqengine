@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,9 +34,9 @@ import static java.lang.reflect.Modifier.*;
 /**
  * Generates Attributes by synthesizing bytecode, avoiding the need to write attributes by hand.
  * The synthesized attributes should perform as well at runtime as hand-written ones in most cases.
- * <p/>
+ * <p>
  * Generated attributes are loaded into the ClassLoader of the given POJO classes.
- * <p/>
+ * <p>
  * See {@link MemberFilter} and {@link MemberFilters} for some common filters which can be used with this class
  * to determine the subset of fields or methods in a POJO for which attributes should be generated.
  */
@@ -95,7 +96,7 @@ public class AttributeBytecodeGenerator {
     @SuppressWarnings("unchecked")
     public static <O> Map<String, ? extends Attribute<O, ?>> createAttributes(Class<O> pojoClass, MemberFilter memberFilter, Function<Member, String> attributeNameProducer) {
         final Map<String, Attribute<O, ?>> attributes = new TreeMap<String, Attribute<O, ?>>();
-        Class currentClass = pojoClass;
+        Class<?> currentClass = pojoClass;
         Set<String> membersEncountered = new HashSet<String>();
         while (currentClass != null && currentClass != Object.class) {
             for (Member member : getMembers(currentClass)) {
@@ -154,7 +155,7 @@ public class AttributeBytecodeGenerator {
                                     ? generateSimpleNullableAttributeForGetter(pojoClass, memberType, memberName, attributeName)
                                     : generateSimpleNullableAttributeForField(pojoClass, memberType, memberName, attributeName);
                         }
-                        Attribute<O, ?> attribute = attributeClass.newInstance();
+                        Attribute<O, ?> attribute = attributeClass.getDeclaredConstructor().newInstance();
                         attributes.put(attribute.getAttributeName(), attribute);
                         membersEncountered.add(member.getName());
                     }
@@ -444,8 +445,7 @@ public class AttributeBytecodeGenerator {
      */
     private static <O, A, C extends Attribute<O, A>, R extends Class<? extends C>> R generateSimpleAttribute(Class<C> attributeSuperClass, Class<O> pojoClass, Class<A> attributeValueType, String attributeName, String target) {
         try {
-            ClassPool pool = new ClassPool(false);
-            pool.appendClassPath(new ClassClassPath(pojoClass));
+            ClassPool pool = createClassPool(pojoClass, attributeSuperClass);
 
             CtClass attributeClass = pool.makeClass(pojoClass.getName() + "$$CQEngine_" + attributeSuperClass.getSimpleName() + "_" + attributeName);
             attributeClass.setSuperclass(pool.get(attributeSuperClass.getName()));
@@ -481,10 +481,7 @@ public class AttributeBytecodeGenerator {
             getterBridgeMethod.setModifiers(getterBridgeMethod.getModifiers() | AccessFlag.BRIDGE);
             attributeClass.addMethod(getterBridgeMethod);
 
-            @SuppressWarnings("unchecked")
-            R result = (R) attributeClass.toClass(pojoClass.getClassLoader(), pojoClass.getProtectionDomain());
-            attributeClass.detach();
-            return result;
+            return loadGeneratedClass(attributeClass, pojoClass);
         } catch (Exception e) {
             throw new IllegalStateException(getExceptionMessage(pojoClass, attributeValueType, attributeName), e);
         }
@@ -497,8 +494,7 @@ public class AttributeBytecodeGenerator {
      */
     private static <O, A, C extends MultiValueAttribute<O, A>, R extends Class<? extends C>> R generateMultiValueAttribute(Class<C> attributeSuperClass, Class<O> pojoClass, Class<A> attributeValueType, String attributeName, String target) {
         try {
-            ClassPool pool = new ClassPool(false);
-            pool.appendClassPath(new ClassClassPath(pojoClass));
+            ClassPool pool = createClassPool(pojoClass, attributeSuperClass);
 
             CtClass attributeClass = pool.makeClass(pojoClass.getName() + "$$CQEngine_" + attributeSuperClass.getSimpleName() + "_" + attributeName);
             attributeClass.setSuperclass(pool.get(attributeSuperClass.getName()));
@@ -546,10 +542,7 @@ public class AttributeBytecodeGenerator {
             getterBridgeMethod.setModifiers(getterBridgeMethod.getModifiers() | AccessFlag.BRIDGE);
             attributeClass.addMethod(getterBridgeMethod);
 
-            @SuppressWarnings("unchecked")
-            R result = (R) attributeClass.toClass(pojoClass.getClassLoader(), pojoClass.getProtectionDomain());
-            attributeClass.detach();
-            return result;
+            return loadGeneratedClass(attributeClass, pojoClass);
         } catch (Exception e) {
             throw new IllegalStateException(getExceptionMessage(pojoClass, attributeValueType, attributeName), e);
         }
@@ -562,8 +555,7 @@ public class AttributeBytecodeGenerator {
      */
     private static <O, A, C extends MultiValueNullableAttribute<O, A>, R extends Class<? extends C>> R generateMultiValueNullableAttribute(Class<C> attributeSuperClass, Class<O> pojoClass, Class<A> attributeValueType, String attributeName, boolean componentValuesNullable, String target) {
         try {
-            ClassPool pool = new ClassPool(false);
-            pool.appendClassPath(new ClassClassPath(pojoClass));
+            ClassPool pool = createClassPool(pojoClass, attributeSuperClass);
 
             CtClass attributeClass = pool.makeClass(pojoClass.getName() + "$$CQEngine_" + attributeSuperClass.getSimpleName() + "_" + attributeName);
             attributeClass.setSuperclass(pool.get(attributeSuperClass.getName()));
@@ -611,13 +603,28 @@ public class AttributeBytecodeGenerator {
             getterBridgeMethod.setModifiers(getterBridgeMethod.getModifiers() | AccessFlag.BRIDGE);
             attributeClass.addMethod(getterBridgeMethod);
 
-            @SuppressWarnings("unchecked")
-            R result = (R) attributeClass.toClass(pojoClass.getClassLoader(), pojoClass.getProtectionDomain());
-            attributeClass.detach();
-            return result;
+            return loadGeneratedClass(attributeClass, pojoClass);
         } catch (Exception e) {
             throw new IllegalStateException(getExceptionMessage(pojoClass, attributeValueType, attributeName), e);
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <R> R loadGeneratedClass(CtClass generatedClass, Class<?> pojoClass) throws CannotCompileException {
+        try {
+            return (R) generatedClass.toClass(pojoClass);
+        }
+        finally {
+            generatedClass.detach();
+        }
+    }
+
+    private static ClassPool createClassPool(Class<?> pojoClass, Class<?> attributeSuperClass) {
+        ClassPool pool = new ClassPool(false);
+        pool.appendSystemPath();
+        pool.appendClassPath(new ClassClassPath(attributeSuperClass));
+        pool.appendClassPath(new ClassClassPath(pojoClass));
+        return pool;
     }
 
     static String getClassName(Class<?> cls) {
