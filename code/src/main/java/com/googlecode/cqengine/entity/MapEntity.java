@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,17 +26,17 @@ import java.util.Set;
  * Wrapper for Map to allow efficient use in an IndexCollection.
  * MapEntities can be created via {@link QueryFactory#mapEntity(Map)}. Attributes can be created to read the entries
  * in these maps, using {@link QueryFactory#mapAttribute(Object, Class)}.
- * <p/>
+ * <p>
  * This works by optimizing the performance of the {@link #hashCode()} and {@link #equals(Object)} methods - which
  * may be called frequently during query processing. The hashCode of the wrapped Map will be cached to improve the
  * performance of repeated invocations of {@link #hashCode()}. The cached hashCode will be used in the
  * implementation of the {@link #equals(Object)} method too, to avoid computing equality entirely when the cached
  * hashCodes are different.
- * <p/>
+ * <p>
  * Note it is not safe to modify entries in maps which are indexed, although non-indexed entries may be modified
  * safely. Alternatively, remove and re-add the Map to the collection.
  */
-@SuppressWarnings({"unchecked", "NullableProblems"})
+@SuppressWarnings({"rawtypes", "unchecked", "NullableProblems"}) // Implements the legacy raw-Map public contract.
 public class MapEntity implements Map {
 
     final Map wrappedMap;
@@ -74,7 +75,7 @@ public class MapEntity implements Map {
         if (this == o) {
             return true;
         }
-        if (!(o instanceof MapEntity)) {
+        if (o == null || getClass() != o.getClass()) {
             return false;
         }
 

@@ -18,7 +18,7 @@ package com.googlecode.cqengine.query.option;
 /**
  * A wrapper around a key and an associated {@link Double} value, representing the value for that threshold key
  * which is to be applied to tune CQEngine query performance. These thresholds can be supplied as query options.
- * <p/>
+ * <p>
  * See {@link EngineThresholds} for information about some thresholds which can be set.
  *
  * @author niall.gallagher

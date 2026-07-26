@@ -22,7 +22,7 @@ import static com.googlecode.cqengine.query.support.QueryValidation.checkQueryVa
  * | 2  | 353855 | A.N.Other |
  * </pre>
  * A longest prefix query using a  query as shown below would return the entity with id 0
- * <p/>
+ * <p>
  *  {@code Query<Foo> query1 = longestPrefix(Foo.CODE, "35387123456")); }
  * 
  * @author Glen Lockhart

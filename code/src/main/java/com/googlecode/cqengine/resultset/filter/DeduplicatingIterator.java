@@ -25,10 +25,10 @@ import java.util.Set;
 /**
  * An iterator which wraps another, to suppress duplicate objects, where a duplicate object is one which has
  * the same value(s) for the given attribute.
- * <p/>
+ * <p>
  * Say an object had an attribute {@code COLOR}. This iterator would return only one object of each color from the
  * wrapped iterator.
- * <p/>
+ * <p>
  * Only one of the potentially duplicate objects will be returned, but which one is unspecified (the query engine is
  * usually free for performance reasons to return objects in any order).
  *

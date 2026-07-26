@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -56,7 +57,7 @@ public class Not<O> extends LogicalQuery<O> {
         if (this == o) return true;
         if (!(o instanceof Not)) return false;
 
-        Not other = (Not) o;
+        Not<?> other = (Not<?>) o;
 
         if (!negatedQuery.equals(other.negatedQuery)) return false;
 

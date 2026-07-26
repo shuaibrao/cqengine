@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,13 +18,14 @@ package com.googlecode.cqengine.index.compound.support;
 
 import com.googlecode.cqengine.attribute.Attribute;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
 /**
  * A tuple (ordered list) of values, extracted from the fields of an object, according to, and in the same order as, the
  * {@link Attribute}s encapsulated in a {@link CompoundAttribute}.
- * <p/>
+ * <p>
  * The combination of values encapsulated in objects of this type are used as keys in compound indexes. This object
  * implements {@link Object#equals(Object)} and {@link Object#hashCode()} where the hash code is calculated from the
  * combination of values.
@@ -36,8 +38,8 @@ public class CompoundValueTuple<O> {
     private final int hashCode;
 
     public CompoundValueTuple(List<?> attributeValues) {
-        this.attributeValues = attributeValues;
-        this.hashCode = attributeValues.hashCode();
+        this.attributeValues = Collections.unmodifiableList(new ArrayList<Object>(attributeValues));
+        this.hashCode = this.attributeValues.hashCode();
     }
 
     public Iterable<Object> getAttributeValues() {
@@ -49,7 +51,7 @@ public class CompoundValueTuple<O> {
         if (this == o) return true;
         if (!(o instanceof CompoundValueTuple)) return false;
 
-        CompoundValueTuple that = (CompoundValueTuple) o;
+        CompoundValueTuple<?> that = (CompoundValueTuple<?>) o;
 
         if (hashCode != that.hashCode) return false;
         if (!attributeValues.equals(that.attributeValues)) return false;

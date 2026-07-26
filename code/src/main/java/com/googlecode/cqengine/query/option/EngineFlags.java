@@ -21,7 +21,7 @@ import com.googlecode.cqengine.query.QueryFactory;
  * An enum of some flags which can be set into {@link QueryOptions} to request certain behaviours from the query engine.
  * This enum is not an exhaustive set of possible flags which can be set. For example custom indexes are free to define
  * their own flags. This enum is just a central collection of flags used directly by the query engine.
- * <p/>
+ * <p>
  * Example usage using {@link QueryFactory}:<br/>
  * <code>QueryOptions queryOptions =
  * queryOptions(enableFlags(EngineFlags.SOME_FLAG, EngineFlags.OTHER_FLAG), disableFlags(EngineFlags.ANOTHER_FLAG))
@@ -35,7 +35,7 @@ public enum EngineFlags {
      * A performance tuning flag which may be useful in applications in which objects are stored off-heap, remotely, or
      * on disk, or generally where it is more expensive to retrieve values from CQEngine attributes, than it is to
      * probe indexes on those attributes, when evaluating a query.
-     * <p/>
+     * <p>
      * <b>Example</b><br/>
      * Consider the query: <code>and(equal(Car.MANUFACTURER, "Ford"), equal(Car.COLOR, Color.BLUE))</code><br/>
      * <ol>
@@ -64,15 +64,15 @@ public enum EngineFlags {
      * A performance tuning flag for when the index ordering strategy is used, which configures the strategy to
      * maximize ordering speed, at the expense of allowing a slightly inexact ordering of objects which have multiple
      * values for the attribute by which they are being ordered.
-     * <p/>
+     * <p>
      * For example: if object 1 has values ["a"] and object 2 has values ["a", "b"] then technically object 1 should
      * always be returned before object 2, when results are to be returned in ascending order. The relative ordering
      * of these objects should also be reversed, when results are to be returned in descending order. That is, to be
      * consistent with the other ordering strategies in CQEngine.
-     * <p/>
+     * <p>
      * However this technically-correct and deterministic ordering, does not come for free, and requires that the
      * strategy re-sort the objects in each bucket encountered.
-     * <p/>
+     * <p>
      * If this flag is enabled, the index ordering strategy will avoid re-sorting the buckets in the index used for
      * ordering. This will improve retrieval speed, at the expense of allowing the relative ordering of objects having
      * one attribute value in common, and having other differing attribute values, to be slightly inexact.

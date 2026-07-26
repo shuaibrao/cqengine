@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,12 +24,12 @@ import java.util.*;
 /**
  * A private implementation of {@link Attribute} used internally by
  * {@link com.googlecode.cqengine.index.compound.CompoundIndex}, which groups several other attributes.
- * <p/>
+ * <p>
  * Note that, being like regular {@link com.googlecode.cqengine.attribute.Attribute}s, objects of this type
  * do not represent values but rather the means to obtain values from fields in an object. <i>Values</i> for compound
  * attributes are encapsulated separately in {@link CompoundValueTuple} objects. The {@link Attribute#getValues(Object, com.googlecode.cqengine.query.option.QueryOptions)} method
  * returns a list of these tuples for a given object.
- * <p/>
+ * <p>
  * <b><u>Algorithm to generate tuples</u></b><br/>
  * The list of tuples generated for a {@code CompoundAttribute} referencing a given object, depends on whether the
  * {@code CompoundAttribute} groups only {@link com.googlecode.cqengine.attribute.SimpleAttribute}s, or whether it
@@ -44,18 +45,18 @@ import java.util.*;
  *         <b>Generating tuples for {@code MultiValueAttribute}s</b><br/>
  *         If a compound attribute groups one or more {@link com.googlecode.cqengine.attribute.MultiValueAttribute}s,
  *         then the determination of tuples is more complicated, and is as follows.
- *         <p/>
+ *         <p>
  *         {@code MultiValueAttribute}s can return multiple values from a single field in an object. The purpose of
  *         {@code MultiValueAttribute} is to allow an object to be indexed separately against <i>each</i> of the values
  *         from this field. Given that a {@code CompoundAttribute} spans multiple attributes, the presence of one or
  *         more {@code MultiValueAttribute}s means that <u>several possible combinations of values</u> should match the
  *         object in the index.
- *         <p/>
+ *         <p>
  *         To generate tuples for {@code CompoundAttribute}s spanning {@code MultiValueAttribute}s, the
  *         {@link Attribute#getValues(Object, com.googlecode.cqengine.query.option.QueryOptions)} method will retrieve a list of values from the object for each of the component
  *         attributes. It will then generate all possible combinations of values between these lists as tuples, using
  *         {@link TupleCombinationGenerator#generateCombinations(java.util.List)}.
- *         <p/>
+ *         <p>
  *         <u>Example:</u><br/>
  *         If we have the following lists of values from attributes:<br/>
  *         Values from first attribute:  <code>1</code><br/>
@@ -75,10 +76,11 @@ public class CompoundAttribute<O> implements Attribute<O, CompoundValueTuple<O>>
     private final List<Attribute<O, ?>> attributes;
 
     public CompoundAttribute(List<Attribute<O, ?>> attributes) {
-        if (attributes.size() < 2) {
-            throw new IllegalStateException("Cannot create a compound index on fewer than two attributes: " + attributes.size());
+        List<Attribute<O, ?>> snapshot = new ArrayList<Attribute<O, ?>>(attributes);
+        if (snapshot.size() < 2) {
+            throw new IllegalStateException("Cannot create a compound index on fewer than two attributes: " + snapshot.size());
         }
-        this.attributes = attributes;
+        this.attributes = Collections.unmodifiableList(snapshot);
     }
 
     public int size() {
@@ -104,7 +106,7 @@ public class CompoundAttribute<O> implements Attribute<O, CompoundValueTuple<O>>
     /**
      * Returns a list of {@link CompoundValueTuple} objects for the given object, containing all possible combinations
      * of attribute values against which the object can be indexed.
-     * <p/>
+     * <p>
      * See documentation on this class itself for details of the algorithm used to generate these tuples.
      *
      * @param object The object from which all {@link com.googlecode.cqengine.index.compound.support.CompoundValueTuple}s are required
@@ -150,7 +152,7 @@ public class CompoundAttribute<O> implements Attribute<O, CompoundValueTuple<O>>
         if (this == o) return true;
         if (!(o instanceof CompoundAttribute)) return false;
 
-        CompoundAttribute that = (CompoundAttribute) o;
+        CompoundAttribute<?> that = (CompoundAttribute<?>) o;
 
         if (!attributes.equals(that.attributes)) return false;
 

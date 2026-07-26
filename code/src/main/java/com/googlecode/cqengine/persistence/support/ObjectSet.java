@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,21 +18,24 @@ package com.googlecode.cqengine.persistence.support;
 
 import com.googlecode.cqengine.index.support.CloseableIterable;
 import com.googlecode.cqengine.index.support.CloseableIterator;
+import com.googlecode.cqengine.index.support.CloseableRequestResources;
 import com.googlecode.cqengine.query.option.QueryOptions;
 
 import java.io.Closeable;
+import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashSet;
+import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.Set;
 
 /**
  * Represents a set of objects which may be iterated repeatedly, allowing the resources opened
  * for each iteration to be closed afterwards.
- * <p/>
+ * <p>
  * The {@link #iterator()} method returns a {@link CloseableIterator} which should ideally be
  * closed after each iteration is complete.
- * <p/>
+ * <p>
  * However this object also keeps track of iterators which were opened but not yet closed,
  * and provides a {@link #close()} method which will close all iterators which remain open.
  *
@@ -109,7 +113,10 @@ public abstract class ObjectSet<O> implements CloseableIterable<O>, Closeable {
         final ObjectStore<O> objectStore;
         final QueryOptions queryOptions;
 
-        final Set<CloseableIterator<O>> openIterators = new HashSet<CloseableIterator<O>>();
+        final Set<CloseableIterator<O>> openIterators = Collections.newSetFromMap(
+                new IdentityHashMap<CloseableIterator<O>, Boolean>());
+        private final Object iteratorRegistryLock = new Object();
+        boolean closed;
 
         public ObjectStoreAsObjectSet(ObjectStore<O> objectStore, QueryOptions queryOptions) {
             this.objectStore = objectStore;
@@ -118,48 +125,68 @@ public abstract class ObjectSet<O> implements CloseableIterable<O>, Closeable {
 
         @Override
         public CloseableIterator<O> iterator() {
-            final CloseableIterator<O> iterator = objectStore.iterator(queryOptions);
-            openIterators.add(iterator);
-            return new CloseableIterator<O>() {
-                @Override
-                public void close() {
-                    openIterators.remove(this);
-                    iterator.close();
+            synchronized (iteratorRegistryLock) {
+                if (closed) {
+                    throw new IllegalStateException("ObjectSet is closed");
                 }
+                final CloseableIterator<O> delegateIterator = objectStore.iterator(queryOptions);
+                class ManagedIterator implements CloseableIterator<O> {
+                    private final Object closeLock = new Object();
+                    boolean iteratorClosed;
 
-                @Override
-                public boolean hasNext() {
-                    return iterator.hasNext();
-                }
+                    @Override
+                    public void close() {
+                        synchronized (closeLock) {
+                            if (iteratorClosed) {
+                                return;
+                            }
+                            iteratorClosed = true;
+                        }
+                        synchronized (iteratorRegistryLock) {
+                            openIterators.remove(this);
+                        }
+                        delegateIterator.close();
+                    }
 
-                @Override
-                public O next() {
-                    return iterator.next();
-                }
+                    @Override
+                    public boolean hasNext() {
+                        return delegateIterator.hasNext();
+                    }
 
-                @Override
-                public void remove() {
-                    iterator.remove();
+                    @Override
+                    public O next() {
+                        return delegateIterator.next();
+                    }
+
+                    @Override
+                    public void remove() {
+                        delegateIterator.remove();
+                    }
                 }
-            };
+                ManagedIterator managedIterator = new ManagedIterator();
+                openIterators.add(managedIterator);
+                return managedIterator;
+            }
         }
 
         public boolean isEmpty() {
-            CloseableIterator<O> iterator = objectStore.iterator(queryOptions);
-            try {
+            try (CloseableIterator<O> iterator = iterator()) {
                 return !iterator.hasNext();
-            }
-            finally {
-                iterator.close();
             }
         }
 
         @Override
         public void close() {
-            for (CloseableIterator<O> openIterator : openIterators) {
-                openIterator.close();
+            final Collection<CloseableIterator<O>> iteratorsToClose;
+            synchronized (iteratorRegistryLock) {
+                if (closed) {
+                    return;
+                }
+                closed = true;
+                iteratorsToClose = new ArrayList<CloseableIterator<O>>(openIterators);
+                openIterators.clear();
             }
-            openIterators.clear();
+            CloseableRequestResources.closeAll(iteratorsToClose);
         }
     }
 }

@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +22,7 @@ import java.lang.reflect.Field;
 
 /**
  * A type of {@link SimpleAttribute} which is implemented using reflection.
- * <p/>
+ * <p>
  * This type of attribute will not perform as well as an attribute defined in code,
  * but this type can sometimes be convenient.
  *
@@ -43,15 +44,26 @@ public class ReflectiveAttribute<O, A> extends SimpleAttribute<O, A> {
         Field field;
         try {
             field = getField(objectType, fieldName);
-            if (!field.isAccessible()) {
-                field.setAccessible(true);
-            }
         }
-        catch (Exception e) {
-            throw new IllegalStateException("Invalid attribute definition: No such field '" + fieldName + "' in object '" + objectType.getName() + "'");
+        catch (NoSuchFieldException e) {
+            throw new IllegalStateException("Invalid attribute definition: No such field '" + fieldName
+                    + "' in object '" + objectType.getName() + "'", e);
         }
         if (!fieldType.isAssignableFrom(field.getType())) {
-            throw new IllegalStateException("Invalid attribute definition: The type of field '" + fieldName + "', type '" + field.getType() + "', in object '" + objectType.getName() + "', is not assignable to the type indicated: " + fieldType.getName());
+            throw new IllegalStateException("Invalid attribute definition: The type of field '" + fieldName
+                    + "', type '" + field.getType() + "', in object '" + objectType.getName()
+                    + "', is not assignable to the type indicated: " + fieldType.getName());
+        }
+        try {
+            if (!field.trySetAccessible()) {
+                throw new IllegalStateException("Invalid attribute definition: Field '" + fieldName
+                        + "' in object '" + objectType.getName() + "' cannot be made accessible. "
+                        + "Define the attribute in application code or open the declaring package to CQEngine.");
+            }
+        }
+        catch (SecurityException e) {
+            throw new IllegalStateException("Invalid attribute definition: Access to field '" + fieldName
+                    + "' in object '" + objectType.getName() + "' was denied", e);
         }
         this.field = field;
     }
@@ -93,7 +105,7 @@ public class ReflectiveAttribute<O, A> extends SimpleAttribute<O, A> {
         if (!(o instanceof ReflectiveAttribute)) return false;
         if (!super.equals(o)) return false;
 
-        ReflectiveAttribute that = (ReflectiveAttribute) o;
+        ReflectiveAttribute<?, ?> that = (ReflectiveAttribute<?, ?>) o;
         if (!that.canEqual(this)) return false;
 
         if (!field.equals(that.field)) return false;

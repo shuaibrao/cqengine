@@ -53,7 +53,7 @@ public interface Index<O> extends ModificationListener<O> {
     /**
      * Returns a {@link ResultSet} which when iterated will return objects from the index matching the query
      * supplied.
-     * <p/>
+     * <p>
      * Usually {@code ResultSet}s are <i>lazy</i> which means that they don't actually do any work, or encapsulate or
      * <i>materialize</i> matching objects, but rather they encapsulate logic to fetch matching objects from the index
      * on-the-fly as the application iterates through the {@code ResultSet}.

@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,8 +33,11 @@ import com.googlecode.cqengine.query.simple.In;
 import com.googlecode.cqengine.resultset.ResultSet;
 import com.googlecode.cqengine.resultset.iterator.UnmodifiableIterator;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
@@ -42,15 +46,15 @@ import static com.googlecode.cqengine.index.support.IndexSupport.deduplicateIfNe
 /**
  * An index backed by a {@link ConcurrentHashMap}, which can be more efficient than {@link HashIndex} when used with
  * (and only with) attributes which uniquely identify objects (primary key-type attributes).
- * <p/>
+ * <p>
  * This type of index does not store a set of objects matching each attribute value, but instead stores only a
  * single object for each value. This results in faster query performance, and often lower memory usage, but has some
  * trade-offs.
- * <p/>
+ * <p>
  * This index will throw an exception if a duplicate object is detected for an existing attribute value. That condition
  * means however that inconsistencies might already have arisen between this and other indexes as a result of the
  * application's misuse of this index.
- * <p/>
+ * <p>
  * <b>Trade-offs: {@code UniqueIndex} versus {@code HashIndex}</b>
  * <ul>
  *     <li>
@@ -75,7 +79,7 @@ import static com.googlecode.cqengine.index.support.IndexSupport.deduplicateIfNe
  *         </li></ul>
  *     </li>
  * </ul>
- * <p/>
+ * <p>
  * Supports query types:
  * <ul>
  *     <li>
@@ -101,6 +105,7 @@ public class UniqueIndex<A,O> extends AbstractAttributeIndex<A,O> implements OnH
      * @param indexMapFactory A factory used to create the main map-based data structure used by the index
      * @param attribute The attribute on which the index will be built
      */
+    @SuppressWarnings("rawtypes") // Supplies query classes to the legacy protected superclass contract.
     protected UniqueIndex(Factory<ConcurrentMap<A,O>> indexMapFactory, Attribute<O, A> attribute)	{
         super(attribute, new HashSet<Class<? extends Query>>() {{
             add(Equal.class);
@@ -118,7 +123,7 @@ public class UniqueIndex<A,O> extends AbstractAttributeIndex<A,O> implements OnH
 
     /**
      * {@inheritDoc}
-     * <p/>
+     * <p>
      * This index is mutable.
      *
      * @return true
@@ -192,7 +197,10 @@ public class UniqueIndex<A,O> extends AbstractAttributeIndex<A,O> implements OnH
                     }
                     @Override
                     public O next() {
-                        this.hasNext=false;
+                        if (!hasNext) {
+                            throw new NoSuchElementException();
+                        }
+                        this.hasNext = false;
                         return obj;
                     }
                 };
@@ -237,14 +245,19 @@ public class UniqueIndex<A,O> extends AbstractAttributeIndex<A,O> implements OnH
      */
     @Override
     public boolean addAll(ObjectSet<O> objectSet, QueryOptions queryOptions) {
+        List<IndexEntry<A, O>> addedEntries = new ArrayList<IndexEntry<A, O>>();
         try {
             boolean modified = false;
             ConcurrentMap<A, O> indexMap = this.indexMap;
             for (O object : objectSet) {
                 Iterable<A> attributeValues = getAttribute().getValues(object, queryOptions);
                 for (A attributeValue : attributeValues) {
-                    O existingValue = indexMap.put(attributeValue, object);
-                    if (existingValue != null && !existingValue.equals(object)) {
+                    O existingValue = indexMap.putIfAbsent(attributeValue, object);
+                    if (existingValue == null) {
+                        addedEntries.add(new IndexEntry<A, O>(attributeValue, object));
+                        modified = true;
+                    }
+                    else if (!existingValue.equals(object)) {
                         throw new UniqueConstraintViolatedException(
                                 "The application has attempted to add a duplicate object to the UniqueIndex on attribute '"
                                         + attribute.getAttributeName() +
@@ -253,14 +266,23 @@ public class UniqueIndex<A,O> extends AbstractAttributeIndex<A,O> implements OnH
                                         "Problematic attribute value: '" + attributeValue + "', " +
                                         "problematic duplicate object: " + object);
                     }
-                    modified = true;
-
                 }
             }
             return modified;
         }
+        catch (RuntimeException | Error failure) {
+            rollbackAdditions(addedEntries);
+            throw failure;
+        }
         finally {
             objectSet.close();
+        }
+    }
+
+    private void rollbackAdditions(List<IndexEntry<A, O>> addedEntries) {
+        for (int i = addedEntries.size() - 1; i >= 0; i--) {
+            IndexEntry<A, O> addedEntry = addedEntries.get(i);
+            indexMap.remove(addedEntry.attributeValue, addedEntry.object);
         }
     }
 
@@ -275,7 +297,7 @@ public class UniqueIndex<A,O> extends AbstractAttributeIndex<A,O> implements OnH
             for (O object : objectSet) {
                 Iterable<A> attributeValues = getAttribute().getValues(object, queryOptions);
                 for (A attributeValue : attributeValues) {
-                    modified |= (indexMap.remove(attributeValue) != null);
+                    modified |= indexMap.remove(attributeValue, object);
                 }
             }
             return modified;
@@ -310,9 +332,21 @@ public class UniqueIndex<A,O> extends AbstractAttributeIndex<A,O> implements OnH
         this.indexMap.clear();
     }
 
+    @SuppressWarnings("serial") // Retain the upstream computed identity; apiCompatibility guards drift.
     public static class UniqueConstraintViolatedException extends RuntimeException {
+
         public UniqueConstraintViolatedException(String message) {
             super(message);
+        }
+    }
+
+    private static class IndexEntry<A, O> {
+        final A attributeValue;
+        final O object;
+
+        IndexEntry(A attributeValue, O object) {
+            this.attributeValue = attributeValue;
+            this.object = object;
         }
     }
 
@@ -330,7 +364,6 @@ public class UniqueIndex<A,O> extends AbstractAttributeIndex<A,O> implements OnH
 
     /**
      * Creates a new {@link UniqueIndex} on the specified attribute.
-     * <p/>
      * @param attribute The attribute on which the index will be built
      * @param <O> The type of the object containing the attribute
      * @return A {@link UniqueIndex} on this attribute
@@ -341,7 +374,6 @@ public class UniqueIndex<A,O> extends AbstractAttributeIndex<A,O> implements OnH
 
     /**
      * Creates a new {@link UniqueIndex} on the specified attribute.
-     * <p/>
      * @param indexMapFactory A factory used to create the main map-based data structure used by the index
      * @param attribute The attribute on which the index will be built
      * @param <O> The type of the object containing the attribute

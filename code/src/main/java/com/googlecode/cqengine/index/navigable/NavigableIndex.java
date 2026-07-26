@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,7 +42,7 @@ import static com.googlecode.cqengine.index.support.IndexSupport.deduplicateIfNe
 
 /**
  * An index backed by a {@link ConcurrentSkipListMap}.
- * <p/>
+ * <p>
  * Supports query types:
  * <ul>
  *     <li>
@@ -56,7 +57,6 @@ import static com.googlecode.cqengine.index.support.IndexSupport.deduplicateIfNe
  *     <li>
  *         {@link Between}
  *     </li>
- * </ul>
  * </ul>
  * The constructor of this index accepts {@link Factory} objects, from which it will create the map and value sets it
  * uses internally. This allows the application to "tune" the construction parameters of these maps/sets,
@@ -77,6 +77,7 @@ public class NavigableIndex<A extends Comparable<A>, O> extends AbstractMapBased
      * @param valueSetFactory A factory used to create sets to store values in the index
      * @param attribute The attribute on which the index will be built
      */
+    @SuppressWarnings("rawtypes") // Supplies query classes to the legacy protected superclass contract.
     protected NavigableIndex(Factory<ConcurrentNavigableMap<A, StoredResultSet<O>>> indexMapFactory, Factory<StoredResultSet<O>> valueSetFactory, Attribute<O, A> attribute) {
         super(indexMapFactory, valueSetFactory,  attribute, new HashSet<Class<? extends Query>>() {{
             add(Equal.class);
@@ -90,7 +91,7 @@ public class NavigableIndex<A extends Comparable<A>, O> extends AbstractMapBased
 
     /**
      * {@inheritDoc}
-     * <p/>
+     * <p>
      * This index is mutable.
      * @return true
      */
@@ -397,18 +398,18 @@ public class NavigableIndex<A extends Comparable<A>, O> extends AbstractMapBased
     /**
      * A no-op method which may be overridden by subclasses which use a
      * {@link com.googlecode.cqengine.quantizer.Quantizer}.
-     * <p/>
+     * <p>
      * <b>This default implementation simply returns the given attribute value unmodified.</b>
-     * <p/>
+     * <p>
      * Returns an {@link Iterable} which is similar to the one supplied, but which transparently wraps the first
      * {@link ResultSet} and/or the last {@link ResultSet} returned by the supplied {@link Iterable} in a
      * {@link QuantizedResultSet}.
-     * <p/>
+     * <p>
      * A {@link QuantizedResultSet} transparently filters objects in the wrapped {@link ResultSet} to ensure that
      * they match the given {@link Query}. This is necessary when the index uses a
      * {@link com.googlecode.cqengine.quantizer.Quantizer}, where objects having several adjacent attribute values
      * will be stored together in the same {@link StoredResultSet} in the index.
-     * <p/>
+     * <p>
      * For <i>range queries</i> ({@link LessThan}, {@link GreaterThan}, {@link Between}), the {@link StoredResultSet}s
      * in an index using a quantizer at the keys in the index referenced by the query, are not guaranteed to only
      * contain objects matching the values in the query, due to objects being mixed with their adjacent counterparts.
@@ -432,7 +433,7 @@ public class NavigableIndex<A extends Comparable<A>, O> extends AbstractMapBased
      * A no-op method which can be overridden by a subclass to return a {@link ResultSet} which filters objects from the
      * given {@link ResultSet}, to return only those objects matching the query, for the case that the index is using a
      * {@link com.googlecode.cqengine.quantizer.Quantizer}.
-     * <p/>
+     * <p>
      * <b>This default implementation simply returns the given {@link ResultSet} unmodified.</b>
      *
      * @param storedResultSet A {@link com.googlecode.cqengine.resultset.ResultSet} stored against a quantized key in the index
@@ -453,7 +454,6 @@ public class NavigableIndex<A extends Comparable<A>, O> extends AbstractMapBased
      * Creates a new {@code NavigableIndex} on the given attribute. The attribute can be a {@link SimpleAttribute} or a
      * {@link com.googlecode.cqengine.attribute.MultiValueAttribute}, as long as the type of the attribute referenced
      * implements {@link Comparable}.
-     * <p/>
      * @param attribute The attribute on which the index will be built, a {@link SimpleAttribute} or a
      * {@link com.googlecode.cqengine.attribute.MultiValueAttribute} where the type of the attribute referenced
      * implements {@link Comparable}
@@ -469,7 +469,6 @@ public class NavigableIndex<A extends Comparable<A>, O> extends AbstractMapBased
      * Creates a new {@code NavigableIndex} on the given attribute. The attribute can be a {@link SimpleAttribute} or a
      * {@link com.googlecode.cqengine.attribute.MultiValueAttribute}, as long as the type of the attribute referenced
      * implements {@link Comparable}.
-     * <p/>
      * @param indexMapFactory A factory used to create the main map-based data structure used by the index
      * @param valueSetFactory A factory used to create sets to store values in the index
      * @param attribute The attribute on which the index will be built, a {@link SimpleAttribute} or a
@@ -485,7 +484,6 @@ public class NavigableIndex<A extends Comparable<A>, O> extends AbstractMapBased
 
     /**
      * Creates a {@link NavigableIndex} on the given attribute using the given {@link Quantizer}.
-     * <p/>
      * @param quantizer A {@link Quantizer} to use in this index
      * @param attribute The attribute on which the index will be built
      * @param <O> The type of the object containing the attribute
@@ -497,7 +495,6 @@ public class NavigableIndex<A extends Comparable<A>, O> extends AbstractMapBased
 
     /**
      * Creates a {@link NavigableIndex} on the given attribute using the given {@link Quantizer}.
-     * <p/>
      * @param indexMapFactory A factory used to create the main map-based data structure used by the index
      * @param valueSetFactory A factory used to create sets to store values in the index
      * @param quantizer A {@link Quantizer} to use in this index

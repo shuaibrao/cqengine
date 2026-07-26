@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,8 +29,6 @@ import com.googlecode.cqengine.query.logical.Not;
 import com.googlecode.cqengine.query.logical.Or;
 import com.googlecode.cqengine.query.option.*;
 import com.googlecode.cqengine.query.simple.*;
-import net.jodah.typetools.TypeResolver;
-
 import java.util.*;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
@@ -158,6 +157,8 @@ public class QueryFactory {
      * @param <O> The type of the object containing the attribute
      * @return An {@link In} query
      */
+    @SafeVarargs
+    @SuppressWarnings("varargs")
     public static <O, A> Query<O> in(Attribute<O, A> attribute, A... attributeValues) {
         return in(attribute, Arrays.asList(attributeValues));
     }
@@ -307,7 +308,7 @@ public class QueryFactory {
 
     /**
      * Creates a {@link StringMatchesRegex} query which asserts that an attribute's value matches a regular expression.
-     * <p/>
+     * <p>
      * To accelerate {@code matchesRegex(...)} queries, add a Standing Query Index on {@code matchesRegex(...)}.
      *
      * @param attribute The attribute to which the query refers
@@ -322,7 +323,7 @@ public class QueryFactory {
 
     /**
      * Creates a {@link StringMatchesRegex} query which asserts that an attribute's value matches a regular expression.
-     * <p/>
+     * <p>
      * To accelerate {@code matchesRegex(...)} queries, add a Standing Query Index on {@code matchesRegex(...)}.
      *
      * @param attribute The attribute to which the query refers
@@ -337,11 +338,11 @@ public class QueryFactory {
 
     /**
      * Creates an {@link Has} query which asserts that an attribute has a value (is not null).
-     * <p/>
+     * <p>
      * To accelerate {@code has(...)} queries, add a Standing Query Index on {@code has(...)}.
-     * <p/>
+     * <p>
      * To assert that an attribute does <i>not</i> have a value (is null), use <code>not(has(...))</code>.
-     * <p/>
+     * <p>
      * To accelerate <code>not(has(...))</code> queries, add a Standing Query Index on <code>not(has(...))</code>.
      *
      * @param attribute The attribute to which the query refers
@@ -378,6 +379,8 @@ public class QueryFactory {
      * @param <O> The type of the object containing attributes to which child queries refer
      * @return An {@link And} query, representing a logical AND on child queries
      */
+    @SafeVarargs
+    @SuppressWarnings("varargs")
     public static <O> And<O> and(Query<O> query1, Query<O> query2, Query<O>... additionalQueries) {
         Collection<Query<O>> queries = new ArrayList<Query<O>>(2 + additionalQueries.length);
         queries.add(query1);
@@ -429,6 +432,8 @@ public class QueryFactory {
      * @param <O> The type of the object containing attributes to which child queries refer
      * @return An {@link Or} query, representing a logical OR on child queries
      */
+    @SafeVarargs
+    @SuppressWarnings("varargs")
     public static <O> Or<O> or(Query<O> query1, Query<O> query2, Query<O>... additionalQueries) {
         Collection<Query<O>> queries = new ArrayList<Query<O>>(2 + additionalQueries.length);
         queries.add(query1);
@@ -469,12 +474,12 @@ public class QueryFactory {
 
     /**
      * Creates a query supporting the equivalent of SQL <code>EXISTS</code>.
-     * <p/>
+     * <p>
      * Asserts that objects in a local {@code IndexedCollection} match objects in a foreign collection,
      * based on a key attribute of local objects being equal to a key attribute of the foreign objects.
      * This query can be performed on the local collection, supplying the foreign collection and the
      * relevant attributes, as arguments to the query.
-     * <p/>
+     * <p>
      * This supports the SQL equivalent of:<br/>
      * <pre>
      * SELECT * From LocalCollection
@@ -500,13 +505,13 @@ public class QueryFactory {
     /**
      * Creates a query supporting the equivalent of SQL <code>EXISTS</code>,
      * with some additional restrictions on foreign objects.
-     * <p/>
+     * <p>
      * Asserts that objects in a local {@code IndexedCollection} match objects in a foreign collection,
      * based on a key attribute of local objects being equal to a key attribute of the foreign objects,
      * AND objects in the foreign collection matching some additional criteria.
      * This query can be performed on the local collection, supplying the foreign collection and the
      * relevant attributes, as arguments to the query.
-     * <p/>
+     * <p>
      * This supports the SQL equivalent of:<br/>
      * <pre>
      * SELECT * From LocalCollection
@@ -532,7 +537,7 @@ public class QueryFactory {
 
     /**
      * Creates a query which matches all objects in the collection.
-     * <p/>
+     * <p>
      * This is equivalent to a literal boolean 'true'.
      *
      * @param <O> The type of the objects in the collection
@@ -544,7 +549,7 @@ public class QueryFactory {
 
     /**
      * Creates a query which matches no objects in the collection.
-     * <p/>
+     * <p>
      * This is equivalent to a literal boolean 'false'.
      *
      * @param <O> The type of the objects in the collection
@@ -576,6 +581,8 @@ public class QueryFactory {
      * @param <O> The type of the object containing the attributes
      * @return An {@link OrderByOption} query option, requests results to be sorted in the given order
      */
+    @SafeVarargs
+    @SuppressWarnings("varargs")
     public static <O> OrderByOption<O> orderBy(AttributeOrder<O>... attributeOrders) {
         return new OrderByOption<O>(Arrays.asList(attributeOrders));
     }
@@ -591,6 +598,7 @@ public class QueryFactory {
      * @return An {@link AttributeOrder} object, encapsulating the attribute and a preference to sort results by it
      * in ascending order
      */
+    @SuppressWarnings("rawtypes") // Retains the legacy public generic signature.
     public static <O> AttributeOrder<O> ascending(Attribute<O, ? extends Comparable> attribute) {
         return new AttributeOrder<O>(attribute, false);
     }
@@ -606,6 +614,7 @@ public class QueryFactory {
      * @return An {@link AttributeOrder} object, encapsulating the attribute and a preference to sort results by it
      * in descending order
      */
+    @SuppressWarnings("rawtypes") // Retains the legacy public generic signature.
     public static <O> AttributeOrder<O> descending(Attribute<O, ? extends Comparable> attribute) {
         return new AttributeOrder<O>(attribute, true);
     }
@@ -684,7 +693,7 @@ public class QueryFactory {
     /**
      * Creates a {@link FlagsEnabled} object which may be added to query options.
      * This object encapsulates arbitrary "flag" objects which are said to be "enabled".
-     * <p/>
+     * <p>
      * Some components such as indexes allow their default behaviour to be overridden by
      * setting flags in this way.
      *
@@ -702,7 +711,7 @@ public class QueryFactory {
     /**
      * Creates a {@link FlagsDisabled} object which may be added to query options.
      * This object encapsulates arbitrary "flag" objects which are said to be "disabled".
-     * <p/>
+     * <p>
      * Some components such as indexes allow their default behaviour to be overridden by
      * setting flags in this way.
      *
@@ -760,6 +769,7 @@ public class QueryFactory {
      * @param <A> The type of the resulting attribute; which is the type of the value stored
      * @return a {@link SimpleNullableMapAttribute} which retrieves the value for the given key from a map
      */
+    @SuppressWarnings("rawtypes") // Retains the legacy raw-Map public API.
     public static <K, A> Attribute<Map, A> mapAttribute(K mapKey, Class<A> mapValueType) {
         return new SimpleNullableMapAttribute<K, A>(mapKey, mapValueType);
     }
@@ -771,6 +781,7 @@ public class QueryFactory {
      * @param map The map to wrap
      * @return a {@link MapEntity} wrapping the given map
      */
+    @SuppressWarnings("rawtypes") // Retains the legacy raw-Map public API.
     public static Map mapEntity(Map map) {
         return map instanceof MapEntity ? map : new MapEntity(map);
     }
@@ -784,6 +795,7 @@ public class QueryFactory {
      * @param primaryKey The key of the entry in the map to be used as a primary key
      * @return a {@link PrimaryKeyedMapEntity} wrapping the given map
      */
+    @SuppressWarnings("rawtypes") // Retains the legacy raw-Map public API.
     public static Map primaryKeyedMapEntity(Map map, Object primaryKey) {
         return map instanceof PrimaryKeyedMapEntity ? map : new PrimaryKeyedMapEntity(map, primaryKey);
     }
@@ -792,7 +804,7 @@ public class QueryFactory {
      * Returns an {@link OrderMissingLastAttribute} which which can be used in an {@link #orderBy(AttributeOrder)}
      * clause to specify that objects which do not have values for the given delegate attribute should be returned after
      * objects which do have values for the attribute.
-     * <p/>
+     * <p>
      * Essentially, this attribute can be used to order results based on whether a {@link #has(Attribute)} query on the
      * delegate attribute would return true or false. See documentation in {@link OrderMissingLastAttribute} for more
      * details.
@@ -802,7 +814,7 @@ public class QueryFactory {
      * @param <O> The type of the object containing the attribute
      * @return An {@link OrderMissingLastAttribute} which orders objects with values before those without values
      */
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"rawtypes", "unchecked"}) // Retains the legacy public generic signature.
     public static <O> OrderMissingLastAttribute<O> missingLast(Attribute<O, ? extends Comparable> delegateAttribute) {
         return new OrderMissingLastAttribute<O>(delegateAttribute);
     }
@@ -811,7 +823,7 @@ public class QueryFactory {
      * Returns an {@link OrderMissingFirstAttribute} which which can be used in an {@link #orderBy(AttributeOrder)}
      * clause to specify that objects which do not have values for the given delegate attribute should be returned
      * before objects which do have values for the attribute.
-     * <p/>
+     * <p>
      * Essentially, this attribute can be used to order results based on whether a {@link #has(Attribute)} query on the
      * delegate attribute would return true or false. See documentation in {@link OrderMissingFirstAttribute} for more
      * details.
@@ -821,7 +833,7 @@ public class QueryFactory {
      * @param <O> The type of the object containing the attribute
      * @return An {@link OrderMissingFirstAttribute} which orders objects without values before those with values
      */
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"rawtypes", "unchecked"}) // Retains the legacy public generic signature.
     public static <O> OrderMissingFirstAttribute<O> missingFirst(Attribute<O, ? extends Comparable> delegateAttribute) {
         return new OrderMissingFirstAttribute<O>(delegateAttribute);
     }
@@ -840,7 +852,7 @@ public class QueryFactory {
     /**
      * Creates a {@link StandingQueryAttribute} which returns true if the given attribute does not have values for
      * an object.
-     * <p/>
+     * <p>
      * An index can then be built on this attribute, and it will be able to to answer a <code>not(has(attribute))</code>
      * query, returning objects which do not have values for that attribute, in constant time complexity O(1).
      *
@@ -857,44 +869,32 @@ public class QueryFactory {
     // ***************************************************************************************************************
 
     /**
-     * Creates a {@link SimpleAttribute} from the given function or lambda expression,
-     * while attempting to infer generic type information for the attribute automatically.
-     * <p/>
-     * <b>Limitations of type inference</b><br/>
-     * As of Java 8, there are limitations of this type inference.
-     * CQEngine uses <a href="https://github.com/jhalterman/typetools">TypeTools</a> to infer generic types.
-     * See documentation of that library for details.
-     * If generic type information cannot be inferred, as a workaround you may use the overloaded variant of this method
-     * which allows the types to be specified explicitly.
-     * <p/>
+     * Creates a {@link SimpleAttribute} from a class-based function implementation whose concrete generic types can be
+     * read through standard Java reflection. Lambda expressions and method references use synthetic runtime classes
+     * which do not expose those types; use {@link #simpleAttribute(Class, Class, String, SimpleFunction)} for them.
+     * <p>
      * This is a convenience method, which delegates to {@link #attribute(String, SimpleFunction)},
      * supplying {@code function.getClass().getName()} as the name of the attribute.
      *
-     * @param function A function or lambda expression
+     * @param function A class-based function implementation with concrete generic types
      * @param <O> The type of the object containing the attribute
      * @param <A> The type of the attribute
-     * @return A {@link SimpleAttribute} created from the given function or lambda expression
+     * @return A {@link SimpleAttribute} created from the given function
      */
     public static <O, A> SimpleAttribute<O, A> attribute(SimpleFunction<O, A> function) {
         return attribute(function.getClass().getName(), function);
     }
 
     /**
-     * Creates a {@link SimpleAttribute} from the given function or lambda expression,
-     * while attempting to infer generic type information for the attribute automatically.
-     * <p/>
-     * <b>Limitations of type inference</b><br/>
-     * As of Java 8, there are limitations of this type inference.
-     * CQEngine uses <a href="https://github.com/jhalterman/typetools">TypeTools</a> to infer generic types.
-     * See documentation of that library for details.
-     * If generic type information cannot be inferred, as a workaround you may use the overloaded variant of this method
-     * which allows the types to be specified explicitly.
+     * Creates a {@link SimpleAttribute} from a class-based function implementation whose concrete generic types can be
+     * read through standard Java reflection. Lambda expressions and method references use synthetic runtime classes
+     * which do not expose those types; use {@link #simpleAttribute(Class, Class, String, SimpleFunction)} for them.
      *
      * @param attributeName The name of the attribute
-     * @param function A function or lambda expression
+     * @param function A class-based function implementation with concrete generic types
      * @param <O> The type of the object containing the attribute
      * @param <A> The type of the attribute
-     * @return A {@link SimpleAttribute} created from the given function or lambda expression
+     * @return A {@link SimpleAttribute} created from the given function
      */
     public static <O, A> SimpleAttribute<O, A> attribute(String attributeName, SimpleFunction<O, A> function) {
         FunctionGenericTypes<O, A> resolved = resolveSimpleFunctionGenericTypes(function.getClass());
@@ -904,6 +904,8 @@ public class QueryFactory {
     /**
      * Creates a {@link SimpleAttribute} from the given function or lambda expression,
      * allowing the generic types of the attribute to be specified explicitly.
+     * For an inline lambda, {@link #simpleAttribute(Class, Class, String, SimpleFunction)} avoids ambiguity with the
+     * equivalent multi-value overload.
      *
      * @param objectType The type of the object containing the attribute
      * @param attributeType The type of the attribute
@@ -918,44 +920,50 @@ public class QueryFactory {
     }
 
     /**
-     * Creates a {@link SimpleNullableAttribute} from the given function or lambda expression,
-     * while attempting to infer generic type information for the attribute automatically.
-     * <p/>
-     * <b>Limitations of type inference</b><br/>
-     * As of Java 8, there are limitations of this type inference.
-     * CQEngine uses <a href="https://github.com/jhalterman/typetools">TypeTools</a> to infer generic types.
-     * See documentation of that library for details.
-     * If generic type information cannot be inferred, as a workaround you may use the overloaded variant of this method
-     * which allows the types to be specified explicitly.
-     * <p/>
-     * This is a convenience method, which delegates to {@link #nullableAttribute(String, SimpleFunction)},
-     * supplying {@code function.getClass().getName()} as the name of the attribute.
+     * Creates a {@link SimpleAttribute} with explicit types. This is the canonical, unambiguous factory for lambda
+     * expressions and method references.
      *
+     * @param objectType The type of the object containing the attribute
+     * @param attributeType The type of the attribute
+     * @param attributeName The name of the attribute
      * @param function A function or lambda expression
      * @param <O> The type of the object containing the attribute
      * @param <A> The type of the attribute
-     * @return A {@link SimpleNullableAttribute} created from the given function or lambda expression
+     * @return A {@link SimpleAttribute} created from the given function
+     */
+    public static <O, A> SimpleAttribute<O, A> simpleAttribute(Class<O> objectType, Class<A> attributeType, String attributeName, SimpleFunction<O, A> function) {
+        return attribute(objectType, attributeType, attributeName, function);
+    }
+
+    /**
+     * Creates a {@link SimpleNullableAttribute} from a class-based function implementation whose concrete generic types
+     * can be read through standard Java reflection. Lambda expressions and method references use synthetic runtime
+     * classes which do not expose those types; use
+     * {@link #simpleNullableAttribute(Class, Class, String, SimpleFunction)} for them.
+     * <p>
+     * This is a convenience method, which delegates to {@link #nullableAttribute(String, SimpleFunction)},
+     * supplying {@code function.getClass().getName()} as the name of the attribute.
+     *
+     * @param function A class-based function implementation with concrete generic types
+     * @param <O> The type of the object containing the attribute
+     * @param <A> The type of the attribute
+     * @return A {@link SimpleNullableAttribute} created from the given function
      */
     public static <O, A> SimpleNullableAttribute<O, A> nullableAttribute(SimpleFunction<O, A> function) {
         return nullableAttribute(function.getClass().getName(), function);
     }
 
     /**
-     * Creates a {@link SimpleNullableAttribute} from the given function or lambda expression,
-     * while attempting to infer generic type information for the attribute automatically.
-     * <p/>
-     * <b>Limitations of type inference</b><br/>
-     * As of Java 8, there are limitations of this type inference.
-     * CQEngine uses <a href="https://github.com/jhalterman/typetools">TypeTools</a> to infer generic types.
-     * See documentation of that library for details.
-     * If generic type information cannot be inferred, as a workaround you may use the overloaded variant of this method
-     * which allows the types to be specified explicitly.
+     * Creates a {@link SimpleNullableAttribute} from a class-based function implementation whose concrete generic types
+     * can be read through standard Java reflection. Lambda expressions and method references use synthetic runtime
+     * classes which do not expose those types; use
+     * {@link #simpleNullableAttribute(Class, Class, String, SimpleFunction)} for them.
      *
      * @param attributeName The name of the attribute
-     * @param function A function or lambda expression
+     * @param function A class-based function implementation with concrete generic types
      * @param <O> The type of the object containing the attribute
      * @param <A> The type of the attribute
-     * @return A {@link SimpleNullableAttribute} created from the given function or lambda expression
+     * @return A {@link SimpleNullableAttribute} created from the given function
      */
     public static <O, A> SimpleNullableAttribute<O, A> nullableAttribute(String attributeName, SimpleFunction<O, A> function) {
         FunctionGenericTypes<O, A> resolved = resolveSimpleFunctionGenericTypes(function.getClass());
@@ -965,6 +973,8 @@ public class QueryFactory {
     /**
      * Creates a {@link SimpleNullableAttribute} from the given function or lambda expression,
      * allowing the generic types of the attribute to be specified explicitly.
+     * For an inline lambda, {@link #simpleNullableAttribute(Class, Class, String, SimpleFunction)} avoids ambiguity with
+     * the equivalent multi-value overload.
      *
      * @param objectType The type of the object containing the attribute
      * @param attributeType The type of the attribute
@@ -979,46 +989,50 @@ public class QueryFactory {
     }
 
     /**
-     * Creates a {@link MultiValueAttribute} from the given function or lambda expression,
-     * while attempting to infer generic type information for the attribute automatically.
-     * <p/>
-     * <b>Limitations of type inference</b><br/>
-     * As of Java 8, there are limitations of this type inference.
-     * CQEngine uses <a href="https://github.com/jhalterman/typetools">TypeTools</a> to infer generic types.
-     * See documentation of that library for details.
-     * If generic type information cannot be inferred, as a workaround you may use the overloaded variant of this method
-     * which allows the types to be specified explicitly.
-     * <p/>
+     * Creates a {@link SimpleNullableAttribute} with explicit types. This is the canonical, unambiguous factory for
+     * lambda expressions and method references.
+     *
+     * @param objectType The type of the object containing the attribute
+     * @param attributeType The type of the attribute
+     * @param attributeName The name of the attribute
+     * @param function A function or lambda expression
+     * @param <O> The type of the object containing the attribute
+     * @param <A> The type of the attribute
+     * @return A {@link SimpleNullableAttribute} created from the given function
+     */
+    public static <O, A> SimpleNullableAttribute<O, A> simpleNullableAttribute(Class<O> objectType, Class<A> attributeType, String attributeName, SimpleFunction<O, A> function) {
+        return nullableAttribute(objectType, attributeType, attributeName, function);
+    }
+
+    /**
+     * Creates a {@link MultiValueAttribute} from a class-based function implementation whose object type can be read
+     * through standard Java reflection. Lambda expressions and method references use synthetic runtime classes which do
+     * not expose that type; use {@link #multiValueAttribute(Class, Class, String, MultiValueFunction)} for them.
+     * <p>
      * This is a convenience method, which delegates to {@link #attribute(Class, String, MultiValueFunction)},
      * supplying {@code function.getClass().getName()} as the name of the attribute.
      *
      * @param attributeType The type of the attribute
-     * @param function A function or lambda expression
+     * @param function A class-based function implementation with a concrete object type
      * @param <O> The type of the object containing the attribute
      * @param <A> The type of the attribute
-     * @return A {@link MultiValueAttribute} created from the given function or lambda expression
+     * @return A {@link MultiValueAttribute} created from the given function
      */
     public static <O, A, I extends Iterable<A>> MultiValueAttribute<O, A> attribute(Class<A> attributeType, MultiValueFunction<O, A, I> function) {
         return attribute(attributeType, function.getClass().getName(), function);
     }
 
     /**
-     * Creates a {@link MultiValueAttribute} from the given function or lambda expression,
-     * while attempting to infer generic type information for the attribute automatically.
-     * <p/>
-     * <b>Limitations of type inference</b><br/>
-     * As of Java 8, there are limitations of this type inference.
-     * CQEngine uses <a href="https://github.com/jhalterman/typetools">TypeTools</a> to infer generic types.
-     * See documentation of that library for details.
-     * If generic type information cannot be inferred, as a workaround you may use the overloaded variant of this method
-     * which allows the types to be specified explicitly.
+     * Creates a {@link MultiValueAttribute} from a class-based function implementation whose object type can be read
+     * through standard Java reflection. Lambda expressions and method references use synthetic runtime classes which do
+     * not expose that type; use {@link #multiValueAttribute(Class, Class, String, MultiValueFunction)} for them.
      *
      * @param attributeType The type of the attribute
      * @param attributeName The name of the attribute
-     * @param function A function or lambda expression
+     * @param function A class-based function implementation with a concrete object type
      * @param <O> The type of the object containing the attribute
      * @param <A> The type of the attribute
-     * @return A {@link MultiValueAttribute} created from the given function or lambda expression
+     * @return A {@link MultiValueAttribute} created from the given function
      */
     public static <O, A, I extends Iterable<A>> MultiValueAttribute<O, A> attribute(Class<A> attributeType, String attributeName, MultiValueFunction<O, A, I> function) {
         Class<O> resolvedObjectType = resolveMultiValueFunctionGenericObjectType(function.getClass());
@@ -1028,6 +1042,8 @@ public class QueryFactory {
     /**
      * Creates a {@link MultiValueAttribute} from the given function or lambda expression,
      * allowing the generic types of the attribute to be specified explicitly.
+     * For an inline lambda, {@link #multiValueAttribute(Class, Class, String, MultiValueFunction)} avoids ambiguity with
+     * the equivalent simple-value overload.
      *
      * @param objectType The type of the object containing the attribute
      * @param attributeType The type of the attribute
@@ -1042,46 +1058,53 @@ public class QueryFactory {
     }
 
     /**
-     * Creates a {@link MultiValueNullableAttribute} from the given function or lambda expression,
-     * while attempting to infer generic type information for the attribute automatically.
-     * <p/>
-     * <b>Limitations of type inference</b><br/>
-     * As of Java 8, there are limitations of this type inference.
-     * CQEngine uses <a href="https://github.com/jhalterman/typetools">TypeTools</a> to infer generic types.
-     * See documentation of that library for details.
-     * If generic type information cannot be inferred, as a workaround you may use the overloaded variant of this method
-     * which allows the types to be specified explicitly.
-     * <p/>
+     * Creates a {@link MultiValueAttribute} with explicit types. This is the canonical, unambiguous factory for lambda
+     * expressions and method references.
+     *
+     * @param objectType The type of the object containing the attribute
+     * @param attributeType The type of the attribute
+     * @param attributeName The name of the attribute
+     * @param function A function or lambda expression
+     * @param <O> The type of the object containing the attribute
+     * @param <A> The type of the attribute
+     * @param <I> The iterable type returned by the function
+     * @return A {@link MultiValueAttribute} created from the given function
+     */
+    public static <O, A, I extends Iterable<A>> MultiValueAttribute<O, A> multiValueAttribute(Class<O> objectType, Class<A> attributeType, String attributeName, MultiValueFunction<O, A, I> function) {
+        return attribute(objectType, attributeType, attributeName, function);
+    }
+
+    /**
+     * Creates a {@link MultiValueNullableAttribute} from a class-based function implementation whose object type can be
+     * read through standard Java reflection. Lambda expressions and method references use synthetic runtime classes
+     * which do not expose that type; use
+     * {@link #multiValueNullableAttribute(Class, Class, String, MultiValueFunction)} for them.
+     * <p>
      * This is a convenience method, which delegates to {@link #nullableAttribute(Class, String, MultiValueFunction)},
      * supplying {@code function.getClass().getName()} as the name of the attribute.
      *
      * @param attributeType The type of the attribute
-     * @param function A function or lambda expression
+     * @param function A class-based function implementation with a concrete object type
      * @param <O> The type of the object containing the attribute
      * @param <A> The type of the attribute
-     * @return A {@link MultiValueNullableAttribute} created from the given function or lambda expression
+     * @return A {@link MultiValueNullableAttribute} created from the given function
      */
     public static <O, A, I extends Iterable<A>> MultiValueNullableAttribute<O, A> nullableAttribute(Class<A> attributeType, MultiValueFunction<O, A, I> function) {
         return nullableAttribute(attributeType, function.getClass().getName(), function);
     }
 
     /**
-     * Creates a {@link MultiValueNullableAttribute} from the given function or lambda expression,
-     * while attempting to infer generic type information for the attribute automatically.
-     * <p/>
-     * <b>Limitations of type inference</b><br/>
-     * As of Java 8, there are limitations of this type inference.
-     * CQEngine uses <a href="https://github.com/jhalterman/typetools">TypeTools</a> to infer generic types.
-     * See documentation of that library for details.
-     * If generic type information cannot be inferred, as a workaround you may use the overloaded variant of this method
-     * which allows the types to be specified explicitly.
+     * Creates a {@link MultiValueNullableAttribute} from a class-based function implementation whose object type can be
+     * read through standard Java reflection. Lambda expressions and method references use synthetic runtime classes
+     * which do not expose that type; use
+     * {@link #multiValueNullableAttribute(Class, Class, String, MultiValueFunction)} for them.
      *
      * @param attributeType The type of the attribute
      * @param attributeName The name of the attribute
-     * @param function A function or lambda expression
+     * @param function A class-based function implementation with a concrete object type
      * @param <O> The type of the object containing the attribute
      * @param <A> The type of the attribute
-     * @return A {@link MultiValueNullableAttribute} created from the given function or lambda expression
+     * @return A {@link MultiValueNullableAttribute} created from the given function
      */
     public static <O, A, I extends Iterable<A>> MultiValueNullableAttribute<O, A> nullableAttribute(Class<A> attributeType, String attributeName, MultiValueFunction<O, A, I> function) {
         Class<O> resolvedObjectType = resolveMultiValueFunctionGenericObjectType(function.getClass());
@@ -1091,6 +1114,8 @@ public class QueryFactory {
     /**
      * Creates a {@link MultiValueNullableAttribute} from the given function or lambda expression,
      * allowing the generic types of the attribute to be specified explicitly.
+     * For an inline lambda, {@link #multiValueNullableAttribute(Class, Class, String, MultiValueFunction)} avoids
+     * ambiguity with the equivalent simple-value overload.
      *
      * @param objectType The type of the object containing the attribute
      * @param attributeType The type of the attribute
@@ -1104,20 +1129,41 @@ public class QueryFactory {
         return new FunctionalMultiValueNullableAttribute<O, A, I>(objectType, attributeType, attributeName, true, function);
     }
 
+    /**
+     * Creates a {@link MultiValueNullableAttribute} with explicit types. This is the canonical, unambiguous factory for
+     * lambda expressions and method references.
+     *
+     * @param objectType The type of the object containing the attribute
+     * @param attributeType The type of the attribute
+     * @param attributeName The name of the attribute
+     * @param function A function or lambda expression
+     * @param <O> The type of the object containing the attribute
+     * @param <A> The type of the attribute
+     * @param <I> The iterable type returned by the function
+     * @return A {@link MultiValueNullableAttribute} created from the given function
+     */
+    public static <O, A, I extends Iterable<A>> MultiValueNullableAttribute<O, A> multiValueNullableAttribute(Class<O> objectType, Class<A> attributeType, String attributeName, MultiValueFunction<O, A, I> function) {
+        return nullableAttribute(objectType, attributeType, attributeName, function);
+    }
+
     // ***************************************************************************************************************
     // Helper methods for creating attributes from lambda expressions...
     // ***************************************************************************************************************
 
     static final String GENERIC_TYPE_RESOLUTION_FAILURE_MESSAGE =
-            "If the function you supplied was created from a lambda expression, then it's likely " +
-                    "that the host JVM does not allow the generic type information to be read from lambda expressions. " +
-                    "Alternatively, if you supplied a class-based implementation of the function, then you must ensure " +
-                    "that you specified the generic types of the function when it was compiled. " +
-                    "As a workaround, you can use the counterpart methods in QueryFactory " +
-                    "which allow the generic types to be specified explicitly.";
+            "Generic type inference requires a class-based function implementation which retains concrete generic " +
+                    "arguments. Use simpleAttribute, simpleNullableAttribute, multiValueAttribute or " +
+                    "multiValueNullableAttribute to supply objectType and attributeType explicitly.";
 
-    static <O, A, F> FunctionGenericTypes<O, A> resolveSimpleFunctionGenericTypes(Class<?> subType) {
-        Class<?>[] typeArgs = TypeResolver.resolveRawArguments(SimpleFunction.class, subType);
+    static final String SYNTHETIC_FUNCTION_TYPE_RESOLUTION_FAILURE_MESSAGE =
+            "Generic type inference is not supported for lambda expressions or method references because their " +
+                    "synthetic runtime classes do not expose generic arguments. Use simpleAttribute, " +
+                    "simpleNullableAttribute, multiValueAttribute or multiValueNullableAttribute to supply objectType " +
+                    "and attributeType explicitly.";
+
+    static <O, A> FunctionGenericTypes<O, A> resolveSimpleFunctionGenericTypes(Class<?> subType) {
+        rejectSyntheticFunctionType(subType);
+        Class<?>[] typeArgs = FunctionGenericTypeResolver.resolveRawArguments(SimpleFunction.class, subType);
 
         validateSimpleFunctionGenericTypes(typeArgs, subType);
 
@@ -1131,7 +1177,7 @@ public class QueryFactory {
             throw new IllegalStateException("Could not resolve any generic type information from the given " +
                     "function of type: " + subType.getName() + ". " + GENERIC_TYPE_RESOLUTION_FAILURE_MESSAGE);
         }
-        if (typeArgs.length != 2 || typeArgs[0] == TypeResolver.Unknown.class || typeArgs[1] == TypeResolver.Unknown.class) {
+        if (typeArgs.length != 2 || typeArgs[0] == null || typeArgs[1] == null) {
             throw new IllegalStateException("Could not resolve sufficient generic type information from the given " +
                     "function of type: " + subType.getName() + ", resolved: " + Arrays.toString(typeArgs) + ". " +
                     GENERIC_TYPE_RESOLUTION_FAILURE_MESSAGE);
@@ -1139,7 +1185,8 @@ public class QueryFactory {
     }
 
     static <O> Class<O> resolveMultiValueFunctionGenericObjectType(Class<?> subType) {
-        Class<?>[] typeArgs = TypeResolver.resolveRawArguments(MultiValueFunction.class, subType);
+        rejectSyntheticFunctionType(subType);
+        Class<?>[] typeArgs = FunctionGenericTypeResolver.resolveRawArguments(MultiValueFunction.class, subType);
 
         validateMultiValueFunctionGenericTypes(typeArgs, subType);
 
@@ -1152,15 +1199,20 @@ public class QueryFactory {
             throw new IllegalStateException("Could not resolve any generic type information from the given " +
                     "function of type: " + subType.getName() + ". " + GENERIC_TYPE_RESOLUTION_FAILURE_MESSAGE);
         }
-        if (typeArgs.length != 3 || typeArgs[0] == TypeResolver.Unknown.class) {
+        if (typeArgs.length != 3 || typeArgs[0] == null) {
             throw new IllegalStateException("Could not resolve sufficient generic type information from the given " +
                     "function of type: " + subType.getName() + ", resolved: " + Arrays.toString(typeArgs) + ". " +
                     GENERIC_TYPE_RESOLUTION_FAILURE_MESSAGE);
         }
     }
 
+    static void rejectSyntheticFunctionType(Class<?> subType) {
+        if (subType.isSynthetic() || subType.isHidden()) {
+            throw new IllegalStateException(SYNTHETIC_FUNCTION_TYPE_RESOLUTION_FAILURE_MESSAGE);
+        }
+    }
 
-        static class FunctionGenericTypes<O, A> {
+    static class FunctionGenericTypes<O, A> {
         final Class<O> objectType;
         final Class<A> attributeType;
 
@@ -1184,7 +1236,7 @@ public class QueryFactory {
 
     /**
      * Overloaded variant of {@link #and(Query, Query, Query[])} - see that method for details.
-     * <p/>
+     * <p>
      * Note: This method is unnecessary as of Java 7, and is provided only for backward compatibility with Java 6 and
      * earlier, to eliminate generic array creation warnings output by the compiler in those versions.
      */
@@ -1197,7 +1249,7 @@ public class QueryFactory {
 
     /**
      * Overloaded variant of {@link #and(Query, Query, Query[])} - see that method for details.
-     * <p/>
+     * <p>
      * Note: This method is unnecessary as of Java 7, and is provided only for backward compatibility with Java 6 and
      * earlier, to eliminate generic array creation warnings output by the compiler in those versions.
      */
@@ -1210,7 +1262,7 @@ public class QueryFactory {
 
     /**
      * Overloaded variant of {@link #and(Query, Query, Query[])} - see that method for details.
-     * <p/>
+     * <p>
      * Note: This method is unnecessary as of Java 7, and is provided only for backward compatibility with Java 6 and
      * earlier, to eliminate generic array creation warnings output by the compiler in those versions.
      */
@@ -1225,7 +1277,7 @@ public class QueryFactory {
 
     /**
      * Overloaded variant of {@link #or(Query, Query, Query[])} - see that method for details.
-     * <p/>
+     * <p>
      * Note: This method is unnecessary as of Java 7, and is provided only for backward compatibility with Java 6 and
      * earlier, to eliminate generic array creation warnings output by the compiler in those versions.
      */
@@ -1238,7 +1290,7 @@ public class QueryFactory {
 
     /**
      * Overloaded variant of {@link #or(Query, Query, Query[])} - see that method for details.
-     * <p/>
+     * <p>
      * Note: This method is unnecessary as of Java 7, and is provided only for backward compatibility with Java 6 and
      * earlier, to eliminate generic array creation warnings output by the compiler in those versions.
      */
@@ -1251,7 +1303,7 @@ public class QueryFactory {
 
     /**
      * Overloaded variant of {@link #or(Query, Query, Query[])} - see that method for details.
-     * <p/>
+     * <p>
      * Note: This method is unnecessary as of Java 7, and is provided only for backward compatibility with Java 6 and
      * earlier, to eliminate generic array creation warnings output by the compiler in those versions.
      */
@@ -1267,7 +1319,7 @@ public class QueryFactory {
     /**
      * Overloaded variant of {@link #orderBy(com.googlecode.cqengine.query.option.AttributeOrder[])} - see that method
      * for details.
-     * <p/>
+     * <p>
      * Note: This method is unnecessary as of Java 7, and is provided only for backward compatibility with Java 6 and
      * earlier, to eliminate generic array creation warnings output by the compiler in those versions.
      */
@@ -1281,7 +1333,7 @@ public class QueryFactory {
     /**
      * Overloaded variant of {@link #orderBy(com.googlecode.cqengine.query.option.AttributeOrder[])} - see that method
      * for details.
-     * <p/>
+     * <p>
      * Note: This method is unnecessary as of Java 7, and is provided only for backward compatibility with Java 6 and
      * earlier, to eliminate generic array creation warnings output by the compiler in those versions.
      */
@@ -1295,7 +1347,7 @@ public class QueryFactory {
     /**
      * Overloaded variant of {@link #orderBy(com.googlecode.cqengine.query.option.AttributeOrder[])} - see that method
      * for details.
-     * <p/>
+     * <p>
      * Note: This method is unnecessary as of Java 7, and is provided only for backward compatibility with Java 6 and
      * earlier, to eliminate generic array creation warnings output by the compiler in those versions.
      */
@@ -1310,7 +1362,7 @@ public class QueryFactory {
     /**
      * Overloaded variant of {@link #orderBy(com.googlecode.cqengine.query.option.AttributeOrder[])} - see that method
      * for details.
-     * <p/>
+     * <p>
      * Note: This method is unnecessary as of Java 7, and is provided only for backward compatibility with Java 6 and
      * earlier, to eliminate generic array creation warnings output by the compiler in those versions.
      */
@@ -1326,7 +1378,7 @@ public class QueryFactory {
     /**
      * Overloaded variant of {@link #orderBy(com.googlecode.cqengine.query.option.AttributeOrder[])} - see that method
      * for details.
-     * <p/>
+     * <p>
      * Note: This method is unnecessary as of Java 7, and is provided only for backward compatibility with Java 6 and
      * earlier, to eliminate generic array creation warnings output by the compiler in those versions.
      */
@@ -1344,7 +1396,7 @@ public class QueryFactory {
      * Converts a {@link Query} to a {@link Predicate} which can evaluate if the the query matches any given object.
      * The predicate will determine this by invoking {@link Query#matches(Object, QueryOptions)}, supplying null for
      * the query options.
-     * <p/>
+     * <p>
      * Note that while most queries do not utilize query options and thus will be compatible with this method,
      * it's possible that some queries might require query options. For those cases, create the predicate via
      * the counterpart method {@link #predicate(Query, QueryOptions)} instead.
@@ -1372,7 +1424,7 @@ public class QueryFactory {
 
     /**
      * Overloaded variant of {@link #queryOptions(Object...)}  - see that method for details.
-     * <p/>
+     * <p>
      * Note: This method is unnecessary as of Java 7, and is provided only for backward compatibility with Java 6 and
      * earlier, to eliminate generic array creation warnings output by the compiler in those versions.
      */
@@ -1383,7 +1435,7 @@ public class QueryFactory {
 
     /**
      * Overloaded variant of {@link #queryOptions(Object...)}  - see that method for details.
-     * <p/>
+     * <p>
      * Note: This method is unnecessary as of Java 7, and is provided only for backward compatibility with Java 6 and
      * earlier, to eliminate generic array creation warnings output by the compiler in those versions.
      */

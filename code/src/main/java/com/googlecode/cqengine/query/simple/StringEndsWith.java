@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -79,7 +80,7 @@ public class StringEndsWith<O, A extends CharSequence> extends SimpleQuery<O, A>
         if (this == o) return true;
         if (!(o instanceof StringEndsWith)) return false;
 
-        StringEndsWith that = (StringEndsWith) o;
+        StringEndsWith<?, ?> that = (StringEndsWith<?, ?>) o;
 
         if (!attribute.equals(that.attribute)) return false;
         if (!value.equals(that.value)) return false;

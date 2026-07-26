@@ -40,7 +40,7 @@ public interface QueryEngine<O> {
 
     /**
      * Adds the given index to the collection.
-     * <p/>
+     * <p>
      * Subsequently queries passed to the {@link #retrieve(com.googlecode.cqengine.query.Query, QueryOptions)} method
      * will use these indexes if suitable for the particular queries, to speed up retrievals.
      * @param index The index to add

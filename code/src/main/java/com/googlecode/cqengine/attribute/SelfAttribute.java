@@ -19,7 +19,7 @@ import com.googlecode.cqengine.query.option.QueryOptions;
 
 /**
  * An attribute which returns the object itself.
- * <p/>
+ * <p>
  * This can be useful when performing queries on objects in the collection itself (rather than on fields in the
  * objects in the collection). Typical use case would be for performing <code>startsWith</code> queries on an
  * <code>IndexedCollection&lt;String&gt;</code>.

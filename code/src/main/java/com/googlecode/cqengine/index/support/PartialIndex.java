@@ -36,19 +36,19 @@ import java.util.*;
 /**
  * An index which indexes and can answer queries on a subset of the collection; a kind of hybrid between a
  * {@link StandingQueryIndex} and a {@link CompoundIndex}.
- * <p/>
+ * <p>
  * A partial index wraps a backing index and adds only a subset of objects which match a given <i>filter
  * query</i> to the backing index. As such, a partial index accelerates queries on an "interesting subset"
  * of the collection, without incurring the overhead of indexing the entire collection.
- * <p/>
+ * <p>
  * Partial indexes require less storage space or memory than non-partial indexes, and they can yield better
  * query performance as well, because they will contain fewer irrelevant entries not pertaining to the query.
- * <p/>
+ * <p>
  * Partial indexes are also particularly useful when used with index-accelerated ordering. They can store
  * results which match a given filter query in pre-sorted order of the given attribute, which means that
  * requesting results for that query and ordered by that attribute at runtime, can be answered quickly by
  * the partial index without requiring any post-filtering or post-sorting.
- * <p/>
+ * <p>
  * <b>The conditions under which a partial index will be used are as follows.</b><br/>
  *
  * Two conditions must be satisfied:
@@ -129,7 +129,7 @@ public abstract class PartialIndex<A, O, I extends AttributeIndex<A, O>> impleme
 
     /**
      * Returns true if this partial index can answer this branch of the query.
-     * <p/>
+     * <p>
      * See the class JavaDoc for the conditions which must be satisfied for this method to return true.
      *
      * @param query The query supplied by the query engine, which is typically a branch of the overall query being

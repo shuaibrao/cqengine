@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,7 +43,7 @@ import static com.googlecode.cqengine.index.support.IndexSupport.deduplicateIfNe
 
 /**
  * An index backed by a {@link ConcurrentRadixTree}.
- * <p/>
+ * <p>
  * Supports query types:
  * <ul>
  *     <li>
@@ -72,6 +73,7 @@ public class RadixTreeIndex<A extends CharSequence, O> extends AbstractAttribute
     /**
      * Package-private constructor, used by static factory methods.
      */
+    @SuppressWarnings("rawtypes") // Supplies query classes to the legacy protected superclass contract.
     protected RadixTreeIndex(Attribute<O, A> attribute, NodeFactory nodeFactory) {
         super(attribute, new HashSet<Class<? extends Query>>() {{
             add(Equal.class);
@@ -334,7 +336,6 @@ public class RadixTreeIndex<A extends CharSequence, O> extends AbstractAttribute
 
     /**
      * Creates a new {@link RadixTreeIndex} on the specified attribute.
-     * <p/>
      * @param attribute The attribute on which the index will be built
      * @param <O> The type of the object containing the attribute
      * @return A {@link RadixTreeIndex} on this attribute
@@ -345,7 +346,6 @@ public class RadixTreeIndex<A extends CharSequence, O> extends AbstractAttribute
 
     /**
      * Creates a new {@link RadixTreeIndex} on the specified attribute, using the specified NodeFactory.
-     * <p/>
      * @param attribute The attribute on which the index will be built
      * @param nodeFactory The NodeFactory to be used by the tree
      * @param <O> The type of the object containing the attribute

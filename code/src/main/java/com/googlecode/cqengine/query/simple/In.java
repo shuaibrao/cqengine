@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +20,8 @@ import com.googlecode.cqengine.attribute.Attribute;
 import com.googlecode.cqengine.attribute.SimpleAttribute;
 import com.googlecode.cqengine.query.option.QueryOptions;
 
+import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.Set;
 
 /**
@@ -32,10 +35,14 @@ public class In<O, A> extends SimpleQuery<O, A> {
     private final boolean disjoint;
     public In(Attribute<O, A> attribute, boolean disjoint, Set<A> values) {
         super(attribute);
-        if (values == null || values.size() == 0){
+        if (values == null){
             throw new IllegalArgumentException("The IN query must have at least one value.");
         }
-        this.values = values;
+        Set<A> valueSnapshot = new LinkedHashSet<A>(values);
+        if (valueSnapshot.isEmpty()) {
+            throw new IllegalArgumentException("The IN query must have at least one value.");
+        }
+        this.values = Collections.unmodifiableSet(valueSnapshot);
         this.disjoint = disjoint;
     }
 

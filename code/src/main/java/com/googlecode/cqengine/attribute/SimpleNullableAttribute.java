@@ -35,7 +35,7 @@ public abstract class SimpleNullableAttribute<O, A> extends AbstractAttribute<O,
      *
      * This name is not actually used by the query engine except in providing informative exception and debug messages.
      * As such it is recommended, but not required, that a name be provided.
-     * <p/>
+     * <p>
      * A suitable name might be the name of the field to which an attribute refers.
      *
      * @param attributeName The name for this attribute
@@ -89,7 +89,6 @@ public abstract class SimpleNullableAttribute<O, A> extends AbstractAttribute<O,
 
     /**
      * Returns the (possibly null) value of the attribute from the object.
-     * <p/>
      * @param object The object from which the value of the attribute is required
      * @param queryOptions Optional parameters supplied by the application along with the operation which is causing
      * this attribute to be invoked (either a query, or an update to the collection)

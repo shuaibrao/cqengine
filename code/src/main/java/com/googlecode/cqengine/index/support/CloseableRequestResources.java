@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +25,7 @@ import java.util.*;
 /**
  * A QueryOption that allows to keep track of query resources which were opened to process a request and
  * which need to be closed when processing of the request is finished.
- * <p/>
+ * <p>
  * The {@link #add(Closeable)} method is used to add {@link Closeable} objects to this object.
  * Then when processing the request has finished (often when {@link ResultSet#close()} is called), the engine will
  * retrieve this object from the query options and call the {@link #close()} method on this object, which will close
@@ -35,6 +36,8 @@ import java.util.*;
 public class CloseableRequestResources implements Closeable {
 
     final Collection<Closeable> requestResources = Collections.newSetFromMap(new IdentityHashMap<Closeable, Boolean>());
+    private final Object requestResourcesLock = new Object();
+    boolean closed;
 
     /**
      * Add a new resource that needs to be closed.
@@ -42,7 +45,12 @@ public class CloseableRequestResources implements Closeable {
      * @param closeable The resource that needs to be closed
      */
     public void add(Closeable closeable) {
-        requestResources.add(closeable);
+        synchronized (requestResourcesLock) {
+            if (closed) {
+                throw new IllegalStateException("Request resources have already been closed");
+            }
+            requestResources.add(closeable);
+        }
     }
 
     public CloseableResourceGroup addGroup() {
@@ -56,11 +64,16 @@ public class CloseableRequestResources implements Closeable {
      */
     @Override
     public void close() {
-        for (Iterator<Closeable> iterator = requestResources.iterator(); iterator.hasNext(); ) {
-            Closeable closeable = iterator.next();
-            closeQuietly(closeable);
-            iterator.remove();
+        final Collection<Closeable> resourcesToClose;
+        synchronized (requestResourcesLock) {
+            if (closed) {
+                return;
+            }
+            closed = true;
+            resourcesToClose = new ArrayList<Closeable>(requestResources);
+            requestResources.clear();
         }
+        closeAll(resourcesToClose);
     }
 
     /**
@@ -86,9 +99,70 @@ public class CloseableRequestResources implements Closeable {
      * @param queryOptions The {@link QueryOptions}
      */
     public static void closeForQueryOptions(QueryOptions queryOptions) {
-        closeQuietly(queryOptions.get(CloseableRequestResources.class));
-
+        try {
+            CloseableRequestResources resources = queryOptions.get(CloseableRequestResources.class);
+            if (resources != null) {
+                resources.close();
+            }
+        }
+        finally {
+            queryOptions.remove(CloseableRequestResources.class);
+        }
     }
+
+    /**
+     * Closes every supplied resource and rethrows the first failure after attaching later failures as suppressed.
+     *
+     * @param closeables resources to close, in close order
+     */
+    public static void closeAll(Iterable<? extends Closeable> closeables) {
+        Throwable failure = null;
+        for (Closeable closeable : closeables) {
+            if (closeable == null) {
+                continue;
+            }
+            try {
+                closeable.close();
+            }
+            catch (Throwable closeFailure) {
+                if (failure == null) {
+                    failure = closeFailure instanceof RuntimeException || closeFailure instanceof Error
+                            ? closeFailure
+                            : new IllegalStateException("Failed to close request resource", closeFailure);
+                }
+                else if (failure != closeFailure) {
+                    failure.addSuppressed(closeFailure);
+                }
+            }
+        }
+        if (failure instanceof RuntimeException) {
+            throw (RuntimeException) failure;
+        }
+        if (failure instanceof Error) {
+            throw (Error) failure;
+        }
+    }
+
+    /**
+     * Attempts to close a resource while preserving an exception which is already in flight.
+     *
+     * @param closeable resource to close
+     * @param primaryFailure exception which must remain primary
+     */
+    public static void closeAndAddSuppressed(Closeable closeable, Throwable primaryFailure) {
+        if (closeable == null) {
+            return;
+        }
+        try {
+            closeable.close();
+        }
+        catch (Throwable closeFailure) {
+            if (primaryFailure != closeFailure) {
+                primaryFailure.addSuppressed(closeFailure);
+            }
+        }
+    }
+
     public static void closeQuietly(Closeable closeable) {
         if (closeable != null) {
             try {
@@ -101,9 +175,19 @@ public class CloseableRequestResources implements Closeable {
 
     public class CloseableResourceGroup implements Closeable {
         final Set<Closeable> groupResources = Collections.newSetFromMap(new IdentityHashMap<Closeable, Boolean>());
+        private final Object groupResourcesLock = new Object();
 
         public boolean add(Closeable closeable) {
-            return groupResources.add(closeable);
+            synchronized (groupResourcesLock) {
+                try {
+                    CloseableRequestResources.this.add(this);
+                }
+                catch (RuntimeException | Error failure) {
+                    closeAndAddSuppressed(closeable, failure);
+                    throw failure;
+                }
+                return groupResources.add(closeable);
+            }
         }
 
         /**
@@ -111,17 +195,26 @@ public class CloseableRequestResources implements Closeable {
          */
         @Override
         public void close() {
-            for (Iterator<Closeable> iterator = groupResources.iterator(); iterator.hasNext(); ) {
-                Closeable closeable = iterator.next();
-                CloseableRequestResources.closeQuietly(closeable);
-                iterator.remove();
+            final Collection<Closeable> resourcesToClose;
+            synchronized (groupResourcesLock) {
+                resourcesToClose = new ArrayList<Closeable>(groupResources);
+                groupResources.clear();
+                remove(this);
             }
-            requestResources.remove(this);
+            CloseableRequestResources.closeAll(resourcesToClose);
         }
 
         @Override
         public String toString() {
-            return groupResources.toString();
+            synchronized (groupResourcesLock) {
+                return groupResources.toString();
+            }
+        }
+    }
+
+    void remove(Closeable closeable) {
+        synchronized (requestResourcesLock) {
+            requestResources.remove(closeable);
         }
     }
 }

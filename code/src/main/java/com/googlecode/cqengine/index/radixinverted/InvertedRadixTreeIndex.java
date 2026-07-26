@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,7 +52,7 @@ import com.googlecode.cqengine.resultset.stored.StoredSetBasedResultSet;
 
 /**
  * An index backed by a {@link ConcurrentInvertedRadixTree}.
- * <p/>
+ * <p>
  * Supports query types:
  * <ul>
  *     <li>
@@ -81,6 +82,7 @@ public class InvertedRadixTreeIndex<A extends CharSequence, O> extends AbstractA
     /**
      * Package-private constructor, used by static factory methods.
      */
+    @SuppressWarnings("rawtypes") // Supplies query classes to the legacy protected superclass contract.
     protected InvertedRadixTreeIndex(Attribute<O, A> attribute, NodeFactory nodeFactory) {
         super(attribute, new HashSet<Class<? extends Query>>() {/**
              * 
@@ -370,7 +372,7 @@ public class InvertedRadixTreeIndex<A extends CharSequence, O> extends AbstractA
     /**
      * If a query option specifying logical deduplication was supplied, wrap the given result sets in
      * {@link ResultSetUnion}, otherwise wrap in {@link ResultSetUnionAll}.
-     * <p/>
+     * <p>
      * An exception is if the index is built on a SimpleAttribute, we can avoid deduplication and always use
      * {@link ResultSetUnionAll}, because the same object could not exist in more than one {@link StoredResultSet}.
      *
@@ -500,7 +502,6 @@ public class InvertedRadixTreeIndex<A extends CharSequence, O> extends AbstractA
 
     /**
      * Creates a new {@link InvertedRadixTreeIndex} on the specified attribute.
-     * <p/>
      * @param attribute The attribute on which the index will be built
      * @param <O> The type of the object containing the attribute
      * @return A {@link InvertedRadixTreeIndex} on this attribute
@@ -511,7 +512,6 @@ public class InvertedRadixTreeIndex<A extends CharSequence, O> extends AbstractA
 
     /**
      * Creates a new {@link InvertedRadixTreeIndex} on the specified attribute.
-     * <p/>
      * @param attribute The attribute on which the index will be built
      * @param nodeFactory The NodeFactory to be used by the tree
      * @param <O> The type of the object containing the attribute

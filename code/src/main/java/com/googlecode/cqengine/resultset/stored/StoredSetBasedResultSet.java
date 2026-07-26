@@ -23,7 +23,7 @@ import java.util.Set;
 
 /**
  * A ResultSet which is stored directly in an index, and supports additional methods to add and remove objects.
- * <p/>
+ * <p>
  * This implementation wraps a backing {@link java.util.Set}.
  *
  * @author Niall Gallagher
@@ -60,7 +60,7 @@ public class StoredSetBasedResultSet<O> extends StoredResultSet<O> {
 
     /**
      * {@inheritDoc}
-     * <p/>
+     * <p>
      * This implementation delegates to {@link #contains(Object)}.
      */
     @Override

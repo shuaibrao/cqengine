@@ -29,13 +29,13 @@ import java.util.Set;
 /**
  * A Java collection which can maintain indexes on the objects it contains, allowing objects matching complex queries
  * to be retrieved with very low latency.
- * <p/>
+ * <p>
  * The {@link #retrieve(com.googlecode.cqengine.query.Query)} methods accept a {@link com.googlecode.cqengine.query.Query}
  * and return a {@link com.googlecode.cqengine.resultset.ResultSet} of objects matching that query.
- * <p/>
+ * <p>
  * The {@link #addIndex(com.googlecode.cqengine.index.Index)} methods allowing indexes to be added to the collection to
  * improve query performance.
- * <p/>
+ * <p>
  * Several implementations of this interface exist each with different performance or transaction isolation
  * characteristics. See documentation on the implementations for further details.
  *
@@ -56,7 +56,7 @@ public interface IndexedCollection<O> extends Set<O>, QueryEngine<O> {
 
     /**
      * Removes or adds objects to/from the collection and indexes in bulk.
-     * <p/>
+     * <p>
      * Note that although this method accepts either {@code Iterable}s or {@code Collection}s for its
      * {@code objectsToRemove} and {@code objectsToAdd} parameters, there are pros and cons of each:
      * <ul>
@@ -77,7 +77,7 @@ public interface IndexedCollection<O> extends Set<O>, QueryEngine<O> {
      *         <ul><li>
      *         Note also that some off-heap and on-disk indexes support a fast "bulk import" feature which can be used
      *         in conjunction with this. For details on how to perform a bulk import, see
-     *         {@link com.googlecode.cqengine.index.sqlite.support.SQLiteIndexFlags#BULK_IMPORT}.
+     *         {@code SQLiteIndexFlags.BULK_IMPORT}.
      *         </li></ul>
      *     </li>
      * </ul>
@@ -90,7 +90,7 @@ public interface IndexedCollection<O> extends Set<O>, QueryEngine<O> {
 
     /**
      * Removes or adds objects to/from the collection and indexes in bulk.
-     * <p/>
+     * <p>
      * Note that although this method accepts either {@code Iterable}s or {@code Collection}s for its
      * {@code objectsToRemove} and {@code objectsToAdd} parameters, there are pros and cons of each:
      * <ul>
@@ -111,7 +111,7 @@ public interface IndexedCollection<O> extends Set<O>, QueryEngine<O> {
      *         <ul><li>
      *         Note also that some off-heap and on-disk indexes support a fast "bulk import" feature which can be used
      *         in conjunction with this. For details on how to perform a bulk import, see
-     *         {@link com.googlecode.cqengine.index.sqlite.support.SQLiteIndexFlags#BULK_IMPORT}.
+     *         {@code SQLiteIndexFlags.BULK_IMPORT}.
      *         </li></ul>
      *     </li>
      * </ul>

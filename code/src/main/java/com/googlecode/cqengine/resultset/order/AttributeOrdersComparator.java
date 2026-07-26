@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,8 +21,12 @@ import com.googlecode.cqengine.query.option.AttributeOrder;
 import com.googlecode.cqengine.query.option.QueryOptions;
 
 import java.util.Comparator;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 
 /**
  * A comparator which sorts result objects according to a list of attributes each with an associated preference for
@@ -34,14 +39,18 @@ public class AttributeOrdersComparator<O> implements Comparator<O> {
 
     final List<AttributeOrder<O>> attributeSortOrders;
     final QueryOptions queryOptions;
+    private final Object tieBreakerLock = new Object();
+    private final Map<O, Long> tieBreakerIds = new IdentityHashMap<O, Long>();
+    private long nextTieBreakerId;
 
     public AttributeOrdersComparator(List<AttributeOrder<O>> attributeSortOrders, QueryOptions queryOptions) {
-        this.attributeSortOrders = attributeSortOrders;
+        this.attributeSortOrders = Collections.unmodifiableList(
+                new ArrayList<AttributeOrder<O>>(attributeSortOrders));
         this.queryOptions = queryOptions;
     }
 
     @Override
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"rawtypes", "unchecked"}) // Consumes AttributeOrder's legacy raw-Comparable API.
     public int compare(O o1, O o2) {
         for (AttributeOrder<O> attributeOrder : attributeSortOrders) {
             Attribute<O, ? extends Comparable> attribute = attributeOrder.getAttribute();
@@ -77,19 +86,26 @@ public class AttributeOrdersComparator<O> implements Comparator<O> {
         // and the same price. Because a third - tie-breaking - sort order was not supplied, the sort order of items
         // which have the same color and price, is unspecified.
 
-        // However although the sort order is now unspecified, we should try to preserve the stability of the comparison
-        // as much as possible: such that
+        // Although the business sort order is now unspecified, the comparator contract still requires that
         //                              if comparator.compare(o1, o2) == -1, then it should be the case that
         //                                 comparator.compare(o2, o1) == +1.
-        // Thus we cannot simply return the same result in both of those cases. This can be important when objects are
-        // added to collections such as {@link java.util.TreeSet} which depend on the stability of the comparison.
+        // Hash codes provide the first tie-breaker. Identity-based sequence numbers provide an exact total order when
+        // unequal objects also have equal hash codes.
+        int hashComparison = Integer.compare(o1.hashCode(), o2.hashCode());
+        return hashComparison != 0
+                ? hashComparison
+                : Long.compare(tieBreakerId(o1), tieBreakerId(o2));
+    }
 
-        // As we don't have any other readily available properties of the objects to use as tie-breakers, we will use
-        // the hashcodes of the objects instead. As the hashcodes of unequal objects are unlikely to be the same *most
-        // of the time*, using the hashcodes as a tie-breaker will result in a stable comparison *most of the time*.
-        // In the rare event that the hashcodes of the unequal objects turn out to be the same however, we will return
-        // 1 because it seems more important that the comparator is consistent with equals() than it is to be stable...
-        return o1.hashCode() >= o2.hashCode() ? 1 : -1;
+    private long tieBreakerId(O object) {
+        synchronized (tieBreakerLock) {
+            Long id = tieBreakerIds.get(object);
+            if (id == null) {
+                id = nextTieBreakerId++;
+                tieBreakerIds.put(object, id);
+            }
+            return id;
+        }
     }
 
     <A extends Comparable<A>> int compareAttributeValues(Attribute<O, A> attribute, O o1, O o2) {

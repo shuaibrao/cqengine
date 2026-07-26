@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -59,7 +60,7 @@ public class KeyStatistics<A> implements KeyFrequency<A> {
 
         KeyStatistics<?> that = (KeyStatistics<?>) o;
 
-        if (count != that.count) {
+        if (!count.equals(that.count)) {
             return false;
         }
         return key.equals(that.key);

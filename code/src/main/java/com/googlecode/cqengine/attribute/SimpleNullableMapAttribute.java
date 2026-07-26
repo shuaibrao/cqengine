@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,14 +24,15 @@ import java.util.Map;
 /**
  * An attribute which reads the value from an entry in a map given the map key. This can be used when Map objects
  * are stored in the IndexedCollection.
- * <p/>
+ * <p>
  * These attributes can be created via {@link QueryFactory#mapAttribute(Object, Class)}.
- * <p/>
+ * <p>
  * Also see {@link QueryFactory#mapEntity(Map)} as a way to improve the performance when working with collections
  * of Maps.
  *
  * Created by npgall on 23/05/2016.
  */
+@SuppressWarnings("rawtypes") // Retains the legacy raw-Map superclass and override signatures.
 public class SimpleNullableMapAttribute<K, A> extends SimpleNullableAttribute<Map, A> {
 
     final K mapKey;

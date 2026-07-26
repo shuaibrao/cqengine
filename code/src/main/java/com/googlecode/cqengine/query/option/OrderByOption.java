@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +16,8 @@
  */
 package com.googlecode.cqengine.query.option;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 
@@ -30,10 +33,12 @@ public class OrderByOption<O> {
     private final List<AttributeOrder<O>> attributeOrders;
 
     public OrderByOption(List<AttributeOrder<O>> attributeOrders) {
-        if (attributeOrders.isEmpty()) {
+        List<AttributeOrder<O>> attributeOrderSnapshot =
+                new ArrayList<AttributeOrder<O>>(attributeOrders);
+        if (attributeOrderSnapshot.isEmpty()) {
             throw new IllegalArgumentException("The list of attribute orders cannot be empty");
         }
-        this.attributeOrders = attributeOrders;
+        this.attributeOrders = Collections.unmodifiableList(attributeOrderSnapshot);
     }
 
     public List<AttributeOrder<O>> getAttributeOrders() {
@@ -60,7 +65,7 @@ public class OrderByOption<O> {
         if (this == o) return true;
         if (!(o instanceof OrderByOption)) return false;
 
-        OrderByOption that = (OrderByOption) o;
+        OrderByOption<?> that = (OrderByOption<?>) o;
 
         if (!attributeOrders.equals(that.attributeOrders)) return false;
 

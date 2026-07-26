@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +16,7 @@
  */
 package com.googlecode.cqengine;
 
+import com.googlecode.cqengine.index.support.CloseableRequestResources;
 import com.googlecode.cqengine.persistence.Persistence;
 import com.googlecode.cqengine.persistence.onheap.OnHeapPersistence;
 import com.googlecode.cqengine.persistence.support.ObjectStore;
@@ -40,12 +42,12 @@ import static com.googlecode.cqengine.query.option.IsolationOption.isIsolationLe
  * Extends {@link ConcurrentIndexedCollection} with support for READ_COMMITTED transaction isolation using
  * <a href="http://en.wikipedia.org/wiki/Multiversion_concurrency_control">Multiversion concurrency control</a>
  * (MVCC).
- * <p/>
+ * <p>
  * A transaction is composed of a set of objects to be added to the collection, and a set of objects to be removed from
  * the collection. Either one of those sets can be empty, so this supports bulk <i>atomic addition</i> and <i>atomic
  * removal</i> of objects from the collection. But if both sets are non-empty then it allows bulk
  * <i>atomic replacement</i> of objects in the collection.
- * <p/>
+ * <p>
  * <b>Atomically replacing objects</b><br/>
  * A restriction is that if you want to replace objects in the collection, then for each object to be removed,
  * {@code objectToRemove.equals(objectToAdd)} should return {@code false}. That is, the sets of objects to be removed
@@ -100,7 +102,7 @@ public class TransactionalIndexedCollection<O> extends ConcurrentIndexedCollecti
 
     final Class<O> objectType;
     volatile Version currentVersion;
-    final Object writeMutex = new Object();
+    private final Object writeMutex = new Object();
 
     final AtomicLong versionNumberGenerator = new AtomicLong();
 
@@ -177,7 +179,6 @@ public class TransactionalIndexedCollection<O> extends ConcurrentIndexedCollecti
     /**
      * This is the same as calling without any query options:
      * {@link #update(Iterable, Iterable, com.googlecode.cqengine.query.option.QueryOptions)}.
-     * <p/>
      * @see #update(Iterable, Iterable, com.googlecode.cqengine.query.option.QueryOptions)
      */
     @Override
@@ -187,32 +188,32 @@ public class TransactionalIndexedCollection<O> extends ConcurrentIndexedCollecti
 
     /**
      * {@inheritDoc}
-     * <p/>
+     * <p>
      * This method applies multi-version concurrency control by default such that the update is seen to occur
      * <i>atomically</i> with {@code READ_COMMITTED} transaction isolation by reading threads.
-     * <p/>
+     * <p>
      * For performance reasons, transaction isolation may (optionally) be overridden on a case-by-case basis by
      * supplying an {@link com.googlecode.cqengine.query.option.IsolationOption} query option to this method requesting
      * {@link com.googlecode.cqengine.query.option.IsolationLevel#READ_UNCOMMITTED} transaction isolation instead.
      * In that case the modifications will be made directly to the collection, bypassing multi-version concurrency
      * control. This might be useful when making some modifications to the collection which do not need to be viewed
      * atomically.
-     * <p/>
+     * <p>
      * <b>Atomically replacing objects and argument validation</b><br/>
      * As discussed in this class' JavaDoc, the sets of objects to be removed and objects to be added supplied to this
      * method as arguments, must be <i>disjoint</i> and <i>this method will validate that this is the case by
      * default</i>.
-     * <p/>
+     * <p>
      * To disable this validation for performance reasons, supply QueryOption: <code>argumentValidation(SKIP)</code>.
-     * <p/>
+     * <p>
      * Note that if the application disables this validation and proceeds to call this method with non-compliant
      * arguments anyway, then indexes may become inconsistent. Validation should only be skipped when it is certain that
      * the application will be compliant.
-     * <p/>
+     * <p>
      * <b>Atomically replacing objects with STRICT_REPLACEMENT</b><br/>
      * By default, this method will not check if the objects to be removed are actually contained in the collection.
      * If any objects to be removed are not actually contained, then the objects to be added will be added anyway.
-     * <p/>
+     * <p>
      * Applications requiring "strict" object replacement, can supply QueryOption:
      * <code>enableFlags(TransactionalIndexedCollection.STRICT_REPLACEMENT))</code>.
      * If this query option is supplied, then a check will be performed to ensure that all of the objects to be removed
@@ -232,44 +233,57 @@ public class TransactionalIndexedCollection<O> extends ConcurrentIndexedCollecti
 
         // Otherwise apply MVCC to support READ_COMMITTED isolation...
         synchronized (writeMutex) {
-            queryOptions = openRequestScopeResourcesIfNecessary(queryOptions);
+            boolean exclusionVersionPublished = false;
             try {
-                Iterator<O> objectsToRemoveIterator = objectsToRemove.iterator();
-                Iterator<O> objectsToAddIterator = objectsToAdd.iterator();
-                if (!objectsToRemoveIterator.hasNext() && !objectsToAddIterator.hasNext()) {
-                    return false;
-                }
-                if (FlagsEnabled.isFlagEnabled(queryOptions, STRICT_REPLACEMENT)) {
-                    if (!objectStoreContainsAllIterable(objectStore, objectsToRemove, queryOptions)) {
+                QueryOptions classifiedOptions = classifyAsWriteRequest(queryOptions);
+                try (RequestScope requestScope = openRequestScope(classifiedOptions)) {
+                    queryOptions = classifyAsWriteRequest(requestScope.getQueryOptions());
+                    Iterator<O> objectsToRemoveIterator = objectsToRemove.iterator();
+                    Iterator<O> objectsToAddIterator = objectsToAdd.iterator();
+                    if (!objectsToRemoveIterator.hasNext() && !objectsToAddIterator.hasNext()) {
+                        requestScope.markSuccessful();
                         return false;
                     }
+                    if (FlagsEnabled.isFlagEnabled(queryOptions, STRICT_REPLACEMENT)) {
+                        if (!objectStoreContainsAllIterable(objectStore, objectsToRemove, queryOptions)) {
+                            requestScope.markSuccessful();
+                            return false;
+                        }
+                    }
+                    boolean modified = false;
+                    if (objectsToAddIterator.hasNext()) {
+                        // Configure new reading threads to exclude the objects we will add,
+                        // and then wait for threads reading previous versions to finish...
+                        exclusionVersionPublished = true;
+                        incrementVersion(objectsToAdd);
+
+                        // Now add the given objects...
+                        modified = doAddAll(objectsToAdd, queryOptions);
+                    }
+                    if (objectsToRemoveIterator.hasNext()) {
+                        // Configure (or reconfigure) new reading threads to (instead) exclude the objects we will remove,
+                        // and then wait for threads reading previous versions to finish...
+                        exclusionVersionPublished = true;
+                        incrementVersion(objectsToRemove);
+
+                        // Now remove the given objects...
+                        modified = doRemoveAll(objectsToRemove, queryOptions) || modified;
+                    }
+
+                    // Finally, remove the exclusion,
+                    // and then wait for this to take effect across all threads...
+                    incrementVersion(Collections.<O>emptySet());
+                    exclusionVersionPublished = false;
+
+                    requestScope.markSuccessful();
+                    return modified;
                 }
-                boolean modified = false;
-                if (objectsToAddIterator.hasNext()) {
-                    // Configure new reading threads to exclude the objects we will add,
-                    // and then wait for threads reading previous versions to finish...
-                    incrementVersion(objectsToAdd);
-
-                    // Now add the given objects...
-                    modified = doAddAll(objectsToAdd, queryOptions);
-                }
-                if (objectsToRemoveIterator.hasNext()) {
-                    // Configure (or reconfigure) new reading threads to (instead) exclude the objects we will remove,
-                    // and then wait for threads reading previous versions to finish...
-                    incrementVersion(objectsToRemove);
-
-                    // Now remove the given objects...
-                    modified = doRemoveAll(objectsToRemove, queryOptions) || modified;
-                }
-
-                // Finally, remove the exclusion,
-                // and then wait for this to take effect across all threads...
-                incrementVersion(Collections.<O>emptySet());
-
-                return modified;
             }
-            finally {
-                closeRequestScopeResourcesIfNecessary(queryOptions);
+            catch (RuntimeException | Error failure) {
+                if (exclusionVersionPublished) {
+                    restoreEmptyVersionAfterFailure(failure);
+                }
+                throw failure;
             }
         }
     }
@@ -289,57 +303,88 @@ public class TransactionalIndexedCollection<O> extends ConcurrentIndexedCollecti
     @Override
     @SuppressWarnings({"unchecked"})
     public boolean addAll(Collection<? extends O> c) {
+        if (c == this) {
+            return false;
+        }
         return update(Collections.<O>emptySet(), (Collection<O>) c);
     }
 
     @Override
     @SuppressWarnings({"unchecked"})
     public boolean removeAll(Collection<?> c) {
+        if (c == this) {
+            boolean modified = !isEmpty();
+            clear();
+            return modified;
+        }
         return update((Collection<O>) c, Collections.<O>emptySet());
     }
 
     @Override
     public boolean retainAll(final Collection<?> c) {
         synchronized (writeMutex) {
-            QueryOptions queryOptions = openRequestScopeResourcesIfNecessary(null);
+            boolean exclusionVersionPublished = false;
             try {
-                // Copy objects into a new set removing nulls.
-                // CQEngine does not permit nulls in queries, but the spec of {@link Collection#retainAll} does.
-                Set<O> objectsToRetain = new HashSet<O>(c.size());
-                for (Object object : c) {
-                    if (object != null) {
-                        @SuppressWarnings("unchecked") O o = (O)object;
-                        objectsToRetain.add(o);
+                try (RequestScope requestScope = openRequestScope(classifyAsWriteRequest(null))) {
+                    QueryOptions queryOptions = classifyAsWriteRequest(requestScope.getQueryOptions());
+                    // Copy objects into a new set removing nulls.
+                    // CQEngine does not permit nulls in queries, but the spec of {@link Collection#retainAll} does.
+                    Set<O> objectsToRetain = new HashSet<O>(c.size());
+                    for (Object object : c) {
+                        if (object != null) {
+                            @SuppressWarnings("unchecked") O o = (O)object;
+                            objectsToRetain.add(o);
+                        }
                     }
+                    // Prepare a query which will match objects in the collection which are not contained in the given
+                    // collection of objects to retain and therefore which need to be removed from the collection...
+                    // We prepare the query to use the same QueryOptions as above.
+                    // Any resources opened for the query which need to be closed,
+                    // will be added to the QueryOptions and closed at the end of this method.
+                    @SuppressWarnings("unchecked")
+                    ResultSet<O> objectsToRemove = indexEngine.retrieve(
+                            not(in(selfAttribute(objectType), objectsToRetain)), queryOptions);
+                    boolean modified;
+                    try (ResultSet<O> closeableObjectsToRemove = objectsToRemove) {
+                        Iterator<O> objectsToRemoveIterator = closeableObjectsToRemove.iterator();
+                        if (!objectsToRemoveIterator.hasNext()) {
+                            modified = false;
+                        }
+                        else {
+                            // Configure new reading threads to exclude the objects we will remove,
+                            // then wait for this to take effect across all threads...
+                            exclusionVersionPublished = true;
+                            incrementVersion(closeableObjectsToRemove);
+
+                            // Now remove the given objects...
+                            modified = doRemoveAll(closeableObjectsToRemove, queryOptions);
+
+                            // Finally, remove the exclusion,
+                            // then wait for this to take effect across all threads...
+                            incrementVersion(Collections.<O>emptySet());
+                            exclusionVersionPublished = false;
+                        }
+                    }
+                    requestScope.markSuccessful();
+                    return modified;
                 }
-                // Prepare a query which will match objects in the collection which are not contained in the given
-                // collection of objects to retain and therefore which need to be removed from the collection...
-                // We prepare the query to use the same QueryOptions as above.
-                // Any resources opened for the query which need to be closed,
-                // will be added to the QueryOptions and closed at the end of this method.
-                @SuppressWarnings("unchecked")
-                ResultSet<O> objectsToRemove = super.retrieve(not(in(selfAttribute(objectType), objectsToRetain)), queryOptions);
-
-                Iterator<O> objectsToRemoveIterator = objectsToRemove.iterator();
-                if (!objectsToRemoveIterator.hasNext()) {
-                    return false;
-                }
-
-                // Configure new reading threads to exclude the objects we will remove,
-                // then wait for this to take effect across all threads...
-                incrementVersion(objectsToRemove);
-
-                // Now remove the given objects...
-                boolean modified = doRemoveAll(objectsToRemove, queryOptions);
-
-                // Finally, remove the exclusion,
-                // then wait for this to take effect across all threads...
-                incrementVersion(Collections.<O>emptySet());
-
-                return modified;
             }
-            finally {
-                closeRequestScopeResourcesIfNecessary(queryOptions);
+            catch (RuntimeException | Error failure) {
+                if (exclusionVersionPublished) {
+                    restoreEmptyVersionAfterFailure(failure);
+                }
+                throw failure;
+            }
+        }
+    }
+
+    void restoreEmptyVersionAfterFailure(Throwable failure) {
+        try {
+            incrementVersion(Collections.<O>emptySet());
+        }
+        catch (RuntimeException | Error restoreFailure) {
+            if (failure != restoreFailure) {
+                failure.addSuppressed(restoreFailure);
             }
         }
     }
@@ -364,6 +409,8 @@ public class TransactionalIndexedCollection<O> extends ConcurrentIndexedCollecti
 
         // Get the current Version and acquire an (uncontended) read lock on it...
         final Version thisVersion = acquireReadLockForCurrentVersion();
+        ResultSet<O> results = null;
+        CloseableResultSet<O> versionReadingResultSet = null;
         try {
 
             // Return the results matching the query such that:
@@ -371,26 +418,18 @@ public class TransactionalIndexedCollection<O> extends ConcurrentIndexedCollecti
             //   to record that this thread is no longer reading this version.
             // - STEP 2: We filter out from the results any objects which might not be fully committed yet
             //   (as configured by writing threads for this version of the collection).
-            ResultSet<O> results = super.retrieve(query, queryOptions);
+            results = super.retrieve(query, queryOptions);
 
             // STEP 1: Wrap the results to intercept ResultSet.close()...
-            CloseableResultSet<O> versionReadingResultSet = new CloseableResultSet<O>(results, query, queryOptions) {
-                @Override
-                public void close() {
-                    super.close();
-                    // Release the read lock for this version when ResultSet.close() is called...
-                    thisVersion.lock.readLock().unlock();
-                }
-            };
+            versionReadingResultSet = new CloseableResultSet<O>(
+                    results, query, queryOptions, () -> thisVersion.lock.readLock().unlock());
             // STEP 2: Apply filtering as necessary...
             if (thisVersion.objectsToExclude.iterator().hasNext()) {
                 // Apply the filtering to omit uncommitted objects...
                 return new CloseableFilteringResultSet<O>(versionReadingResultSet, query, queryOptions) {
                     @Override
                     public boolean isValid(O object, QueryOptions queryOptions) {
-                        @SuppressWarnings("unchecked")
-                        Iterable<O> objectsToExclude = (Iterable<O>) thisVersion.objectsToExclude;
-                        return !iterableContains(objectsToExclude, object);
+                        return !iterableContains(thisVersion.objectsToExclude, object);
                     }
                 };
             } else {
@@ -398,11 +437,16 @@ public class TransactionalIndexedCollection<O> extends ConcurrentIndexedCollecti
                 return versionReadingResultSet;
             }
         }
-        catch (RuntimeException e) {
-            // Release the read lock we acquired above, because due to throwing an exception,
-            // we will not be returning a CloseableResultSet which otherwise would allow it to be released later...
-            thisVersion.lock.readLock().unlock();
-            throw e;
+        catch (RuntimeException | Error failure) {
+            if (versionReadingResultSet != null) {
+                CloseableRequestResources.closeAndAddSuppressed(versionReadingResultSet, failure);
+            }
+            else {
+                CloseableRequestResources.closeAndAddSuppressed(results, failure);
+                CloseableRequestResources.closeAndAddSuppressed(
+                        () -> thisVersion.lock.readLock().unlock(), failure);
+            }
+            throw failure;
         }
     }
 

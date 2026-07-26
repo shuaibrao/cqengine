@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,13 +44,12 @@ import static com.googlecode.cqengine.index.support.IndexSupport.deduplicateIfNe
 
 /**
  * An index backed by a {@link ConcurrentHashMap}.
- * <p/>
+ * <p>
  * Supports query types:
  * <ul>
  *     <li>{@link Equal}</li>
  *     <li>{@link In}</li>
  *     <li>{@link Has}</li>
- * </ul>
  * </ul>
  * The constructor of this index accepts {@link Factory} objects, from which it will create the map and value sets it
  * uses internally. This allows the application to "tune" the construction parameters of these maps/sets,
@@ -70,6 +70,7 @@ public class HashIndex<A, O> extends AbstractMapBasedAttributeIndex<A, O, Concur
      * @param valueSetFactory A factory used to create sets to store values in the index
      * @param attribute The attribute on which the index will be built
      */
+    @SuppressWarnings("rawtypes") // Supplies query classes to the legacy protected superclass contract.
     protected HashIndex(Factory<ConcurrentMap<A, StoredResultSet<O>>> indexMapFactory, Factory<StoredResultSet<O>> valueSetFactory, Attribute<O, A> attribute) {
         super(indexMapFactory, valueSetFactory, attribute, new HashSet<Class<? extends Query>>() {{
             add(Equal.class);
@@ -80,7 +81,7 @@ public class HashIndex<A, O> extends AbstractMapBasedAttributeIndex<A, O, Concur
 
     /**
      * {@inheritDoc}
-     * <p/>
+     * <p>
      * This index is mutable.
      *
      * @return true
@@ -192,7 +193,7 @@ public class HashIndex<A, O> extends AbstractMapBasedAttributeIndex<A, O, Concur
      * A no-op method which can be overridden by a subclass to return a {@link ResultSet} which filters objects from the
      * given {@link ResultSet}, to return only those objects matching the query, for the case that the index is using a
      * {@link com.googlecode.cqengine.quantizer.Quantizer}.
-     * <p/>
+     * <p>
      * <b>This default implementation simply returns the given {@link ResultSet} unmodified.</b>
      *
      * @param storedResultSet A {@link com.googlecode.cqengine.resultset.ResultSet} stored against a quantized key in the index
@@ -234,7 +235,6 @@ public class HashIndex<A, O> extends AbstractMapBasedAttributeIndex<A, O, Concur
 
     /**
      * Creates a new {@link HashIndex} on the specified attribute.
-     * <p/>
      * @param attribute The attribute on which the index will be built
      * @param <O> The type of the object containing the attribute
      * @return A {@link HashIndex} on this attribute
@@ -246,12 +246,12 @@ public class HashIndex<A, O> extends AbstractMapBasedAttributeIndex<A, O, Concur
     /**
      * Creates a new {@link HashIndex} on the specified attribute, where the attribute is expected to uniquely identify
      * an object in the collection <i>most of the time</i>.
-     * <p/>
+     * <p>
      * This can be used as a less-strict alternative to {@link UniqueIndex}, especially when used with a
      * {@link TransactionalIndexedCollection} which implements an MVCC algorithm. The MVCC algorithm sometimes needs
      * to store multiple versions of the same object in the collection at the same time, which would violate the
      * constraints of that index.
-     * <p/>
+     * <p>
      * This configures the {@link HashIndex} with {@link CompactValueSetFactory}, and as such it will use less memory
      * than the default configuration of {@link HashIndex}. However it will use somewhat more memory than
      * {@link UniqueIndex}.
@@ -266,7 +266,6 @@ public class HashIndex<A, O> extends AbstractMapBasedAttributeIndex<A, O, Concur
 
     /**
      * Creates a new {@link HashIndex} on the specified attribute.
-     * <p/>
      * @param indexMapFactory A factory used to create the main map-based data structure used by the index
      * @param valueSetFactory A factory used to create sets to store values in the index
      * @param attribute The attribute on which the index will be built
@@ -279,7 +278,6 @@ public class HashIndex<A, O> extends AbstractMapBasedAttributeIndex<A, O, Concur
 
     /**
      * Creates a {@link HashIndex} on the given attribute using the given {@link Quantizer}.
-     * <p/>
      * @param quantizer A {@link Quantizer} to use in this index
      * @param attribute The attribute on which the index will be built
      * @param <O> The type of the object containing the attribute
@@ -291,7 +289,6 @@ public class HashIndex<A, O> extends AbstractMapBasedAttributeIndex<A, O, Concur
 
     /**
      * Creates a {@link HashIndex} on the given attribute using the given {@link Quantizer}.
-     * <p/>
      * @param indexMapFactory A factory used to create the main map-based data structure used by the index
      * @param valueSetFactory A factory used to create sets to store values in the index
      * @param quantizer A {@link Quantizer} to use in this index
@@ -344,7 +341,7 @@ public class HashIndex<A, O> extends AbstractMapBasedAttributeIndex<A, O, Concur
     /**
      * Creates a value set which is tuned to reduce memory overhead, with an expectation that only a single or
      * a very small number of object(s) will be stored in each bucket.
-     * <p/>
+     * <p>
      * Additionally, this is tuned with the <b>expectation of low concurrency for writes</b>. Concurrent writes are
      * safe, but they might block each other.
      */

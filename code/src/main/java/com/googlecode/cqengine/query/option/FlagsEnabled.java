@@ -22,7 +22,7 @@ import java.util.Set;
 
 /**
  * A wrapper around object keys ("flags") which are said to be enabled.
- * <p/>
+ * <p>
  * Example usage using {@link QueryFactory}:<br/>
  * <code>QueryOptions queryOptions = queryOptions(enableFlags("flag1", "flag2"))</code>
  *

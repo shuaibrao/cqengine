@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +16,7 @@
  */
 package com.googlecode.cqengine.resultset.connective;
 
+import com.googlecode.cqengine.index.support.CloseableRequestResources;
 import com.googlecode.cqengine.query.Query;
 import com.googlecode.cqengine.query.option.QueryOptions;
 import com.googlecode.cqengine.resultset.common.ResultSets;
@@ -25,7 +27,7 @@ import java.util.*;
 
 /**
  * A ResultSet which provides a view onto the union of other ResultSets, <b>without</b> deduplication.
- * <p/>
+ * <p>
  * This is equivalent to UNION ALL in SQL terminology, i.e. duplicates are <b>not</b> eliminated.
  *
  * @author Niall Gallagher
@@ -36,6 +38,7 @@ public class ResultSetUnionAll<O> extends ResultSet<O> {
     final QueryOptions queryOptions;
     // ResultSets (not in any particular order)...
     private final Iterable<? extends ResultSet<O>> resultSets;
+    boolean closed;
 
     public ResultSetUnionAll(Iterable<? extends ResultSet<O>> resultSets, Query<O> query, QueryOptions queryOptions) {
         this.resultSets = ResultSets.wrapWithCostCachingIfNecessary(resultSets);
@@ -118,10 +121,12 @@ public class ResultSetUnionAll<O> extends ResultSet<O> {
      * Closes all of the underlying {@code ResultSet}s.
      */
     @Override
-    public void close() {
-        for (ResultSet<O> resultSet : this.resultSets) {
-            resultSet.close();
+    public synchronized void close() {
+        if (closed) {
+            return;
         }
+        closed = true;
+        CloseableRequestResources.closeAll(resultSets);
     }
 
     @Override

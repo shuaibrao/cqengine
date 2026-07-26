@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -97,7 +98,7 @@ public class OnHeapPersistence<O, A extends Comparable<A>> implements Persistenc
     /**
      * Creates an {@link OnHeapPersistence} object which persists to the Java heap, without specifying a primary key.
      * As such, this persistence implementation will be compatible with on-heap indexes only.
-     * <p/>
+     * <p>
      * This persistence will not work with composite persistence configurations, where some indexes are located on heap,
      * and some off-heap etc. To use this persistence in those configurations, it is necessary to specify a primary
      * key - see: {@link #onPrimaryKey(SimpleAttribute)}.
@@ -105,7 +106,7 @@ public class OnHeapPersistence<O, A extends Comparable<A>> implements Persistenc
      * @return An {@link OnHeapPersistence} object which persists to the Java heap, and which is not configured with
      * a primary key.
      */
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"rawtypes", "unchecked"}) // Retains the legacy public no-primary-key return signature.
     public static <O> OnHeapPersistence<O, ? extends Comparable> withoutPrimaryKey() {
         return withoutPrimaryKey_Internal();
     }

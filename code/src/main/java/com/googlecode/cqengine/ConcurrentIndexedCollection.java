@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +23,7 @@ import com.googlecode.cqengine.index.support.CloseableIterator;
 import com.googlecode.cqengine.index.support.CloseableRequestResources;
 import com.googlecode.cqengine.metadata.MetadataEngine;
 import com.googlecode.cqengine.persistence.Persistence;
+import com.googlecode.cqengine.persistence.RequestScopeTransactionOutcome;
 import com.googlecode.cqengine.persistence.onheap.OnHeapPersistence;
 import com.googlecode.cqengine.persistence.support.ObjectSet;
 import com.googlecode.cqengine.persistence.support.ObjectStore;
@@ -43,28 +45,30 @@ import static java.util.Collections.singleton;
  * {@link #retrieve(com.googlecode.cqengine.query.Query)} methods for performing queries on the collection to retrieve
  * matching objects, and {@link #addIndex(com.googlecode.cqengine.index.Index)} methods allowing indexes to be
  * added to the collection to improve query performance.
- * <p/>
+ * <p>
  * This collection takes care of automatically updating any indexes with objects added to/from the collection.
- * <p/>
+ * <p>
  * This collection is thread-safe for concurrent reads in all cases.
- * <p/>
+ * <p>
  * This collection is thread-safe for concurrent writes in cases where multiple threads might try to add/remove
  * <i>different</i> objects to/from the collection concurrently.
- * <p/>
+ * <p>
  * This collection is <b>not</b> thread-safe in cases where two or more threads might try to add or remove the
  * <i>same</i> object to/from the collection concurrently. There is a risk that indexes might get out of sync causing
  * inconsistent results in that scenario with this implementation.
- * <p/>
+ * <p>
  * In applications where multiple threads might add/remove the same object concurrently, then the subclass
  * {@link ObjectLockingIndexedCollection} should be used instead. That subclass allows concurrent writes, but with
  * additional safeguards against concurrent modification for the same object, with some additional overhead.
- * <p/>
+ * <p>
  * Note that in this context the <i>same object</i> refers to either the same object instance, OR two object instances
  * having the same hash code and being equal according to their {@link #equals(Object)} methods.
  *
  * @author Niall Gallagher
  */
 public class ConcurrentIndexedCollection<O> implements IndexedCollection<O> {
+
+    private static final Object REQUEST_SCOPE_OUTCOME = new Object();
 
     protected final Persistence<O, ?> persistence;
     protected final ObjectStore<O> objectStore;
@@ -86,23 +90,58 @@ public class ConcurrentIndexedCollection<O> implements IndexedCollection<O> {
      *                    in which objects added to the indexed collection will be stored, and which will provide
      *                    access to the underlying storage of indexes.
      */
+    @SuppressWarnings({"rawtypes", "this-escape"}) // Legacy signature; callbacks are not invoked or published here.
     public ConcurrentIndexedCollection(Persistence<O, ? extends Comparable> persistence) {
         this.persistence = persistence;
         this.objectStore = persistence.createObjectStore();
         QueryEngineInternal<O> queryEngine = new CollectionQueryEngine<O>();
-        QueryOptions queryOptions = openRequestScopeResourcesIfNecessary(null);
-        try {
+        try (InitialRequestScope requestScope = new InitialRequestScope(persistence)) {
+            QueryOptions queryOptions = requestScope.getQueryOptions();
             queryEngine.init(objectStore, queryOptions);
-        }
-        finally {
-            closeRequestScopeResourcesIfNecessary(queryOptions);
+            requestScope.markSuccessful();
         }
         this.indexEngine = queryEngine;
         this.metadataEngine = new MetadataEngine<>(
                 this,
-                () -> openRequestScopeResourcesIfNecessary(null),
+                () -> openReadRequestScopeResourcesIfNecessary(null),
                 this::closeRequestScopeResourcesIfNecessary
         );
+    }
+
+    private static final class InitialRequestScope implements AutoCloseable {
+        private final Persistence<?, ?> persistence;
+        private final QueryOptions queryOptions = new QueryOptions();
+        private final boolean closeRequired;
+        private RequestScopeTransactionOutcome outcome = RequestScopeTransactionOutcome.ROLLBACK;
+        private boolean closed;
+
+        private InitialRequestScope(Persistence<?, ?> persistence) {
+            this.persistence = persistence;
+            classifyAsWriteRequest(queryOptions);
+            this.closeRequired = !(persistence instanceof OnHeapPersistence<?, ?>);
+            if (closeRequired) {
+                persistence.openRequestScopeResources(queryOptions);
+            }
+            queryOptions.put(Persistence.class, persistence);
+        }
+
+        private QueryOptions getQueryOptions() {
+            return queryOptions;
+        }
+
+        private void markSuccessful() {
+            outcome = RequestScopeTransactionOutcome.COMMIT;
+        }
+
+        @Override
+        public void close() {
+            if (!closed) {
+                closed = true;
+                if (closeRequired) {
+                    persistence.closeRequestScopeResources(queryOptions, outcome);
+                }
+            }
+        }
     }
 
     /**
@@ -133,16 +172,21 @@ public class ConcurrentIndexedCollection<O> implements IndexedCollection<O> {
      */
     @Override
     public ResultSet<O> retrieve(Query<O> query, QueryOptions queryOptions) {
-        final QueryOptions finalQueryOptions = openRequestScopeResourcesIfNecessary(queryOptions);
-        flagAsReadRequest(finalQueryOptions);
-        ResultSet<O> results = indexEngine.retrieve(query, finalQueryOptions);
-        return new CloseableResultSet<O>(results, query, finalQueryOptions) {
-            @Override
-            public void close() {
-                super.close();
-                closeRequestScopeResourcesIfNecessary(finalQueryOptions);
-            }
-        };
+        final RequestScope requestScope = openReadRequestScope(queryOptions);
+        final QueryOptions finalQueryOptions = requestScope.getQueryOptions();
+        ResultSet<O> results = null;
+        try {
+            results = indexEngine.retrieve(query, finalQueryOptions);
+            CloseableResultSet<O> closeableResults = new CloseableResultSet<O>(
+                    results, query, finalQueryOptions, requestScope::close);
+            requestScope.markSuccessful();
+            return closeableResults;
+        }
+        catch (RuntimeException | Error failure) {
+            CloseableRequestResources.closeAndAddSuppressed(results, failure);
+            requestScope.closeAfterFailure(failure);
+            throw failure;
+        }
     }
 
     /**
@@ -158,13 +202,12 @@ public class ConcurrentIndexedCollection<O> implements IndexedCollection<O> {
      */
     @Override
     public boolean update(Iterable<O> objectsToRemove, Iterable<O> objectsToAdd, QueryOptions queryOptions) {
-        queryOptions = openRequestScopeResourcesIfNecessary(queryOptions);
-        try {
+        try (RequestScope requestScope = openWriteRequestScope(queryOptions)) {
+            queryOptions = requestScope.getQueryOptions();
             boolean modified = doRemoveAll(objectsToRemove, queryOptions);
-            return doAddAll(objectsToAdd, queryOptions) || modified;
-        }
-        finally {
-            closeRequestScopeResourcesIfNecessary(queryOptions);
+            modified = doAddAll(objectsToAdd, queryOptions) || modified;
+            requestScope.markSuccessful();
+            return modified;
         }
     }
 
@@ -181,12 +224,10 @@ public class ConcurrentIndexedCollection<O> implements IndexedCollection<O> {
      */
     @Override
     public void addIndex(Index<O> index, QueryOptions queryOptions) {
-        queryOptions = openRequestScopeResourcesIfNecessary(queryOptions);
-        try {
+        try (RequestScope requestScope = openWriteRequestScope(queryOptions)) {
+            queryOptions = requestScope.getQueryOptions();
             indexEngine.addIndex(index, queryOptions);
-        }
-        finally {
-            closeRequestScopeResourcesIfNecessary(queryOptions);
+            requestScope.markSuccessful();
         }
     }
 
@@ -203,12 +244,10 @@ public class ConcurrentIndexedCollection<O> implements IndexedCollection<O> {
      */
     @Override
     public void removeIndex(Index<O> index, QueryOptions queryOptions) {
-        queryOptions = openRequestScopeResourcesIfNecessary(queryOptions);
-        try {
+        try (RequestScope requestScope = openWriteRequestScope(queryOptions)) {
+            queryOptions = requestScope.getQueryOptions();
             indexEngine.removeIndex(index, queryOptions);
-        }
-        finally {
-            closeRequestScopeResourcesIfNecessary(queryOptions);
+            requestScope.markSuccessful();
         }
     }
 
@@ -224,12 +263,10 @@ public class ConcurrentIndexedCollection<O> implements IndexedCollection<O> {
      */
     @Override
     public int size() {
-        QueryOptions queryOptions = openRequestScopeResourcesIfNecessary(null);
-        try {
-            return objectStore.size(queryOptions);
-        }
-        finally {
-            closeRequestScopeResourcesIfNecessary(queryOptions);
+        try (RequestScope requestScope = openReadRequestScope(null)) {
+            int size = objectStore.size(requestScope.getQueryOptions());
+            requestScope.markSuccessful();
+            return size;
         }
     }
 
@@ -238,12 +275,10 @@ public class ConcurrentIndexedCollection<O> implements IndexedCollection<O> {
      */
     @Override
     public boolean isEmpty() {
-        QueryOptions queryOptions = openRequestScopeResourcesIfNecessary(null);
-        try {
-            return objectStore.isEmpty(queryOptions);
-        }
-        finally {
-            closeRequestScopeResourcesIfNecessary(queryOptions);
+        try (RequestScope requestScope = openReadRequestScope(null)) {
+            boolean empty = objectStore.isEmpty(requestScope.getQueryOptions());
+            requestScope.markSuccessful();
+            return empty;
         }
     }
 
@@ -252,12 +287,10 @@ public class ConcurrentIndexedCollection<O> implements IndexedCollection<O> {
      */
     @Override
     public boolean contains(Object o) {
-        QueryOptions queryOptions = openRequestScopeResourcesIfNecessary(null);
-        try {
-            return objectStore.contains(o, queryOptions);
-        }
-        finally {
-            closeRequestScopeResourcesIfNecessary(queryOptions);
+        try (RequestScope requestScope = openReadRequestScope(null)) {
+            boolean contains = objectStore.contains(o, requestScope.getQueryOptions());
+            requestScope.markSuccessful();
+            return contains;
         }
     }
 
@@ -266,12 +299,10 @@ public class ConcurrentIndexedCollection<O> implements IndexedCollection<O> {
      */
     @Override
     public Object[] toArray() {
-        QueryOptions queryOptions = openRequestScopeResourcesIfNecessary(null);
-        try {
-            return getObjectStoreAsSet(queryOptions).toArray();
-        }
-        finally {
-            closeRequestScopeResourcesIfNecessary(queryOptions);
+        try (RequestScope requestScope = openReadRequestScope(null)) {
+            Object[] array = getObjectStoreAsSet(requestScope.getQueryOptions()).toArray();
+            requestScope.markSuccessful();
+            return array;
         }
     }
 
@@ -280,13 +311,11 @@ public class ConcurrentIndexedCollection<O> implements IndexedCollection<O> {
      */
     @Override
     public <T> T[] toArray(T[] a) {
-        QueryOptions queryOptions = openRequestScopeResourcesIfNecessary(null);
-        try {
+        try (RequestScope requestScope = openReadRequestScope(null)) {
             //noinspection SuspiciousToArrayCall
-            return getObjectStoreAsSet(queryOptions).toArray(a);
-        }
-        finally {
-            closeRequestScopeResourcesIfNecessary(queryOptions);
+            T[] array = getObjectStoreAsSet(requestScope.getQueryOptions()).toArray(a);
+            requestScope.markSuccessful();
+            return array;
         }
     }
 
@@ -295,12 +324,10 @@ public class ConcurrentIndexedCollection<O> implements IndexedCollection<O> {
      */
     @Override
     public boolean containsAll(Collection<?> c) {
-        QueryOptions queryOptions = openRequestScopeResourcesIfNecessary(null);
-        try {
-            return objectStore.containsAll(c, queryOptions);
-        }
-        finally {
-            closeRequestScopeResourcesIfNecessary(queryOptions);
+        try (RequestScope requestScope = openReadRequestScope(null)) {
+            boolean containsAll = objectStore.containsAll(c, requestScope.getQueryOptions());
+            requestScope.markSuccessful();
+            return containsAll;
         }
     }
 
@@ -311,52 +338,102 @@ public class ConcurrentIndexedCollection<O> implements IndexedCollection<O> {
      */
     @Override
     public CloseableIterator<O> iterator() {
-        return new CloseableIterator<O>() {
-            final QueryOptions queryOptions = openRequestScopeResourcesIfNecessary(null);
+        final RequestScope requestScope = openRequestScope(null);
+        final QueryOptions queryOptions = requestScope.getQueryOptions();
+        try {
+            final CloseableIterator<O> collectionIterator = objectStore.iterator(queryOptions);
+            return new CloseableIterator<O>() {
+                boolean autoClosed = false;
+                boolean closed;
+                O currentObject = null;
 
-            private final CloseableIterator<O> collectionIterator = objectStore.iterator(queryOptions);
-            boolean autoClosed = false;
-            @Override
-            public boolean hasNext() {
-                boolean hasNext = collectionIterator.hasNext();
-                if (!hasNext) {
-                    close();
-                    autoClosed = true;
+                @Override
+                public boolean hasNext() {
+                    try {
+                        boolean hasNext = collectionIterator.hasNext();
+                        if (!hasNext) {
+                            autoClosed = true;
+                            close();
+                        }
+                        return hasNext;
+                    }
+                    catch (RuntimeException | Error failure) {
+                        fail(failure);
+                        throw failure;
+                    }
                 }
-                return hasNext;
-            }
 
-            private O currentObject = null;
-            @Override
-            public O next() {
-                O next = collectionIterator.next();
-                currentObject = next;
-                return next;
-            }
+                @Override
+                public O next() {
+                    try {
+                        O next = collectionIterator.next();
+                        currentObject = next;
+                        return next;
+                    }
+                    catch (NoSuchElementException exhausted) {
+                        throw exhausted;
+                    }
+                    catch (RuntimeException | Error failure) {
+                        fail(failure);
+                        throw failure;
+                    }
+                }
 
-            @Override
-            public void remove() {
-                if (currentObject == null) {
-                    throw new IllegalStateException();
+                @Override
+                public void remove() {
+                    if (currentObject == null) {
+                        throw new IllegalStateException();
+                    }
+                    try {
+                        // Handle an edge case where we might have retrieved the last object and called close() automatically,
+                        // but then the application calls remove() so we have to reopen request-scope resources temporarily
+                        // to remove the last object...
+                        if (autoClosed) {
+                            ConcurrentIndexedCollection.this.remove(currentObject); // reopens resources temporarily
+                        }
+                        else {
+                            doRemoveAll(Collections.singleton(currentObject), queryOptions); // uses existing resources
+                            commitRequestScopeTransaction(queryOptions);
+                        }
+                        currentObject = null;
+                    }
+                    catch (RuntimeException | Error failure) {
+                        fail(failure);
+                        throw failure;
+                    }
                 }
-                // Handle an edge case where we might have retrieved the last object and called close() automatically,
-                // but then the application calls remove() so we have to reopen request-scope resources temporarily
-                // to remove the last object...
-                if (autoClosed) {
-                    ConcurrentIndexedCollection.this.remove(currentObject); // reopens resources temporarily
-                }
-                else {
-                    doRemoveAll(Collections.singleton(currentObject), queryOptions); // uses existing resources
-                }
-                currentObject = null;
-            }
 
-            @Override
-            public void close() {
-                CloseableRequestResources.closeQuietly(collectionIterator);
-                closeRequestScopeResourcesIfNecessary(queryOptions);
-            }
-        };
+                synchronized void fail(Throwable failure) {
+                    if (closed) {
+                        return;
+                    }
+                    closed = true;
+                    CloseableRequestResources.closeAndAddSuppressed(collectionIterator, failure);
+                    requestScope.closeAfterFailure(failure);
+                }
+
+                @Override
+                public synchronized void close() {
+                    if (closed) {
+                        return;
+                    }
+                    closed = true;
+                    try {
+                        collectionIterator.close();
+                    }
+                    catch (RuntimeException | Error failure) {
+                        requestScope.closeAfterFailure(failure);
+                        throw failure;
+                    }
+                    requestScope.markSuccessful();
+                    requestScope.close();
+                }
+            };
+        }
+        catch (RuntimeException | Error failure) {
+            requestScope.closeAfterFailure(failure);
+            throw failure;
+        }
     }
 
     /**
@@ -364,16 +441,14 @@ public class ConcurrentIndexedCollection<O> implements IndexedCollection<O> {
      */
     @Override
     public boolean add(O o) {
-        QueryOptions queryOptions = openRequestScopeResourcesIfNecessary(null);
-        try {
+        try (RequestScope requestScope = openWriteRequestScope(null)) {
+            QueryOptions queryOptions = requestScope.getQueryOptions();
             // Add the object to the index.
             // Indexes handle gracefully the case that the objects supplied already exist in the index...
             boolean modified = objectStore.add(o, queryOptions);
             indexEngine.addAll(ObjectSet.fromCollection(singleton(o)), queryOptions);
+            requestScope.markSuccessful();
             return modified;
-        }
-        finally {
-            closeRequestScopeResourcesIfNecessary(queryOptions);
         }
     }
 
@@ -382,16 +457,14 @@ public class ConcurrentIndexedCollection<O> implements IndexedCollection<O> {
      */
     @Override
     public boolean remove(Object object) {
-        QueryOptions queryOptions = openRequestScopeResourcesIfNecessary(null);
-        try {
+        try (RequestScope requestScope = openWriteRequestScope(null)) {
+            QueryOptions queryOptions = requestScope.getQueryOptions();
             @SuppressWarnings({"unchecked"})
             O o = (O) object;
             boolean modified = objectStore.remove(o, queryOptions);
             indexEngine.removeAll(ObjectSet.fromCollection(singleton(o)), queryOptions);
+            requestScope.markSuccessful();
             return modified;
-        }
-        finally {
-            closeRequestScopeResourcesIfNecessary(queryOptions);
         }
     }
 
@@ -400,16 +473,17 @@ public class ConcurrentIndexedCollection<O> implements IndexedCollection<O> {
      */
     @Override
     public boolean addAll(Collection<? extends O> c) {
-        QueryOptions queryOptions = openRequestScopeResourcesIfNecessary(null);
-        try {
+        if (c == this) {
+            return false;
+        }
+        try (RequestScope requestScope = openWriteRequestScope(null)) {
+            QueryOptions queryOptions = requestScope.getQueryOptions();
             @SuppressWarnings({"unchecked"})
             Collection<O> objects = (Collection<O>) c;
             boolean modified = objectStore.addAll(objects, queryOptions);
             indexEngine.addAll(ObjectSet.fromCollection(objects), queryOptions);
+            requestScope.markSuccessful();
             return modified;
-        }
-        finally {
-            closeRequestScopeResourcesIfNecessary(queryOptions);
         }
     }
 
@@ -418,16 +492,19 @@ public class ConcurrentIndexedCollection<O> implements IndexedCollection<O> {
      */
     @Override
     public boolean removeAll(Collection<?> c) {
-        QueryOptions queryOptions = openRequestScopeResourcesIfNecessary(null);
-        try {
+        if (c == this) {
+            boolean modified = !isEmpty();
+            clear();
+            return modified;
+        }
+        try (RequestScope requestScope = openWriteRequestScope(null)) {
+            QueryOptions queryOptions = requestScope.getQueryOptions();
             @SuppressWarnings({"unchecked"})
             Collection<O> objects = (Collection<O>) c;
             boolean modified = objectStore.removeAll(objects, queryOptions);
             indexEngine.removeAll(ObjectSet.fromCollection(objects), queryOptions);
+            requestScope.markSuccessful();
             return modified;
-        }
-        finally {
-            closeRequestScopeResourcesIfNecessary(queryOptions);
         }
     }
 
@@ -436,23 +513,26 @@ public class ConcurrentIndexedCollection<O> implements IndexedCollection<O> {
      */
     @Override
     public boolean retainAll(Collection<?> c) {
-        QueryOptions queryOptions = openRequestScopeResourcesIfNecessary(null);
-        CloseableIterator<O> iterator = null;
-        try {
-            boolean modified = false;
-            iterator = objectStore.iterator(queryOptions);
-            while (iterator.hasNext()) {
-                O next = iterator.next();
-                if (!c.contains(next)) {
-                    doRemoveAll(Collections.singleton(next), queryOptions);
-                    modified = true;
+        RequestScope requestScope = openWriteRequestScope(null);
+        QueryOptions queryOptions = requestScope.getQueryOptions();
+        try (requestScope) {
+            CloseableIterator<O> iterator = null;
+            try {
+                boolean modified = false;
+                iterator = objectStore.iterator(queryOptions);
+                while (iterator.hasNext()) {
+                    O next = iterator.next();
+                    if (!c.contains(next)) {
+                        doRemoveAll(Collections.singleton(next), queryOptions);
+                        modified = true;
+                    }
                 }
+                requestScope.markSuccessful();
+                return modified;
             }
-            return modified;
-        }
-        finally {
-            CloseableRequestResources.closeQuietly(iterator);
-            closeRequestScopeResourcesIfNecessary(queryOptions);
+            finally {
+                CloseableRequestResources.closeQuietly(iterator);
+            }
         }
     }
 
@@ -461,13 +541,11 @@ public class ConcurrentIndexedCollection<O> implements IndexedCollection<O> {
      */
     @Override
     public void clear() {
-        QueryOptions queryOptions = openRequestScopeResourcesIfNecessary(null);
-        try {
+        try (RequestScope requestScope = openWriteRequestScope(null)) {
+            QueryOptions queryOptions = requestScope.getQueryOptions();
             objectStore.clear(queryOptions);
             indexEngine.clear(queryOptions);
-        }
-        finally {
-            closeRequestScopeResourcesIfNecessary(queryOptions);
+            requestScope.markSuccessful();
         }
     }
 
@@ -517,9 +595,91 @@ public class ConcurrentIndexedCollection<O> implements IndexedCollection<O> {
         return queryOptions;
     }
 
+    private QueryOptions openReadRequestScopeResourcesIfNecessary(QueryOptions queryOptions) {
+        QueryOptions classifiedOptions = classifyAsReadRequest(queryOptions);
+        QueryOptions openedOptions = openRequestScopeResourcesIfNecessary(classifiedOptions);
+        flagAsReadRequest(openedOptions);
+        return openedOptions;
+    }
+
     protected void closeRequestScopeResourcesIfNecessary(QueryOptions queryOptions) {
+        RequestScopeTransactionOutcome outcome = (RequestScopeTransactionOutcome) queryOptions.get(REQUEST_SCOPE_OUTCOME);
+        if (outcome == null) {
+            outcome = RequestScopeTransactionOutcome.COMMIT;
+        }
         if (!(persistence instanceof OnHeapPersistence)) {
-            persistence.closeRequestScopeResources(queryOptions);
+            persistence.closeRequestScopeResources(queryOptions, outcome);
+        }
+    }
+
+    protected void closeRequestScopeResourcesIfNecessary(
+            QueryOptions queryOptions,
+            RequestScopeTransactionOutcome outcome) {
+        queryOptions.put(REQUEST_SCOPE_OUTCOME, outcome);
+        try {
+            closeRequestScopeResourcesIfNecessary(queryOptions);
+        }
+        finally {
+            queryOptions.remove(REQUEST_SCOPE_OUTCOME);
+        }
+    }
+
+    protected RequestScope openRequestScope(QueryOptions queryOptions) {
+        return new RequestScope(openRequestScopeResourcesIfNecessary(queryOptions));
+    }
+
+    private RequestScope openReadRequestScope(QueryOptions queryOptions) {
+        RequestScope requestScope = openRequestScope(classifyAsReadRequest(queryOptions));
+        flagAsReadRequest(requestScope.getQueryOptions());
+        return requestScope;
+    }
+
+    private RequestScope openWriteRequestScope(QueryOptions queryOptions) {
+        RequestScope requestScope = openRequestScope(classifyAsWriteRequest(queryOptions));
+        flagAsWriteRequest(requestScope.getQueryOptions());
+        return requestScope;
+    }
+
+    protected void commitRequestScopeTransaction(QueryOptions queryOptions) {
+        if (!(persistence instanceof OnHeapPersistence)) {
+            persistence.commitRequestScopeTransaction(queryOptions);
+        }
+    }
+
+    protected class RequestScope implements AutoCloseable {
+        private final QueryOptions queryOptions;
+        private RequestScopeTransactionOutcome outcome = RequestScopeTransactionOutcome.ROLLBACK;
+        private boolean closed;
+
+        RequestScope(QueryOptions queryOptions) {
+            this.queryOptions = queryOptions;
+        }
+
+        public QueryOptions getQueryOptions() {
+            return queryOptions;
+        }
+
+        public void markSuccessful() {
+            outcome = RequestScopeTransactionOutcome.COMMIT;
+        }
+
+        @Override
+        public void close() {
+            if (!closed) {
+                closed = true;
+                closeRequestScopeResourcesIfNecessary(queryOptions, outcome);
+            }
+        }
+
+        void closeAfterFailure(Throwable failure) {
+            try {
+                close();
+            }
+            catch (RuntimeException | Error closeFailure) {
+                if (failure != closeFailure) {
+                    failure.addSuppressed(closeFailure);
+                }
+            }
         }
     }
 
@@ -530,40 +690,29 @@ public class ConcurrentIndexedCollection<O> implements IndexedCollection<O> {
 
     @Override
     public boolean equals(Object o) {
-        QueryOptions queryOptions = openRequestScopeResourcesIfNecessary(null);
-        try {
-            if (this == o) return true;
-            if (!(o instanceof Set)) return false;
-            Set that = (Set) o;
-
-            if (!getObjectStoreAsSet(queryOptions).equals(that)) return false;
-
-            return true;
-        }
-        finally {
-            closeRequestScopeResourcesIfNecessary(queryOptions);
+        try (RequestScope requestScope = openReadRequestScope(null)) {
+            QueryOptions queryOptions = requestScope.getQueryOptions();
+            boolean equal = this == o || o instanceof Set && getObjectStoreAsSet(queryOptions).equals(o);
+            requestScope.markSuccessful();
+            return equal;
         }
     }
 
     @Override
     public int hashCode() {
-        QueryOptions queryOptions = openRequestScopeResourcesIfNecessary(null);
-        try {
-            return getObjectStoreAsSet(queryOptions).hashCode();
-        }
-        finally {
-            closeRequestScopeResourcesIfNecessary(queryOptions);
+        try (RequestScope requestScope = openReadRequestScope(null)) {
+            int hashCode = getObjectStoreAsSet(requestScope.getQueryOptions()).hashCode();
+            requestScope.markSuccessful();
+            return hashCode;
         }
     }
 
     @Override
     public String toString() {
-        QueryOptions queryOptions = openRequestScopeResourcesIfNecessary(null);
-        try {
-            return getObjectStoreAsSet(queryOptions).toString();
-        }
-        finally {
-            closeRequestScopeResourcesIfNecessary(queryOptions);
+        try (RequestScope requestScope = openReadRequestScope(null)) {
+            String string = getObjectStoreAsSet(requestScope.getQueryOptions()).toString();
+            requestScope.markSuccessful();
+            return string;
         }
     }
 
@@ -575,6 +724,26 @@ public class ConcurrentIndexedCollection<O> implements IndexedCollection<O> {
      * @param queryOptions The query options for the request
      */
     protected static void flagAsReadRequest(QueryOptions queryOptions) {
-        FlagsEnabled.forQueryOptions(queryOptions).add(PersistenceFlags.READ_REQUEST);
+        FlagsEnabled flags = FlagsEnabled.forQueryOptions(queryOptions);
+        flags.remove(PersistenceFlags.WRITE_REQUEST);
+        flags.add(PersistenceFlags.READ_REQUEST);
+    }
+
+    static QueryOptions classifyAsReadRequest(QueryOptions queryOptions) {
+        QueryOptions classifiedOptions = queryOptions == null ? new QueryOptions() : queryOptions;
+        flagAsReadRequest(classifiedOptions);
+        return classifiedOptions;
+    }
+
+    static QueryOptions classifyAsWriteRequest(QueryOptions queryOptions) {
+        QueryOptions classifiedOptions = queryOptions == null ? new QueryOptions() : queryOptions;
+        flagAsWriteRequest(classifiedOptions);
+        return classifiedOptions;
+    }
+
+    private static void flagAsWriteRequest(QueryOptions queryOptions) {
+        FlagsEnabled flags = FlagsEnabled.forQueryOptions(queryOptions);
+        flags.remove(PersistenceFlags.READ_REQUEST);
+        flags.add(PersistenceFlags.WRITE_REQUEST);
     }
 }

@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -141,7 +142,7 @@ public class Between<O, A extends Comparable<A>> extends SimpleQuery<O, A> {
         if (this == o) return true;
         if (!(o instanceof Between)) return false;
 
-        Between between = (Between) o;
+        Between<?, ?> between = (Between<?, ?>) o;
 
         if (!attribute.equals(between.attribute)) return false;
         if (lowerInclusive != between.lowerInclusive) return false;

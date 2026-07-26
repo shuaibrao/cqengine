@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -54,7 +55,7 @@ public class PartialNavigableIndex<A extends Comparable<A>, O> extends PartialSo
     protected SortedKeyStatisticsAttributeIndex<A, O> createBackingIndex() {
         return new NavigableIndex<A, O>(indexMapFactory, valueSetFactory, attribute) {
             @Override
-            public Index getEffectiveIndex() {
+            public Index<O> getEffectiveIndex() {
                 return PartialNavigableIndex.this.getEffectiveIndex();
             }
         };

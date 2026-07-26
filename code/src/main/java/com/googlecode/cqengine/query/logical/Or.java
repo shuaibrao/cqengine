@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,7 +35,7 @@ public class Or<O> extends LogicalQuery<O> {
 
     /**
      * Constructor.
-     * <p/>
+     * <p>
      * Delegates to {@link #Or(java.util.Collection, boolean)} supplying false for disjointness.
      *
      * @param childQueries Child queries for which a set union is required
@@ -52,7 +53,7 @@ public class Or<O> extends LogicalQuery<O> {
      */
     public Or(Collection<Query<O>> childQueries, boolean disjoint) {
         super(childQueries);
-        if (this.size() < 2) {
+        if (childQueries.size() < 2) {
             throw new IllegalStateException("An 'Or' query cannot have fewer than 2 child queries, " + childQueries.size() + " were supplied");
         }
         this.disjoint = disjoint;
@@ -86,7 +87,7 @@ public class Or<O> extends LogicalQuery<O> {
         if (this == o) return true;
         if (!(o instanceof Or)) return false;
 
-        Or or = (Or) o;
+        Or<?> or = (Or<?>) o;
 
         if (disjoint != or.disjoint) return false;
         if (!childQueries.equals(or.childQueries)) return false;

@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,6 +35,7 @@ import java.util.*;
  */
 public abstract class AbstractAttributeIndex<A, O> implements AttributeIndex<A, O> {
 
+    @SuppressWarnings("rawtypes") // Retains the protected set type exposed to legacy subclasses.
     protected final Set<Class<? extends Query>> supportedQueries;
 
     protected final Attribute<O, A> attribute;
@@ -44,6 +46,7 @@ public abstract class AbstractAttributeIndex<A, O> implements AttributeIndex<A, 
      * @param attribute The attribute on which the index will be built
      * @param supportedQueries The set of {@link Query} types which the subclass implementation supports
      */
+    @SuppressWarnings("rawtypes") // Retains the legacy protected constructor signature.
     protected AbstractAttributeIndex(Attribute<O, A> attribute, Set<Class<? extends Query>> supportedQueries) {
         this.attribute = attribute;
         // Note: Ideally supportedQueries would be varargs to simplify subclasses, but varargs causes generic array
@@ -73,7 +76,7 @@ public abstract class AbstractAttributeIndex<A, O> implements AttributeIndex<A, 
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
 
-        AbstractAttributeIndex that = (AbstractAttributeIndex) o;
+        AbstractAttributeIndex<?, ?> that = (AbstractAttributeIndex<?, ?>) o;
 
         if (!attribute.equals(that.attribute)) return false;
 

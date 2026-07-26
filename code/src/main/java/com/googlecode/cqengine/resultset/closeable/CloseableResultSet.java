@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,11 +16,13 @@
  */
 package com.googlecode.cqengine.resultset.closeable;
 
+import com.googlecode.cqengine.index.support.CloseableRequestResources;
 import com.googlecode.cqengine.query.Query;
 import com.googlecode.cqengine.query.option.QueryOptions;
 import com.googlecode.cqengine.resultset.ResultSet;
 
 import java.io.Closeable;
+import java.util.Arrays;
 import java.util.Iterator;
 
 /**
@@ -30,12 +33,19 @@ public class CloseableResultSet<O> extends ResultSet<O> implements Closeable {
     final ResultSet<O> wrapped;
     final Query<O> query;
     final QueryOptions queryOptions;
-    boolean closed = false;
+    final Closeable additionalCloseable;
+    volatile boolean closed = false;
 
     public CloseableResultSet(ResultSet<O> wrapped, Query<O> query, QueryOptions queryOptions) {
+        this(wrapped, query, queryOptions, null);
+    }
+
+    public CloseableResultSet(ResultSet<O> wrapped, Query<O> query, QueryOptions queryOptions,
+                              Closeable additionalCloseable) {
         this.wrapped = wrapped;
         this.query = query;
         this.queryOptions = queryOptions;
+        this.additionalCloseable = additionalCloseable;
     }
 
     @Override
@@ -99,9 +109,12 @@ public class CloseableResultSet<O> extends ResultSet<O> implements Closeable {
     }
 
     @Override
-    public void close() {
-        wrapped.close();
+    public synchronized void close() {
+        if (closed) {
+            return;
+        }
         closed = true;
+        CloseableRequestResources.closeAll(Arrays.asList(wrapped, additionalCloseable));
     }
 
     @Override

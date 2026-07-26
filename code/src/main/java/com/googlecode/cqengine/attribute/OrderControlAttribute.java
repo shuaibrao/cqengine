@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,10 +23,10 @@ import com.googlecode.cqengine.query.simple.Has;
 /**
  * An attribute which wraps another delegate attribute, and can be used in a {@link QueryFactory#orderBy(AttributeOrder)}
  * clause to control the placement in results of objects which have and do not have values for the delegate attribute.
- * <p/>
+ * <p>
  * Essentially this attribute allows results to be sorted based on whether a {@link Has} query on the delegate attribute
  * returns true or false.
- * <p/>
+ * <p>
  * The default behaviour of CQEngine is as follows:
  * <ul>
  *     <li>
@@ -46,8 +47,10 @@ import com.googlecode.cqengine.query.simple.Has;
  */
 public abstract class OrderControlAttribute<O> extends SimpleAttribute<O, Integer> {
 
+    @SuppressWarnings("rawtypes") // Retains the legacy protected field signature for subclasses.
     protected final Attribute<O, ? extends Comparable> delegateAttribute;
 
+    @SuppressWarnings("rawtypes") // Retains the legacy protected constructor signature for subclasses.
     protected OrderControlAttribute(Attribute<O, ? extends Comparable> delegateAttribute, String delegateAttributeName) {
         super(delegateAttribute.getObjectType(), Integer.class, delegateAttributeName);
         if (delegateAttribute instanceof OrderControlAttribute) {

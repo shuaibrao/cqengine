@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +17,7 @@
 package com.googlecode.cqengine.entity;
 
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * An extension of {@link MapEntity} in which a particular entry in the map is designated as a primary key,
@@ -26,12 +28,13 @@ public class PrimaryKeyedMapEntity extends MapEntity {
 
     private final Object primaryKey;
 
+    @SuppressWarnings("rawtypes") // Retains the legacy public constructor signature.
     public PrimaryKeyedMapEntity(Map mapToWrap, Object mapPrimaryKey) {
         super(mapToWrap, getPrimaryKeyHashCode(mapToWrap, mapPrimaryKey));
         primaryKey = mapPrimaryKey;
     }
 
-    static int getPrimaryKeyHashCode(Map map, Object primaryKey) {
+    static int getPrimaryKeyHashCode(Map<?, ?> map, Object primaryKey) {
         Object value = map.get(primaryKey);
         return value.hashCode();
     }
@@ -46,6 +49,9 @@ public class PrimaryKeyedMapEntity extends MapEntity {
         }
 
         PrimaryKeyedMapEntity that = (PrimaryKeyedMapEntity) o;
+        if (!Objects.equals(primaryKey, that.primaryKey)) {
+            return false;
+        }
         if (cachedHashCode != that.cachedHashCode) {
             return false;
         }

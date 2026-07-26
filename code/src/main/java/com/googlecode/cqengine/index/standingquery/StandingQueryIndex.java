@@ -31,13 +31,12 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * An index which stores objects matching any type of query, and which can answer arbitrarily complex
  * queries in constant time complexity.
- * <p/>
+ * <p>
  * A standing query index must be added ahead of time for the exact query which is to be accelerated.
- * <p/>
+ * <p>
  * Note that it is possible to add a standing query index on any <i>fragment</i> of a query, as well as whole queries.
  * CQEngine will accelerate evaluation of query fragments (branches, or nested sub-trees within queries) using any
  * standing query indexes which match those fragments.
- * <p/>
  *
  * @author Niall Gallagher
  */
@@ -58,7 +57,7 @@ public class StandingQueryIndex<O> implements Index<O>, OnHeapTypeIndex {
 
     /**
      * {@inheritDoc}
-     * <p/>
+     * <p>
      * This index is mutable.
      *
      * @return true
@@ -79,7 +78,7 @@ public class StandingQueryIndex<O> implements Index<O>, OnHeapTypeIndex {
 
     /**
      * {@inheritDoc}
-     * <p/>
+     * <p>
      * <b>This implementation always returns true, as this index supports all types of query.</b>
      *
      * @return true, this index supports all types of query
@@ -181,9 +180,8 @@ public class StandingQueryIndex<O> implements Index<O>, OnHeapTypeIndex {
 
     /**
      * A static factory method for convenience.
-     * <p/>
+     * <p>
      * Equivalent to {@code new StandingQueryIndex&lt;Query&lt;O&gt;, O&gt;(standingQuery)}.
-     * <p/>
      * @param standingQuery The standing query on which the index will be built
      * @param <O> The type of the objects in the collection being indexed
      * @return A new StandingQueryIndex which will build an index on this standing query

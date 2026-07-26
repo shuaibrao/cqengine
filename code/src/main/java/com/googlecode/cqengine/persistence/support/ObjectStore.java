@@ -15,6 +15,7 @@
  */
 package com.googlecode.cqengine.persistence.support;
 
+import com.googlecode.cqengine.index.Index;
 import com.googlecode.cqengine.index.support.CloseableIterator;
 import com.googlecode.cqengine.query.option.QueryOptions;
 
@@ -23,11 +24,22 @@ import java.util.Set;
 
 /**
  * An interface providing similar methods as {@link java.util.Set}, except the methods accept {@link QueryOptions}.
- * <p/>
+ * <p>
  * This interface can thus wrap a standard on-heap Set, or an off-heap or disk implementation of a Set where the
  * implementation can extract details of the persistence to use from the supplied query options.
  */
 public interface ObjectStore<O> {
+
+    /**
+     * Returns an index which owns this object store's identity data, or {@code null} when the object store has no
+     * queryable backing index.
+     *
+     * @return The queryable backing index, or {@code null} when none exists.
+     */
+    default Index<O> getBackingIndex() {
+        return null;
+    }
+
     int size(QueryOptions queryOptions);
 
     boolean contains(Object o, QueryOptions queryOptions);

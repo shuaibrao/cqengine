@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -95,7 +96,7 @@ public class GreaterThan<O, A extends Comparable<A>> extends SimpleQuery<O, A> {
         if (this == o) return true;
         if (!(o instanceof GreaterThan)) return false;
 
-        GreaterThan that = (GreaterThan) o;
+        GreaterThan<?, ?> that = (GreaterThan<?, ?>) o;
 
         if (!attribute.equals(that.attribute)) return false;
         if (valueInclusive != that.valueInclusive) return false;

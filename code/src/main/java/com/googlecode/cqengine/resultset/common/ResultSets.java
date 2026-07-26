@@ -28,7 +28,7 @@ public class ResultSets {
 
     /**
      * Returns a Collection-like view of the given ResultSet.
-     * <p/>
+     * <p>
      * The collection simply delegates to the ResultSet, which in turn will reflect
      * any changes made to the underlying IndexedCollection by other threads.
      * For example consecutive calls to the size() method

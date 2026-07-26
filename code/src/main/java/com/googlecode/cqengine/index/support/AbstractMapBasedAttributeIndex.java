@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,11 +32,11 @@ import java.util.concurrent.ConcurrentMap;
 /**
  * An abstract implementation of an index backed by a {@link java.util.concurrent.ConcurrentMap}, where the exact map
  * implementation is provided by a factory supplied to the constructor.
- * <p/>
+ * <p>
  * This class implements the methods to actually build the index and update it when objects are added or removed.
  * Subclasses will implement methods to retrieve from the index, using logic appropriate to the particular
  * implementation.
- * <p/>
+ * <p>
  * This class also provides some static utility methods useful to map-based implementations.
  *
  * @author Niall Gallagher
@@ -55,6 +56,7 @@ public abstract class AbstractMapBasedAttributeIndex<A, O, MapType extends Concu
      * @param attribute The attribute on which the index will be built
      * @param supportedQueries The set of {@link Query} types which the subclass implementation supports
      */
+    @SuppressWarnings("rawtypes") // Retains the legacy protected constructor signature.
     protected AbstractMapBasedAttributeIndex(Factory<MapType> indexMapFactory, Factory<StoredResultSet<O>> valueSetFactory, Attribute<O, A> attribute, Set<Class<? extends Query>> supportedQueries) {
         super(attribute, supportedQueries);
         this.indexMapFactory = indexMapFactory;
@@ -238,7 +240,7 @@ public abstract class AbstractMapBasedAttributeIndex<A, O, MapType extends Concu
     /**
      * A no-op method which may be overridden by subclasses which use a
      * {@link com.googlecode.cqengine.quantizer.Quantizer}.
-     * <p/>
+     * <p>
      * <b>This default implementation simply returns the given attribute value unmodified.</b>
      *
      * @param attributeValue A value returned by an attribute

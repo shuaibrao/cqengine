@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,23 +23,27 @@ import java.util.Comparator;
 /**
  * Stateless comparator singletons for {@link ResultSet}s based on {@link ResultSet#getRetrievalCost()} and
  * {@link com.googlecode.cqengine.resultset.ResultSet#getMergeCost()}.
- * <p/>
  *
  * @author Niall Gallagher
  */
 public class QueryCostComparators {
 
+    @SuppressWarnings("rawtypes") // Backs the legacy public comparator return signature.
     private static final Comparator<ResultSet> RETRIEVAL_COST_COMPARATOR = new RetrievalCostComparator();
+    @SuppressWarnings("rawtypes") // Backs the legacy public comparator return signature.
     private static final Comparator<ResultSet> MERGE_COST_COMPARATOR = new MergeCostComparator();
 
+    @SuppressWarnings("rawtypes") // Retains the legacy public return signature.
     public static Comparator<ResultSet> getRetrievalCostComparator() {
         return RETRIEVAL_COST_COMPARATOR;
     }
 
+    @SuppressWarnings("rawtypes") // Retains the legacy public return signature.
     public static Comparator<ResultSet> getMergeCostComparator() {
         return MERGE_COST_COMPARATOR;
     }
 
+    @SuppressWarnings("rawtypes") // Implements the comparator type returned by the legacy public API.
     static class RetrievalCostComparator implements Comparator<ResultSet> {
 
         @Override
@@ -57,6 +62,7 @@ public class QueryCostComparators {
         }
     }
 
+    @SuppressWarnings("rawtypes") // Implements the comparator type returned by the legacy public API.
     static class MergeCostComparator implements Comparator<ResultSet> {
 
         @Override

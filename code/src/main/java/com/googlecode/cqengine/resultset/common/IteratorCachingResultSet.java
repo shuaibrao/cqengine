@@ -25,11 +25,11 @@ import java.util.Iterator;
  * A {@link ResultSet} which wraps a backing ResultSet, and which caches the iterator returned by
  * the backing ResultSet, to enable repeated invocations on {@code IteratorCachingResultSet.iterator().hasNext()},
  * to avoid each time requesting a new iterator from the backing ResultSet.
- * <p/>
+ * <p>
  * An effect of this caching is that if the application calls {@link #isEmpty()} or {@link #isNotEmpty()} on
  * this ResultSet before it begins iteration, only one iterator will actually be requested from the backing ResultSet
  * because the cached iterator will be reused each time.
- * <p/>
+ * <p>
  * On the other hand, whenever the application actually begins to iterate through results, this ResultSet will
  * detect it, and if {@link #iterator()} is invoked again, it will avoid returning the same cached iterator
  * and will obtain a new iterator instead.

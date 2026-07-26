@@ -25,9 +25,9 @@ import java.util.Iterator;
 /**
  * Wraps another {@link ResultSet} and ensures that the {@link Iterator} returned by the {@link #iterator()} method
  * never returns the same object more than once.
- * <p/>
+ * <p>
  * The implementation delegates to {@link MaterializedDeduplicatedIterator}.
- * <p/>
+ * <p>
  * Note that the {@link #size()} method in this implementation has O(n) time complexity, because it uses the
  * deduplicating iterator to count objects.
  *
@@ -41,7 +41,7 @@ public class MaterializedDeduplicatedResultSet<O> extends WrappedResultSet<O> {
 
     /**
      * Returns an {@link Iterator} which does not return the same object more than once.
-     * <p/>
+     * <p>
      * See class JavaDocs for more details. This implementation has <code>O(merge_cost)</code> time complexity.
      *
      * @return An {@link Iterator} which does not return the same object more than once
@@ -53,7 +53,7 @@ public class MaterializedDeduplicatedResultSet<O> extends WrappedResultSet<O> {
 
     /**
      * {@inheritDoc}
-     * <p/>
+     * <p>
      * This implementation has <code>O(merge_cost)</code> time complexity, because it delegates to
      * the {@link #iterator()} method and counts objects returned.
      */

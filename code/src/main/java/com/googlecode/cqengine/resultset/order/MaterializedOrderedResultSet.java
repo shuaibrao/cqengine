@@ -25,7 +25,7 @@ import java.util.*;
  * A {@code ResultSet} which wraps another {@code ResultSet}, providing an {@link #iterator()} method which returns
  * objects from the wrapped ResultSet in sorted order according to a comparator supplied to the constructor of this
  * {@code ResultSet}.
- * <p/>
+ * <p>
  * This is implemented by copying objects into an intermediate array in memory, and then performing merge-sort
  * on that array.
  * <p>
@@ -52,7 +52,7 @@ public class MaterializedOrderedResultSet<O> extends WrappedResultSet<O> {
 
     /**
      * Builds an insertion-sorted set from the wrapped {@link ResultSet}, and returns an iterator over the sorted set.
-     * <p/>
+     * <p>
      * Time complexity for building an insertion sorted set is <code>O(merge_cost * log(merge_cost))</code>, and then
      * iterating it makes this <b><code>O(merge_cost^2 * log(merge_cost))</code></b>. (Merge cost is an approximation
      * of the cost of iterating all elements in any result set.)

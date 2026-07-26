@@ -1,3 +1,6 @@
+// Modified by Shuaib Rao in 2026.
+// SPDX-License-Identifier: Apache-2.0
+
 package com.googlecode.cqengine.query.comparative;
 
 import com.googlecode.cqengine.attribute.Attribute;
@@ -28,7 +31,7 @@ public class Min<O, A extends Comparable<A>> extends SimpleComparativeQuery<O, A
         if (this == o) return true;
         if (!(o instanceof Min)) return false;
 
-        Min min = (Min) o;
+        Min<?, ?> min = (Min<?, ?>) o;
 
         return super.attribute.equals(min.attribute);
     }
@@ -44,7 +47,7 @@ public class Min<O, A extends Comparable<A>> extends SimpleComparativeQuery<O, A
         Set<O> results = new HashSet<>();
         for (O object : objectsInCollection) {
             A attributeValue = attribute.getValue(object, queryOptions);
-            minimumValue = evaluate(object, attributeValue, minimumValue, (Set<O>) results);
+            minimumValue = evaluate(object, attributeValue, minimumValue, results);
         }
         return results;
     }

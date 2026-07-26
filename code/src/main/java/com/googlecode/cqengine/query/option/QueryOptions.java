@@ -21,10 +21,10 @@ import java.util.Map;
 /**
  * Encapsulates a map of optional key-value parameters supplied by the application to the query engine, attributes
  * and indexes.
- * <p/>
+ * <p>
  * These parameters can request specific behaviour from the query engine such as specifying transaction
  * isolation levels.
- * <p/>
+ * <p>
  * Query options also allow the application to pass arbitrary or request-scope objects to custom Attributes or Indexes.
  */
 public class QueryOptions {

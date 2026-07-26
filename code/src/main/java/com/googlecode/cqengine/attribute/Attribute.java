@@ -36,18 +36,16 @@ public interface Attribute<O, A> {
 
     /**
      * Returns the name of the attribute, as supplied to the constructor.
-     * <p/>
      * @return the name of the attribute, as supplied to the constructor
      */
     String getAttributeName();
 
     /**
      * Returns the values belonging to the attribute in the given object.
-     * <p/>
+     * <p>
      * If the attribute is a {@link SimpleAttribute}, the list returned will contain a single value for the attribute.
      * If the attribute is a {@link MultiValueAttribute}, the list returned will contain any number of values for the
      * attribute.
-     * <p/>
      * @param object The object from which the values of the attribute are required
      * @param queryOptions Optional parameters supplied by the application along with the operation which is causing
      * this attribute to be invoked (either a query, or an update to the collection)

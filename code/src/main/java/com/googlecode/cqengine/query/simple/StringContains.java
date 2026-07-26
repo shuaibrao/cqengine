@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -87,7 +88,7 @@ public class StringContains<O, A extends CharSequence> extends SimpleQuery<O, A>
         if (this == o) return true;
         if (!(o instanceof StringContains)) return false;
 
-        StringContains that = (StringContains) o;
+        StringContains<?, ?> that = (StringContains<?, ?>) o;
 
         if (!attribute.equals(that.attribute)) return false;
         if (!value.equals(that.value)) return false;

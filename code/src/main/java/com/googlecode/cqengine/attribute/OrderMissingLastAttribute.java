@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,7 +28,7 @@ import com.googlecode.cqengine.query.simple.Has;
  */
 public class OrderMissingLastAttribute<O> extends OrderControlAttribute<O> {
 
-    final Has<O, ? extends Comparable> hasQuery;
+    final Has<O, ? extends Comparable<?>> hasQuery;
 
     public <A extends Comparable<A>> OrderMissingLastAttribute(Attribute<O, A> delegateAttribute) {
         super(delegateAttribute, "missingLast_" + delegateAttribute.getAttributeName());

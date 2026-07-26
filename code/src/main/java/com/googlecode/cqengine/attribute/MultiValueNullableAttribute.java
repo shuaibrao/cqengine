@@ -25,9 +25,9 @@ import java.util.Iterator;
 /**
  * Represents an attribute in an object which has multiple values (such as a field which is itself a collection),
  * where some of the values might be null, or where the collection of values itself might be null.
- * <p/>
+ * <p>
  * Provides a method to read the values from the field given such an object.
- * <p/>
+ * <p>
  * This type of attribute performs runtime validation of values to handle nulls, which can impact performance.
  * When it is known that values will not be null, it is recommended to use {@link MultiValueAttribute} instead.
  *
@@ -42,7 +42,7 @@ public abstract class MultiValueNullableAttribute<O, A> extends AbstractAttribut
      *
      * This name is not actually used by the query engine except in providing informative exception and debug messages.
      * As such it is recommended, but not required, that a name be provided.
-     * <p/>
+     * <p>
      * A suitable name might be the name of the field to which an attribute refers.
      *
      * @param attributeName The name for this attribute
@@ -100,7 +100,6 @@ public abstract class MultiValueNullableAttribute<O, A> extends AbstractAttribut
 
     /**
      * Returns the values of the attribute from the object, omitting any null values.
-     * <p/>
      * @param object The object from which the values of the attribute are required
      * @param queryOptions Optional parameters supplied by the application along with the operation which is causing
      * this attribute to be invoked (either a query, or an update to the collection)
@@ -129,7 +128,6 @@ public abstract class MultiValueNullableAttribute<O, A> extends AbstractAttribut
     /**
      * Returns the values of the attribute from the object, some of which can be null.
      * The actual list returned can also be null.
-     * <p/>
      * @param object The object from which the values of the attribute are required
      * @param queryOptions Optional parameters supplied by the application along with the operation which is causing
      * this attribute to be invoked (either a query, or an update to the collection)

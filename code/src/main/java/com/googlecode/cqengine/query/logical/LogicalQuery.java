@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,9 +33,9 @@ import java.util.*;
 public abstract class LogicalQuery<O> implements Query<O> {
 
     protected final Collection<Query<O>> childQueries;
-    private final List<LogicalQuery<O>> logicalQueries = new ArrayList<LogicalQuery<O>>();
-    private final List<SimpleQuery<O, ?>> simpleQueries = new ArrayList<SimpleQuery<O, ?>>();
-    private final List<ComparativeQuery<O, ?>> comparativeQueries = new ArrayList<ComparativeQuery<O, ?>>();
+    private final List<LogicalQuery<O>> logicalQueries;
+    private final List<SimpleQuery<O, ?>> simpleQueries;
+    private final List<ComparativeQuery<O, ?>> comparativeQueries;
     private final boolean hasLogicalQueries;
     private final boolean hasSimpleQueries;
     private final boolean hasComparativeQueries;
@@ -49,25 +50,32 @@ public abstract class LogicalQuery<O> implements Query<O> {
      */
     public LogicalQuery(Collection<Query<O>> childQueries) {
         Objects.requireNonNull(childQueries, "The child queries supplied to a logical query cannot be null");
-        for (Query<O> query : childQueries) {
+        List<Query<O>> childQuerySnapshot = new ArrayList<Query<O>>(childQueries);
+        List<LogicalQuery<O>> logicalQuerySnapshot = new ArrayList<LogicalQuery<O>>();
+        List<SimpleQuery<O, ?>> simpleQuerySnapshot = new ArrayList<SimpleQuery<O, ?>>();
+        List<ComparativeQuery<O, ?>> comparativeQuerySnapshot = new ArrayList<ComparativeQuery<O, ?>>();
+        for (Query<O> query : childQuerySnapshot) {
             if (query instanceof LogicalQuery) {
-                logicalQueries.add((LogicalQuery<O>) query);
+                logicalQuerySnapshot.add((LogicalQuery<O>) query);
             }
             else if (query instanceof SimpleQuery) {
-                simpleQueries.add((SimpleQuery<O, ?>) query);
+                simpleQuerySnapshot.add((SimpleQuery<O, ?>) query);
             }
             else if (query instanceof ComparativeQuery) {
-                comparativeQueries.add((ComparativeQuery<O, ?>) query);
+                comparativeQuerySnapshot.add((ComparativeQuery<O, ?>) query);
             }
             else {
                 throw new IllegalStateException("Unexpected type of query: " + (query == null ? null : query + ", " + query.getClass()));
             }
         }
-        this.hasLogicalQueries = !logicalQueries.isEmpty();
-        this.hasSimpleQueries = !simpleQueries.isEmpty();
-        this.hasComparativeQueries = !comparativeQueries.isEmpty();
-        this.size = childQueries.size();
-        this.childQueries = childQueries;
+        this.logicalQueries = Collections.unmodifiableList(logicalQuerySnapshot);
+        this.simpleQueries = Collections.unmodifiableList(simpleQuerySnapshot);
+        this.comparativeQueries = Collections.unmodifiableList(comparativeQuerySnapshot);
+        this.hasLogicalQueries = !logicalQuerySnapshot.isEmpty();
+        this.hasSimpleQueries = !simpleQuerySnapshot.isEmpty();
+        this.hasComparativeQueries = !comparativeQuerySnapshot.isEmpty();
+        this.size = childQuerySnapshot.size();
+        this.childQueries = Collections.unmodifiableList(childQuerySnapshot);
     }
 
     /**

@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -95,7 +96,7 @@ public class LessThan<O, A extends Comparable<A>> extends SimpleQuery<O, A> {
         if (this == o) return true;
         if (!(o instanceof LessThan)) return false;
 
-        LessThan lessThan = (LessThan) o;
+        LessThan<?, ?> lessThan = (LessThan<?, ?>) o;
 
         if (!attribute.equals(lessThan.attribute)) return false;
         if (valueInclusive != lessThan.valueInclusive) return false;

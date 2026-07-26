@@ -184,7 +184,7 @@ public class IteratorUtil {
     /**
      * Sorts the results returned by the given iterator, returning the sorted results as a new iterator, by performing
      * a merge-sort into an intermediate array in memory.
-     * <p/>
+     * <p>
      * The time complexity for copying the objects into the intermediate array is O(n), and then the cost of sorting is
      * additionally O(n log(n)). So overall complexity is O(n) + O(n log(n)).
      * <p>

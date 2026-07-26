@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +16,7 @@
  */
 package com.googlecode.cqengine.resultset.connective;
 
+import com.googlecode.cqengine.index.support.CloseableRequestResources;
 import com.googlecode.cqengine.query.Query;
 import com.googlecode.cqengine.query.option.QueryOptions;
 import com.googlecode.cqengine.resultset.common.ResultSets;
@@ -26,7 +28,7 @@ import java.util.*;
 
 /**
  * A ResultSet which provides a view onto the set difference of two ResultSets.
- * <p/>
+ * <p>
  * The set difference is elements contained in the first ResultSet which are NOT contained in the second ResultSet.
  *
  * @author Niall Gallagher
@@ -38,6 +40,7 @@ public class ResultSetDifference<O> extends ResultSet<O> {
     final Query<O> query;
     final QueryOptions queryOptions;
     final boolean indexMergeStrategyEnabled;
+    boolean closed;
 
     public ResultSetDifference(ResultSet<O> firstResultSet, ResultSet<O> secondResultSet, Query<O> query, QueryOptions queryOptions) {
         this(firstResultSet, secondResultSet, query, queryOptions, false);
@@ -121,9 +124,12 @@ public class ResultSetDifference<O> extends ResultSet<O> {
     }
 
     @Override
-    public void close() {
-        firstResultSet.close();
-        secondResultSet.close();
+    public synchronized void close() {
+        if (closed) {
+            return;
+        }
+        closed = true;
+        CloseableRequestResources.closeAll(Arrays.asList(firstResultSet, secondResultSet));
     }
 
     @Override

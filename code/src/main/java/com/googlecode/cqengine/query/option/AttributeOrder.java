@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,15 +30,18 @@ import com.googlecode.cqengine.attribute.OrderMissingLastAttribute;
  */
 public class AttributeOrder<O> {
 	
+    @SuppressWarnings("rawtypes") // Retains the type used by the legacy constructor and getter.
     private final Attribute<O, ? extends Comparable> attribute;
     private final boolean descending;
 
+    @SuppressWarnings("rawtypes") // Retains the legacy public constructor signature.
     public AttributeOrder(Attribute<O, ? extends Comparable> attribute, boolean descending) {
 		
 		this.attribute = attribute;
 		this.descending = descending;
 	}
 
+    @SuppressWarnings("rawtypes") // Retains the legacy public return signature.
     public Attribute<O, ? extends Comparable> getAttribute() {
         return attribute;
     }
@@ -49,17 +53,15 @@ public class AttributeOrder<O> {
     @Override
     public String toString() {
         if (attribute instanceof OrderMissingLastAttribute) {
-            OrderControlAttribute orderControlAttribute = (OrderControlAttribute) attribute;
-            @SuppressWarnings("unchecked")
-            Attribute<O, ? extends Comparable> delegateAttribute = orderControlAttribute.getDelegateAttribute();
+            OrderControlAttribute<?> orderControlAttribute = (OrderControlAttribute<?>) attribute;
+            Attribute<?, ?> delegateAttribute = orderControlAttribute.getDelegateAttribute();
             return descending
                     ? "descending(missingLast(" + delegateAttribute.getObjectType().getSimpleName() + "." + delegateAttribute.getAttributeName() + "))"
                     : "ascending(missingLast(" + delegateAttribute.getObjectType().getSimpleName() + "." + delegateAttribute.getAttributeName() + "))";
         }
         if (attribute instanceof OrderMissingFirstAttribute) {
-            OrderControlAttribute orderControlAttribute = (OrderControlAttribute) attribute;
-            @SuppressWarnings("unchecked")
-            Attribute<O, ? extends Comparable> delegateAttribute = orderControlAttribute.getDelegateAttribute();
+            OrderControlAttribute<?> orderControlAttribute = (OrderControlAttribute<?>) attribute;
+            Attribute<?, ?> delegateAttribute = orderControlAttribute.getDelegateAttribute();
             return descending
                     ? "descending(missingFirst(" + delegateAttribute.getObjectType().getSimpleName() + "." + delegateAttribute.getAttributeName() + "))"
                     : "ascending(missingFirst(" + delegateAttribute.getObjectType().getSimpleName() + "." + delegateAttribute.getAttributeName() + "))";
@@ -76,7 +78,7 @@ public class AttributeOrder<O> {
         if (this == o) return true;
         if (!(o instanceof AttributeOrder)) return false;
 
-        AttributeOrder that = (AttributeOrder) o;
+        AttributeOrder<?> that = (AttributeOrder<?>) o;
 
         if (descending != that.descending) return false;
         if (!attribute.equals(that.attribute)) return false;

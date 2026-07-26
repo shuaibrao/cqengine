@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,7 +33,7 @@ public class And<O> extends LogicalQuery<O> {
 
     public And(Collection<Query<O>> childQueries) {
         super(childQueries);
-        if (this.size() < 2) {
+        if (childQueries.size() < 2) {
             throw new IllegalStateException("An 'And' query cannot have fewer than 2 child queries, " + childQueries.size() + " were supplied");
         }
     }
@@ -65,7 +66,7 @@ public class And<O> extends LogicalQuery<O> {
         if (this == o) return true;
         if (!(o instanceof And)) return false;
 
-        And and = (And) o;
+        And<?> and = (And<?>) o;
 
         if (!childQueries.equals(and.childQueries)) return false;
 

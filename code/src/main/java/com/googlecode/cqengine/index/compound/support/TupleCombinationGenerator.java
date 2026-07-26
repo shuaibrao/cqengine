@@ -19,7 +19,7 @@ import java.util.*;
 
 /**
  * Contains static utility methods for generating combinations of elements <i>between</i> lists.
- * <p/>
+ * <p>
  * A major use of this class is to build compound indexes on several attributes where some attributes have multiple
  * values - {@link com.googlecode.cqengine.attribute.MultiValueAttribute}. In those cases the index must store entries
  * for all of the combinations of attribute values.
@@ -31,7 +31,7 @@ public class TupleCombinationGenerator {
     /**
      * Given a list of lists as input, determines all combinations of objects <i>between</i> the input lists, with
      * no repetition. Combinations are returned as if the lists were navigated using preordered depth-first search.
-     * <p/>
+     * <p>
      * Example:
      * <pre>
      * List&lt;List&lt;Object&gt;&gt; inputLists = new ArrayList&lt;List&lt;Object&gt;&gt;() {{
@@ -43,7 +43,6 @@ public class TupleCombinationGenerator {
      * </pre>
      * The example code above prints:
      * <pre>[[1, bar, 2.0], [1, bar, 3.0], [1, bar, 4.0], [1, baz, 2.0], [1, baz, 3.0], [1, baz, 4.0]]</pre>
-     * <p/>
      * @param inputLists A list of lists, each inner list containing objects to be combined with objects from the
      * other lists
      * @param <T> The type of objects in the lists (supply {@link Object} if mixing types)

@@ -21,7 +21,7 @@ import com.googlecode.cqengine.query.option.QueryOptions;
 /**
  * An index which allows the set of distinct keys to be queried, and which can return statistics on the number of
  * objects stored in the buckets for each key.
- * <p/>
+ * <p>
  * Note that this interface reads statistics about keys and NOT about attribute values from the index.
  * Often those statistics will be the same, however if a {@link com.googlecode.cqengine.quantizer.Quantizer} is
  * configured for an index, then often objects for several attribute values may have the same key and may be stored

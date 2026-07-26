@@ -26,10 +26,10 @@ import java.util.Iterator;
 /**
  * A {@link ResultSet} which wraps another, to suppress duplicate objects, where a duplicate object is one which has
  * the same value(s) for the given attribute.
- * <p/>
+ * <p>
  * Say an object had an attribute {@code COLOR}. This result set would return only one object of each color from the
  * wrapped result set.
- * <p/>
+ * <p>
  * Only one of the potentially duplicate objects will be returned, but which one is unspecified (the query engine is
  * usually free for performance reasons to return objects in any order).
  *

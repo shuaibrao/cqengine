@@ -24,7 +24,7 @@ import java.util.Collection;
 
 /**
  * Wraps an {@link ObjectStore} and filters objects returned by its iterator to ensure they match a given query.
- * <p/>
+ * <p>
  * Note this wrapper does not support any method except {@link #iterator(QueryOptions)}!
  * All other methods will throw {@link UnsupportedOperationException}.
  *

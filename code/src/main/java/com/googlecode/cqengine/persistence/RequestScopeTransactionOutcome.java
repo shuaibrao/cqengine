@@ -1,6 +1,5 @@
 /**
- * Copyright 2012-2015 Niall Gallagher
- * Modified by Shuaib Rao in 2026.
+ * Copyright 2026 Shuaib Rao
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,13 +13,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.googlecode.cqengine.persistence.support;
+package com.googlecode.cqengine.persistence;
 
 /**
- * Constants for flags which may be set into query options by the query engine internally.
+ * The outcome of a CQEngine request whose persistence resources are being closed.
  */
-public class PersistenceFlags {
+public enum RequestScopeTransactionOutcome {
+    /** The request completed successfully and its persistence transaction may be committed. */
+    COMMIT,
 
-    public static String READ_REQUEST = "READ_REQUEST";
-    public static final String WRITE_REQUEST = "WRITE_REQUEST";
+    /** The request failed and its persistence transaction must be rolled back. */
+    ROLLBACK
 }

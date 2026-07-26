@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,28 +31,28 @@ import java.util.Collection;
 
 /**
  * Specifies to wrap and use a given collection for persistence.
- * <p/>
+ * <p>
  * Note that, as the implementation of the given collection is outside of CQEngine's control,
  * the following points should be considered with respect to performance and query processing.
- * <p/>
+ * <p>
  * <b>Collection.contains() method</b><br/>
  * As CQEngine evaluates queries using set theory, it relies heavily on the performance of the
  * {@link Collection#contains(Object)} method.
  * If the implementation of this method in the given collection is slow, then it may slow down some queries on the
  * {@link IndexedCollection}.
- * <p/>
+ * <p>
  * As such, it is recommended, although not required, that the wrapped collection is a {@link java.util.Set}.
  * The time complexity of the {@link java.util.Set#contains(Object)} method is usually <i>O(1)</i>.
- * <p/>
+ * <p>
  * <b>Duplicate objects</b><br/>
  * CQEngine does not expect the given collection to contain duplicate objects. If the given collection does
  * contain duplicates, then it is possible that duplicate objects may be returned in {@link ResultSet}s
  * even if deduplication was requested.
- * <p/>
+ * <p>
  * <b>Thread-safety</b><br/>
  * CQEngine will depend on the wrapped collection to be thread-safe, if an {@link IndexedCollection} is
  * configured with this persistence, and it will be accessed concurrently.
- * <p/>
+ * <p>
  * If the application needs to access the the {@link IndexedCollection} concurrently but it cannot supply
  * a thread-safe collection to wrap, then it is recommended to use the {@link OnHeapPersistence} instead.
  *
@@ -118,7 +119,7 @@ public class WrappingPersistence<O, A extends Comparable<A>> implements Persiste
     /**
      * Creates a {@link WrappingPersistence} object which persists to the given collection, without specifying a primary
      * key. As such, this persistence implementation will be compatible with on-heap indexes only.
-     * <p/>
+     * <p>
      * This persistence will not work with composite persistence configurations, where some indexes are located on heap,
      * and some off-heap etc. To use this persistence in those configurations, it is necessary to specify a primary
      * key - see: {@link #aroundCollectionOnPrimaryKey(Collection, SimpleAttribute)}.
@@ -126,7 +127,7 @@ public class WrappingPersistence<O, A extends Comparable<A>> implements Persiste
      * @return A {@link WrappingPersistence} object which persists to the given collection, and which is not configured
      * with a primary key.
      */
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"rawtypes", "unchecked"}) // Retains the legacy public no-primary-key return signature.
     public static <O> WrappingPersistence<O, ? extends Comparable> aroundCollection(Collection<O> collection) {
         return withoutPrimaryKey_Internal(collection);
     }

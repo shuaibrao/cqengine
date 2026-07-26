@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -108,7 +109,7 @@ final IndexedCollection<F> foreignCollection;
         if (this == o) return true;
         if (!(o instanceof ExistsIn)) return false;
 
-        ExistsIn existsIn = (ExistsIn) o;
+        ExistsIn<?, ?, ?> existsIn = (ExistsIn<?, ?, ?>) o;
 
         if (!foreignKeyAttribute.equals(existsIn.foreignKeyAttribute)) return false;
         if (foreignRestrictions != null ? !foreignRestrictions.equals(existsIn.foreignRestrictions) : existsIn.foreignRestrictions != null)

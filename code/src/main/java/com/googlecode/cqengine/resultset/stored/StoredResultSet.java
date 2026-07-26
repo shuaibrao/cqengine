@@ -19,9 +19,9 @@ import com.googlecode.cqengine.resultset.ResultSet;
 
 /**
  * An abstract ResultSet implemented by subclass ResultSets which are stored directly in indexes.
- * <p/>
+ * <p>
  * Extends {@link ResultSet}, adding additional methods to add and remove objects.
- * <p/>
+ * <p>
  * This implementation is abstract.
  *
  * @author Niall Gallagher

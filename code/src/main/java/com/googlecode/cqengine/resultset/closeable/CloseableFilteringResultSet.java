@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,7 +30,7 @@ import java.util.Iterator;
  */
 public abstract class CloseableFilteringResultSet<O> extends FilteringResultSet<O> implements Closeable {
 
-    boolean closed = false;
+    volatile boolean closed = false;
 
     public CloseableFilteringResultSet(ResultSet<O> wrappedResultSet, Query<O> query, QueryOptions queryOptions) {
         super(wrappedResultSet, query, queryOptions);
@@ -84,8 +85,11 @@ public abstract class CloseableFilteringResultSet<O> extends FilteringResultSet<
     }
 
     @Override
-    public void close() {
-        super.close();
+    public synchronized void close() {
+        if (closed) {
+            return;
+        }
         closed = true;
+        super.close();
     }
 }

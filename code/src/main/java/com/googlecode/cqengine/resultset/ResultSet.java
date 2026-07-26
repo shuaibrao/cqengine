@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,11 +42,11 @@ public abstract class ResultSet<O> implements Iterable<O>, Closeable {
 
     /**
      * Returns true if this {@link ResultSet} contains the given object, false if it does not.
-     * <p/>
+     * <p>
      * Note that the cost of calling this method will most likely be cheaper than iterating all results to check if an
      * object is contained. If indexes are available to support the query, this method will query indexes to check if
      * the object is contained, instead of actually retrieving any data.
-     * <p/>
+     * <p>
      * See also the {@link #matches(Object)} method, which provides a similar function but often with better performance
      * than this method.
      *
@@ -59,11 +60,11 @@ public abstract class ResultSet<O> implements Iterable<O>, Closeable {
      * to physical containment in the ResultSet. Determines if the given object would be contained in the ResultSet,
      * by testing if the given object matches the query for which this ResultSet was generated, instead of actually
      * checking if the object is contained in appropriate indexes.
-     * <p/>
+     * <p>
      * This method will typically make the determination by evaluating the query on the given object on-the-fly without
      * accessing indexes, however in some cases this method might delegate to the {@link #contains(Object)}
      * method to make the determination.
-     * <p/>
+     * <p>
      * This method will perform better than {@link #contains(Object)} in cases where querying indexes is more expensive
      * than querying attributes, which is usually the case.
      *
@@ -107,10 +108,10 @@ public abstract class ResultSet<O> implements Iterable<O>, Closeable {
     /**
      * Returns an estimate of the cost of looking up objects matching the query
      * underlying this {@code ResultSet} in the index.
-     * <p/>
+     * <p>
      * The query engine will use this to select the index with the lowest cost,
      * when more than one index supporting the query exists for the same attribute.
-     * <p/>
+     * <p>
      * An example: a single-level hash index will typically have a lower retrieval cost than a tree-based index. Of
      * course a hash index only supports equality-based retrieval whereas a sorted tree-based index might support
      * equality/less than/greater than or range based retrieval. But for an equality-based query, supported by
@@ -122,7 +123,7 @@ public abstract class ResultSet<O> implements Iterable<O>, Closeable {
 
     /**
      * Returns an estimate of the cost of merging (or otherwise processing) objects matching the query.
-     * <p/>
+     * <p>
      * This will typically be based on the number of objects matching the query.
      * <ul>
      *     <li>
@@ -147,14 +148,14 @@ public abstract class ResultSet<O> implements Iterable<O>, Closeable {
 
     /**
      * Returns the number of objects which would be returned by this {@code ResultSet} if iterated.
-     * <p/>
+     * <p>
      * Note that the cost of calling this method depends on the query for which it was constructed.
-     * <p/>
+     * <p>
      * For simple queries where a single query is supplied and a matching index exists, or where several such simple
      * queries are supplied and are connected using a simple {@link com.googlecode.cqengine.query.logical.Or}
      * query, calculating the size via this method will be cheaper than iterating through the ResultSet and counting
      * the number of objects individually.
-     * <p/>
+     * <p>
      * For more complex queries, where intersections must be performed or where no suitable indexes exist, calling this
      * method can be non-trivial, but it will always be at least as cheap as iterating through the ResultSet and
      * counting the number of objects individually.
@@ -166,7 +167,7 @@ public abstract class ResultSet<O> implements Iterable<O>, Closeable {
     /**
      * Checks if this {@code ResultSet} if iterated would not return any objects (i.e. the query does not match any
      * objects).
-     * <p/>
+     * <p>
      * This method can be more efficient than calling {@code #size()} to check simply if no objects would be
      * returned.
      *
@@ -180,7 +181,7 @@ public abstract class ResultSet<O> implements Iterable<O>, Closeable {
     /**
      * Checks if this {@code ResultSet} if iterated would return some objects (i.e. the query matches some
      * objects).
-     * <p/>
+     * <p>
      * This method can be more efficient than calling {@code #size()} to check simply if some objects would be
      * returned.
      *
@@ -193,9 +194,9 @@ public abstract class ResultSet<O> implements Iterable<O>, Closeable {
 
     /**
      * Releases any resources or closes the transaction which was opened for this ResultSet.
-     * <p/>
-     * Whether or not it is necessary to close the ResultSet depends on which implementation of
-     * IndexedCollection is in use and the types of indexes added to it.
+     * <p>
+     * Callers should close every ResultSet they own, preferably with try-with-resources. A wrapper which is returned
+     * to another caller owns its delegate only if its close method closes that delegate.
      */
     public abstract void close();
 

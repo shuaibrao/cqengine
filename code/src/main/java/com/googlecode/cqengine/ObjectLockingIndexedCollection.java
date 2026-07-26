@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +25,7 @@ import com.googlecode.cqengine.query.option.QueryOptions;
 
 import java.util.Collection;
 import java.util.Collections;
+import java.util.NoSuchElementException;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -32,13 +34,13 @@ import java.util.concurrent.locks.ReentrantLock;
  * which multiple threads might try to add or remove the <b>same object</b> to/from an indexed collection
  * <i>concurrently</i>. In this context the <i>same object</i> refers to either the same object instance, OR two object
  * instances having the same hash code and being equal according to their {@link #equals(Object)} methods.
- * <p/>
+ * <p>
  * The {@link ConcurrentIndexedCollection} superclass is thread-safe in cases where the application will add/remove
  * <i>different</i> objects concurrently. This implementation adds safeguards around adding/removing the <i>same</i>
  * object concurrently, with some additional overhead.
- * <p/>
+ * <p>
  * Reading threads are never blocked; reads remain lock-free as in the superclass.
- * <p/>
+ * <p>
  * This class is currently implemented with a
  * <a href="http://code.google.com/p/guava-libraries/wiki/StripedExplained">striped lock</a> (although not the Guava
  * implementation). As such, the hash code of an object is not assigned a unique lock, but there is instead a
@@ -47,7 +49,7 @@ import java.util.concurrent.locks.ReentrantLock;
  * controlled, trading memory overhead of a large number of locks, against likelihood of contention. Two or more
  * modifications for the same object, will always block each other. Two or more modifications for different objects
  * will <i>usually not</i> block each other, but occasionally might.
- * <p/>
+ * <p>
  * Although this class is currently implemented with a striped lock, this might be replaced with a
  * <a href="http://gee.cs.oswego.edu/dl/jsr166/dist/jsr166edocs/jsr166e/StampedLock.html">stamped lock</a>.
  * Applications should not rely on the locking behaviour of this class, except to guard against the concurrent
@@ -131,60 +133,109 @@ public class ObjectLockingIndexedCollection<O> extends ConcurrentIndexedCollecti
      */
     @Override
     public CloseableIterator<O> iterator() {
-        return new CloseableIterator<O>() {
-            final QueryOptions queryOptions = openRequestScopeResourcesIfNecessary(null);
+        final RequestScope requestScope = openRequestScope(null);
+        final QueryOptions queryOptions = requestScope.getQueryOptions();
+        try {
+            final CloseableIterator<O> collectionIterator = objectStore.iterator(queryOptions);
+            return new CloseableIterator<O>() {
+                boolean autoClosed = false;
+                boolean closed;
+                O currentObject = null;
 
-            private final CloseableIterator<O> collectionIterator = objectStore.iterator(queryOptions);
-            boolean autoClosed = false;
-
-            @Override
-            public boolean hasNext() {
-                boolean hasNext = collectionIterator.hasNext();
-                if (!hasNext) {
-                    close();
-                    autoClosed = true;
-                }
-                return hasNext;
-            }
-
-            private O currentObject = null;
-            @Override
-            public O next() {
-                O next = collectionIterator.next();
-                currentObject = next;
-                return next;
-            }
-
-            @Override
-            public void remove() {
-                if (currentObject == null) {
-                    throw new IllegalStateException();
-                }
-                Lock lock = stripedLock.getLockForObject(currentObject);
-                lock.lock();
-                try {
-                    // Handle an edge case where we might have retrieved the last object and called close() automatically,
-                    // but then the application calls remove() so we have to reopen request-scope resources temporarily
-                    // to remove the last object...
-                    if (autoClosed) {
-                        ObjectLockingIndexedCollection.this.remove(currentObject); // reopens resources temporarily
+                @Override
+                public boolean hasNext() {
+                    try {
+                        boolean hasNext = collectionIterator.hasNext();
+                        if (!hasNext) {
+                            autoClosed = true;
+                            close();
+                        }
+                        return hasNext;
                     }
-                    else {
-                        doRemoveAll(Collections.singleton(currentObject), queryOptions); // uses existing resources
+                    catch (RuntimeException | Error failure) {
+                        fail(failure);
+                        throw failure;
                     }
-                    currentObject = null;
                 }
-                finally {
-                    lock.unlock();
-                }
-            }
 
-            @Override
-            public void close() {
-                CloseableRequestResources.closeQuietly(collectionIterator);
-                closeRequestScopeResourcesIfNecessary(queryOptions);
-            }
-        };
+                @Override
+                public O next() {
+                    try {
+                        O next = collectionIterator.next();
+                        currentObject = next;
+                        return next;
+                    }
+                    catch (NoSuchElementException exhausted) {
+                        throw exhausted;
+                    }
+                    catch (RuntimeException | Error failure) {
+                        fail(failure);
+                        throw failure;
+                    }
+                }
+
+                @Override
+                public void remove() {
+                    if (currentObject == null) {
+                        throw new IllegalStateException();
+                    }
+                    try {
+                        Lock lock = stripedLock.getLockForObject(currentObject);
+                        lock.lock();
+                        try {
+                            // Handle an edge case where we might have retrieved the last object and called close() automatically,
+                            // but then the application calls remove() so we have to reopen request-scope resources temporarily
+                            // to remove the last object...
+                            if (autoClosed) {
+                                ObjectLockingIndexedCollection.this.remove(currentObject); // reopens resources temporarily
+                            }
+                            else {
+                                doRemoveAll(Collections.singleton(currentObject), queryOptions); // uses existing resources
+                                commitRequestScopeTransaction(queryOptions);
+                            }
+                            currentObject = null;
+                        }
+                        finally {
+                            lock.unlock();
+                        }
+                    }
+                    catch (RuntimeException | Error failure) {
+                        fail(failure);
+                        throw failure;
+                    }
+                }
+
+                synchronized void fail(Throwable failure) {
+                    if (closed) {
+                        return;
+                    }
+                    closed = true;
+                    CloseableRequestResources.closeAndAddSuppressed(collectionIterator, failure);
+                    requestScope.closeAfterFailure(failure);
+                }
+
+                @Override
+                public synchronized void close() {
+                    if (closed) {
+                        return;
+                    }
+                    closed = true;
+                    try {
+                        collectionIterator.close();
+                    }
+                    catch (RuntimeException | Error failure) {
+                        requestScope.closeAfterFailure(failure);
+                        throw failure;
+                    }
+                    requestScope.markSuccessful();
+                    requestScope.close();
+                }
+            };
+        }
+        catch (RuntimeException | Error failure) {
+            requestScope.closeAfterFailure(failure);
+            throw failure;
+        }
     }
 
     /**
@@ -222,6 +273,9 @@ public class ObjectLockingIndexedCollection<O> extends ConcurrentIndexedCollecti
      */
     @Override
     public boolean addAll(Collection<? extends O> c) {
+        if (c == this) {
+            return super.addAll(c);
+        }
         boolean modified = false;
         for (O object : c) {
             modified = add(object) || modified;
@@ -234,6 +288,9 @@ public class ObjectLockingIndexedCollection<O> extends ConcurrentIndexedCollecti
      */
     @Override
     public boolean removeAll(Collection<?> c) {
+        if (c == this) {
+            return super.removeAll(c);
+        }
         boolean modified = false;
         for (Object object : c) {
             modified = remove(object) || modified;

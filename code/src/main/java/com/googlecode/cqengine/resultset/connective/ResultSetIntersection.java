@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +16,7 @@
  */
 package com.googlecode.cqengine.resultset.connective;
 
+import com.googlecode.cqengine.index.support.CloseableRequestResources;
 import com.googlecode.cqengine.query.Query;
 import com.googlecode.cqengine.query.option.QueryOptions;
 import com.googlecode.cqengine.resultset.common.ResultSets;
@@ -37,6 +39,7 @@ public class ResultSetIntersection<O> extends ResultSet<O> {
     final List<ResultSet<O>> resultSets;
     final QueryOptions queryOptions;
     final boolean useIndexMergeStrategy;
+    boolean closed;
 
     public ResultSetIntersection(Iterable<ResultSet<O>> resultSets, Query<O> query, QueryOptions queryOptions, boolean useIndexMergeStrategy) {
         this.query = query;
@@ -149,10 +152,12 @@ public class ResultSetIntersection<O> extends ResultSet<O> {
      * Closes all of the underlying {@code ResultSet}s.
      */
     @Override
-    public void close() {
-        for (ResultSet<O> resultSet : this.resultSets) {
-            resultSet.close();
+    public synchronized void close() {
+        if (closed) {
+            return;
         }
+        closed = true;
+        CloseableRequestResources.closeAll(resultSets);
     }
 
     @Override

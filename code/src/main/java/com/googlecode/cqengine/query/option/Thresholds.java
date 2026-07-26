@@ -23,7 +23,7 @@ import java.util.Map;
 
 /**
  * A wrapper around {@link Threshold}s which have been set into query options.
- * <p/>
+ * <p>
  * Example usage using {@link QueryFactory}:<br/>
  * <code>QueryOptions queryOptions = queryOptions(applyThresholds(INDEX_ORDERING_SELECTIVITY, 0.4))</code>
  *

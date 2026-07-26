@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +25,7 @@ import static com.googlecode.cqengine.query.support.QueryValidation.checkObjectT
 
 /**
  * A query which matches no objects in the collection.
- * <p/>
+ * <p>
  * This is equivalent to a literal boolean 'false'.
  *
  * @author ngallagher
@@ -57,7 +58,7 @@ public class None<O> extends SimpleQuery<O, O> {
     public boolean equals(Object o) {
         if (this == o) return true;
         if (!(o instanceof None)) return false;
-        None that = (None) o;
+        None<?> that = (None<?>) o;
         return this.objectType.equals(that.objectType);
     }
 

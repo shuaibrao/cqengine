@@ -21,9 +21,9 @@ import com.googlecode.cqengine.query.option.QueryOptions;
 /**
  * Represents an attribute in an object which has multiple values (such as a field which is itself a collection),
  * where all of the values are known to be non-null.
- * <p/>
+ * <p>
  * Provides a method to read the values from the field given such an object.
- * <p/>
+ * <p>
  * This type of attribute skips null checks on values at runtime, thereby allowing maximum performance.
  * If this type of attribute encounters a null, it is likely that a {@code NullPointerException} will be thrown.
  * Therefore when it is not possible to know in advance if values might be null, it is recommended to use
@@ -38,7 +38,7 @@ public abstract class MultiValueAttribute<O, A> extends AbstractAttribute<O, A> 
      *
      * This name is not actually used by the query engine except in providing informative exception and debug messages.
      * As such it is recommended, but not required, that a name be provided.
-     * <p/>
+     * <p>
      * A suitable name might be the name of the field to which an attribute refers.
      *
      * @param attributeName The name for this attribute
@@ -82,7 +82,6 @@ public abstract class MultiValueAttribute<O, A> extends AbstractAttribute<O, A> 
 
     /**
      * Returns the non-null values of the attribute from the object.
-     * <p/>
      * @param object The object from which the values of the attribute are required
      * @param queryOptions Optional parameters supplied by the application along with the operation which is causing
      * this attribute to be invoked (either a query, or an update to the collection)

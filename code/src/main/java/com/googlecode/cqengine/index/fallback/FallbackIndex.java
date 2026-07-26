@@ -32,14 +32,14 @@ import java.util.*;
 /**
  * A special index which when asked to retrieve data simply scans the underlying collection for matching objects.
  * This index does not maintain any data structure of its own.
- * <p/>
+ * <p>
  * This index supports <b>all</b> query types, because it it relies on the supplied query object itself
  * to determine if objects in the collection match the query, by calling
  * {@link Query#matches(Object, com.googlecode.cqengine.query.option.QueryOptions)}.
- * <p/>
+ * <p>
  * The query engine automatically uses this <i>fallback</i> index when an attribute is referenced by a query,
  * and no other index has been added for that attribute that supports the query.
- * <p/>
+ * <p>
  * The time complexity of retrievals from this fallback index is usually O(n) - linear, proportional to the number of
  * objects in the collection.
  *
@@ -57,7 +57,7 @@ public class FallbackIndex<O> implements Index<O> {
 
     /**
      * {@inheritDoc}
-     * <p/>
+     * <p>
      * This index is mutable.
      *
      * @return true
@@ -74,7 +74,7 @@ public class FallbackIndex<O> implements Index<O> {
 
     /**
      * {@inheritDoc}
-     * <p/>
+     * <p>
      * <b>This implementation always returns true, as this index supports all types of query.</b>
      *
      * @return true, this index supports all types of query
@@ -158,7 +158,7 @@ public class FallbackIndex<O> implements Index<O> {
 
     /**
      * {@inheritDoc}
-     * <p/>
+     * <p>
      * <b>In this implementation, does nothing.</b>
      */
     @Override
@@ -169,7 +169,7 @@ public class FallbackIndex<O> implements Index<O> {
 
     /**
      * {@inheritDoc}
-     * <p/>
+     * <p>
      * <b>In this implementation, does nothing.</b>
      */
     @Override
@@ -180,7 +180,7 @@ public class FallbackIndex<O> implements Index<O> {
 
     /**
      * {@inheritDoc}
-     * <p/>
+     * <p>
      * <b>In this implementation, stores a reference to the supplied collection, which the
      * {@link Index#retrieve(com.googlecode.cqengine.query.Query, com.googlecode.cqengine.query.option.QueryOptions)} method can subsequently iterate.</b>
      */

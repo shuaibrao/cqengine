@@ -17,7 +17,7 @@ package com.googlecode.cqengine.quantizer;
 
 /**
  * A static factory for creating {@link Quantizer}s for {@link Double} attributes.
- * <p/>
+ * <p>
  * See {@link #withCompressionFactor(int)} for details.
  *
  * @author Niall Gallagher
@@ -57,7 +57,7 @@ public class DoubleQuantizer {
     /**
      * Returns a {@link Quantizer} which converts the input value to the nearest multiple of the compression
      * factor, in the direction towards zero.
-     * <p/>
+     * <p>
      * <b>Examples (compression factor 5):</b><br/>
      * <ul>
      *     <li>Input value 0.0 -> 0</li>
@@ -71,7 +71,7 @@ public class DoubleQuantizer {
      * </ul>
      *
      * @param compressionFactor The number of adjacent mathematical integers to coalesce to a single key. <b>Supply a
-     * factor < 2 to disable compression</b> and simply truncate everything after the decimal point
+     * factor &lt; 2 to disable compression</b> and simply truncate everything after the decimal point
      * @return A {@link Quantizer} which converts the input value to the closest multiple of the compression
      * factor, in the direction towards zero
      */

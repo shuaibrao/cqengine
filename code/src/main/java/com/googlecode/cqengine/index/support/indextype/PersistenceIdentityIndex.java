@@ -1,6 +1,5 @@
-/**
- * Copyright 2012-2015 Niall Gallagher
- * Modified by Shuaib Rao in 2026.
+/*
+ * Copyright 2026 Shuaib Rao
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,13 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.googlecode.cqengine.persistence.support;
+package com.googlecode.cqengine.index.support.indextype;
 
 /**
- * Constants for flags which may be set into query options by the query engine internally.
+ * Implemented by the identity index which owns the serialized objects in a persistence-backed object store.
  */
-public class PersistenceFlags {
-
-    public static String READ_REQUEST = "READ_REQUEST";
-    public static final String WRITE_REQUEST = "WRITE_REQUEST";
+public interface PersistenceIdentityIndex {
 }

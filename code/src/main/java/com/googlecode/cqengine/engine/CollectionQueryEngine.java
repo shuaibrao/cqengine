@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,10 +20,9 @@ import com.googlecode.concurrenttrees.common.LazyIterator;
 import com.googlecode.cqengine.attribute.*;
 import com.googlecode.cqengine.index.AttributeIndex;
 import com.googlecode.cqengine.index.Index;
-import com.googlecode.cqengine.index.sqlite.IdentityAttributeIndex;
-import com.googlecode.cqengine.index.sqlite.SQLiteIdentityIndex;
-import com.googlecode.cqengine.index.sqlite.SimplifiedSQLiteIndex;
 import com.googlecode.cqengine.index.support.*;
+import com.googlecode.cqengine.index.support.indextype.NonHeapTypeIndex;
+import com.googlecode.cqengine.index.support.indextype.PersistenceIdentityIndex;
 import com.googlecode.cqengine.index.compound.CompoundIndex;
 import com.googlecode.cqengine.index.compound.support.CompoundAttribute;
 import com.googlecode.cqengine.index.compound.support.CompoundQuery;
@@ -33,7 +33,6 @@ import com.googlecode.cqengine.persistence.Persistence;
 import com.googlecode.cqengine.persistence.support.ObjectSet;
 import com.googlecode.cqengine.persistence.support.ObjectStore;
 import com.googlecode.cqengine.persistence.support.ObjectStoreResultSet;
-import com.googlecode.cqengine.persistence.support.sqlite.SQLiteObjectStore;
 import com.googlecode.cqengine.query.ComparativeQuery;
 import com.googlecode.cqengine.query.Query;
 import com.googlecode.cqengine.query.logical.And;
@@ -83,7 +82,7 @@ public class CollectionQueryEngine<O> implements QueryEngineInternal<O> {
     // A key used to store the root query in the QueryOptions, so it may be accessed by partial indexes...
     public static final String ROOT_QUERY = "ROOT_QUERY";
 
-    private volatile Persistence<O, ? extends Comparable> persistence;
+    private volatile Persistence<O, ? extends Comparable<?>> persistence;
     private volatile ObjectStore<O> objectStore;
 
     // Map of attributes to set of indexes on that attribute...
@@ -105,16 +104,8 @@ public class CollectionQueryEngine<O> implements QueryEngineInternal<O> {
     public void init(final ObjectStore<O> objectStore, final QueryOptions queryOptions) {
         this.objectStore = objectStore;
         @SuppressWarnings("unchecked")
-        Persistence<O, ? extends Comparable> persistenceFromQueryOptions = getPersistenceFromQueryOptions(queryOptions);
+        Persistence<O, ? extends Comparable<?>> persistenceFromQueryOptions = getPersistenceFromQueryOptions(queryOptions);
         this.persistence = persistenceFromQueryOptions;
-        if (objectStore instanceof SQLiteObjectStore) {
-            // If the collection is backed by a SQLiteObjectStore, add the backing index of the SQLiteObjectStore
-            // so that it can also be used as a regular index to accelerate queries...
-            SQLiteObjectStore<O, ? extends Comparable<?>> sqLiteObjectStore = (SQLiteObjectStore<O, ? extends Comparable<?>>)objectStore;
-            SQLiteIdentityIndex<? extends Comparable<?>, O> backingIndex = sqLiteObjectStore.getBackingIndex();
-            addIndex(backingIndex, queryOptions);
-        }
-
         forEachIndexDo(new IndexOperation<O>() {
             @Override
             public boolean perform(Index<O> index) {
@@ -124,6 +115,10 @@ public class CollectionQueryEngine<O> implements QueryEngineInternal<O> {
                 return true;
             }
         });
+        Index<O> backingIndex = objectStore.getBackingIndex();
+        if (backingIndex != null) {
+            addIndex(backingIndex, queryOptions);
+        }
     }
 
     /**
@@ -188,10 +183,10 @@ public class CollectionQueryEngine<O> implements QueryEngineInternal<O> {
             indexesOnThisAttribute = Collections.newSetFromMap(new ConcurrentHashMap<Index<O>, Boolean>());
             attributeIndexes.put(attribute, indexesOnThisAttribute);
         }
-        if (attributeIndex instanceof SimplifiedSQLiteIndex) {
+        if (attributeIndex instanceof NonHeapTypeIndex) {
             // Ensure there is not already an identity index added for this attribute...
             for (Index<O> existingIndex : indexesOnThisAttribute) {
-                if (existingIndex instanceof IdentityAttributeIndex) {
+                if (existingIndex instanceof PersistenceIdentityIndex) {
                     throw new IllegalStateException("An index has already been added on the primary key attribute used for persistence, and no additional non-heap indexes are allowed on that attribute: " + attribute);
                 }
             }
@@ -342,7 +337,7 @@ public class CollectionQueryEngine<O> implements QueryEngineInternal<O> {
 
     /**
      * Returns the entire collection wrapped as a {@link ResultSet}, with retrieval cost {@link Integer#MAX_VALUE}.
-     * <p/>
+     * <p>
      * Merge cost is the size of the collection.
      *
      * @return The entire collection wrapped as a {@link ResultSet}, with retrieval cost {@link Integer#MAX_VALUE}
@@ -370,7 +365,7 @@ public class CollectionQueryEngine<O> implements QueryEngineInternal<O> {
 
     /**
      * Returns a {@link ResultSet} from the index with the lowest retrieval cost which supports the given query.
-     * <p/>
+     * <p>
      * For a definition of retrieval cost see {@link ResultSet#getRetrievalCost()}.
      *
      * @param query The query which refers to an attribute
@@ -397,20 +392,14 @@ public class CollectionQueryEngine<O> implements QueryEngineInternal<O> {
         // At this point, we did not find any UniqueIndex, so we now check for other attribute-based indexes
         // and we determine which one has the lowest retrieval cost...
 
-        int lowestRetrievalCost = 0;
         // Examine other (non-unique) indexes...
         Iterable<Index<O>> indexesOnAttribute = getIndexesOnAttribute(query.getAttribute());
 
         // Choose the index with the lowest retrieval cost for this query...
-        for (Index<O> index : indexesOnAttribute) {
-            if (index.supportsQuery(query, queryOptions)) {
-                ResultSet<O> thisIndexResultSet = index.retrieve(query, queryOptions);
-                int thisIndexRetrievalCost = thisIndexResultSet.getRetrievalCost();
-                if (lowestCostResultSet == null || thisIndexRetrievalCost < lowestRetrievalCost) {
-                    lowestCostResultSet = thisIndexResultSet;
-                    lowestRetrievalCost = thisIndexRetrievalCost;
-                }
-            }
+        ResultSet<O> attributeIndexResultSet = retrieveFromLowestCostIndex(
+                query, queryOptions, indexesOnAttribute);
+        if (attributeIndexResultSet != null) {
+            lowestCostResultSet = attributeIndexResultSet;
         }
 
         if (lowestCostResultSet == null) {
@@ -423,7 +412,7 @@ public class CollectionQueryEngine<O> implements QueryEngineInternal<O> {
 
     /**
      * Returns a {@link ResultSet} from the index with the lowest retrieval cost which supports the given query.
-     * <p/>
+     * <p>
      * For a definition of retrieval cost see {@link ResultSet#getRetrievalCost()}.
      *
      * @param query The query which refers to an attribute
@@ -432,22 +421,11 @@ public class CollectionQueryEngine<O> implements QueryEngineInternal<O> {
      */
     <A> ResultSet<O> retrieveComparativeQuery(ComparativeQuery<O, A> query, QueryOptions queryOptions) {
         // Determine which of the indexes on the query's attribute have the lowest retrieval cost...
-        int lowestRetrievalCost = 0;
-        ResultSet<O> lowestCostResultSet = null;
-
         Iterable<Index<O>> indexesOnAttribute = getIndexesOnAttribute(query.getAttribute());
 
         // Choose the index with the lowest retrieval cost for this query...
-        for (Index<O> index : indexesOnAttribute) {
-            if (index.supportsQuery(query, queryOptions)) {
-                ResultSet<O> thisIndexResultSet = index.retrieve(query, queryOptions);
-                int thisIndexRetrievalCost = thisIndexResultSet.getRetrievalCost();
-                if (lowestCostResultSet == null || thisIndexRetrievalCost < lowestRetrievalCost) {
-                    lowestCostResultSet = thisIndexResultSet;
-                    lowestRetrievalCost = thisIndexRetrievalCost;
-                }
-            }
-        }
+        ResultSet<O> lowestCostResultSet = retrieveFromLowestCostIndex(
+                query, queryOptions, indexesOnAttribute);
 
         if (lowestCostResultSet == null) {
             // This should never happen (would indicate a bug);
@@ -455,6 +433,51 @@ public class CollectionQueryEngine<O> implements QueryEngineInternal<O> {
             throw new IllegalStateException("Failed to locate an index supporting query: " + query);
         }
         return new CostCachingResultSet<O>(lowestCostResultSet);
+    }
+
+    ResultSet<O> retrieveFromLowestCostIndex(
+            Query<O> query, QueryOptions queryOptions, Iterable<Index<O>> candidateIndexes) {
+        ResultSet<O> lowestCostResultSet = null;
+        int lowestRetrievalCost = 0;
+        try {
+            for (Index<O> index : candidateIndexes) {
+                if (!index.supportsQuery(query, queryOptions)) {
+                    continue;
+                }
+                ResultSet<O> candidateResultSet = index.retrieve(query, queryOptions);
+                final int candidateRetrievalCost;
+                try {
+                    candidateRetrievalCost = candidateResultSet.getRetrievalCost();
+                }
+                catch (RuntimeException | Error failure) {
+                    CloseableRequestResources.closeAndAddSuppressed(candidateResultSet, failure);
+                    throw failure;
+                }
+                if (lowestCostResultSet == null || candidateRetrievalCost < lowestRetrievalCost) {
+                    ResultSet<O> previousLowestCostResultSet = lowestCostResultSet;
+                    lowestCostResultSet = null;
+                    if (previousLowestCostResultSet != null) {
+                        try {
+                            previousLowestCostResultSet.close();
+                        }
+                        catch (RuntimeException | Error failure) {
+                            CloseableRequestResources.closeAndAddSuppressed(candidateResultSet, failure);
+                            throw failure;
+                        }
+                    }
+                    lowestCostResultSet = candidateResultSet;
+                    lowestRetrievalCost = candidateRetrievalCost;
+                }
+                else {
+                    candidateResultSet.close();
+                }
+            }
+            return lowestCostResultSet;
+        }
+        catch (RuntimeException | Error failure) {
+            CloseableRequestResources.closeAndAddSuppressed(lowestCostResultSet, failure);
+            throw failure;
+        }
     }
 
     // -------------------- Methods for query processing --------------------
@@ -466,6 +489,18 @@ public class CollectionQueryEngine<O> implements QueryEngineInternal<O> {
     // to the #retrieveRecursive() method.
     @Override
     public ResultSet<O> retrieve(final Query<O> query, final QueryOptions queryOptions) {
+        try {
+            return retrieveResultSet(query, queryOptions);
+        }
+        catch (RuntimeException | Error failure) {
+            CloseableRequestResources.closeAndAddSuppressed(
+                    () -> CloseableRequestResources.closeForQueryOptions(queryOptions), failure);
+            throw failure;
+        }
+    }
+
+    @SuppressWarnings("rawtypes") // Bridges AttributeOrder's legacy raw-Comparable API internally.
+    ResultSet<O> retrieveResultSet(final Query<O> query, final QueryOptions queryOptions) {
         @SuppressWarnings("unchecked")
         OrderByOption<O> orderByOption = (OrderByOption<O>) queryOptions.get(OrderByOption.class);
 
@@ -549,8 +584,10 @@ public class CollectionQueryEngine<O> implements QueryEngineInternal<O> {
                     else {
                         // The index supports has() queries, which allows us to calculate selectivity.
                         // Calculate query selectivity, based on the query cardinality and index cardinality...
-                        final int queryCardinality = retrieveRecursive(query, queryOptions).getMergeCost();
-                        final int indexCardinality = indexForOrdering.retrieve(has(firstAttribute), queryOptions).getMergeCost();
+                        final int queryCardinality = getMergeCostAndClose(
+                                retrieveRecursive(query, queryOptions));
+                        final int indexCardinality = getMergeCostAndClose(
+                                indexForOrdering.retrieve(has(firstAttribute), queryOptions));
                         if (queryLog != null) {
                             queryLog.log("queryCardinality: " + queryCardinality);
                             queryLog.log("indexCardinality: " + indexCardinality);
@@ -599,13 +636,14 @@ public class CollectionQueryEngine<O> implements QueryEngineInternal<O> {
 
         // Return the results, ensuring that the close() method will close any resources which were opened...
         // TODO: possibly not necessary to wrap here, as the IndexedCollections also ensure close() is called...
-        return new CloseableResultSet<O>(resultSet, query, queryOptions) {
-            @Override
-            public void close() {
-                super.close();
-                CloseableRequestResources.closeForQueryOptions(queryOptions);
-            }
-        };
+        return new CloseableResultSet<O>(resultSet, query, queryOptions,
+                () -> CloseableRequestResources.closeForQueryOptions(queryOptions));
+    }
+
+    static int getMergeCostAndClose(ResultSet<?> resultSet) {
+        try (ResultSet<?> closeableResultSet = resultSet) {
+            return closeableResultSet.getMergeCost();
+        }
     }
 
     /**
@@ -633,6 +671,7 @@ public class CollectionQueryEngine<O> implements QueryEngineInternal<O> {
     /**
      * Use an index to order results.
      */
+    @SuppressWarnings("rawtypes") // Bridges AttributeOrder's legacy raw-Comparable API internally.
     ResultSet<O> retrieveWithIndexOrdering(final Query<O> query, final QueryOptions queryOptions, final OrderByOption<O> orderByOption, final SortedKeyStatisticsIndex<?, O> indexForOrdering) {
         final List<AttributeOrder<O>> allSortOrders = orderByOption.getAttributeOrders();
 
@@ -791,6 +830,7 @@ public class CollectionQueryEngine<O> implements QueryEngineInternal<O> {
         return filterIndexOrderingCandidateResults(sorted, query, queryOptions);
     }
 
+    @SuppressWarnings("rawtypes") // Accepts the runtime-captured comparable type used by index ordering.
     Iterator<O> retrieveWithIndexOrderingMissingResults(final Query<O> query, QueryOptions queryOptions, Attribute<O, Comparable> primarySortAttribute, List<AttributeOrder<O>> allSortOrders, boolean attributeCanHaveMoreThanOneValue) {
         // Ensure that at the end of processing the request, that we close any resources we opened...
         final CloseableResourceGroup closeableResourceGroup = CloseableRequestResources.forQueryOptions(queryOptions).addGroup();
@@ -822,7 +862,7 @@ public class CollectionQueryEngine<O> implements QueryEngineInternal<O> {
     /**
      * Filters the given sorted candidate results to ensure they match the query, using either the default merge
      * strategy or the index merge strategy as appropriate.
-     * <p/>
+     * <p>
      * This method will add any resources which need to be closed to {@link CloseableRequestResources} in the query options.
      *
      * @param sortedCandidateResults The candidate results to be filtered
@@ -834,14 +874,29 @@ public class CollectionQueryEngine<O> implements QueryEngineInternal<O> {
         final boolean indexMergeStrategyEnabled = isFlagEnabled(queryOptions, PREFER_INDEX_MERGE_STRATEGY);
         if (indexMergeStrategyEnabled) {
             final ResultSet<O> indexAcceleratedQueryResults = retrieveWithoutIndexOrdering(query, queryOptions, null);
-            if (indexAcceleratedQueryResults.getRetrievalCost() == Integer.MAX_VALUE) {
+            final int retrievalCost;
+            try {
+                retrievalCost = indexAcceleratedQueryResults.getRetrievalCost();
+            }
+            catch (RuntimeException | Error failure) {
+                CloseableRequestResources.closeAndAddSuppressed(indexAcceleratedQueryResults, failure);
+                throw failure;
+            }
+            if (retrievalCost == Integer.MAX_VALUE) {
                 // No index is available to accelerate the index merge strategy...
                 indexAcceleratedQueryResults.close();
                 // We fall back to filtering via query.matches() below.
             }
             else {
                 // Ensure that indexAcceleratedQueryResults is closed at the end of processing the request...
-                final CloseableResourceGroup closeableResourceGroup = CloseableRequestResources.forQueryOptions(queryOptions).addGroup();
+                final CloseableResourceGroup closeableResourceGroup;
+                try {
+                    closeableResourceGroup = CloseableRequestResources.forQueryOptions(queryOptions).addGroup();
+                }
+                catch (RuntimeException | Error failure) {
+                    CloseableRequestResources.closeAndAddSuppressed(indexAcceleratedQueryResults, failure);
+                    throw failure;
+                }
                 closeableResourceGroup.add(indexAcceleratedQueryResults);
                 // This is the index merge strategy where indexes are used to filter the sorted results...
                 return new FilteringIterator<O>(sortedCandidateResults, queryOptions) {
@@ -875,7 +930,7 @@ public class CollectionQueryEngine<O> implements QueryEngineInternal<O> {
     /**
      * Called when using an index to order results, to determine if or how results within each bucket
      * in that index should be sorted.
-     * <p/>
+     * <p>
      *
      * We must sort results within each bucket, when:
      * <ol>
@@ -937,7 +992,7 @@ public class CollectionQueryEngine<O> implements QueryEngineInternal<O> {
         }
     }
 
-    static <A extends Comparable<A>, O> RangeBounds getBoundsFromQuery(Query<O> query, Attribute<O, A> attribute) {
+    static <A extends Comparable<A>, O> RangeBounds<A> getBoundsFromQuery(Query<O> query, Attribute<O, A> attribute) {
         A lowerBound = null, upperBound = null;
         boolean lowerInclusive = false, upperInclusive = false;
         List<SimpleQuery<O, ?>> candidateRangeQueries = Collections.emptyList();
@@ -979,14 +1034,14 @@ public class CollectionQueryEngine<O> implements QueryEngineInternal<O> {
 
     /**
      * Implements the bulk of query processing.
-     * <p/>
+     * <p>
      * This method is recursive.
-     * <p/>
+     * <p>
      * When processing a {@link SimpleQuery}, the method will simply delegate to the helper methods
      * {@link #retrieveIntersectionOfSimpleQueries(Collection, QueryOptions, boolean)} and
      * {@link #retrieveUnionOfSimpleQueries(Collection, QueryOptions)}
      * and will return their results.
-     * <p/>
+     * <p>
      * When processing a descendant of {@link CompoundQuery} ({@link And}, {@link Or}, {@link Not}), the method
      * will extract separately from those objects the child queries which are {@link SimpleQuery}s and the child
      * queries which are {@link CompoundQuery}s. It will call the helper methods above to process the child
@@ -1173,27 +1228,27 @@ public class CollectionQueryEngine<O> implements QueryEngineInternal<O> {
 
     /**
      * Retrieves an intersection of the objects matching {@link SimpleQuery}s.
-     * <p/>
+     * <p>
      * <i>Definitions:
      * For a definition of <u>retrieval cost</u> see {@link ResultSet#getRetrievalCost()}.
      * For a definition of <u>merge cost</u> see {@link ResultSet#getMergeCost()}.
      * </i>
-     * <p/>
+     * <p>
      * The algorithm employed by this method is as follows.
-     * <p/>
+     * <p>
      * For each {@link SimpleQuery} supplied, retrieves a {@link ResultSet} for that {@link SimpleQuery}
      * from the index with the lowest <u>retrieval cost</u> which supports that {@link SimpleQuery}.
-     * <p/>
+     * <p>
      * The algorithm then determines the {@link ResultSet} with the <i>lowest</i> <u>merge cost</u>, and the
      * {@link SimpleQuery} which was associated with that {@link ResultSet}. It also assembles a list of the
      * <i>other</i> {@link SimpleQuery}s which had <i>more expensive</i> <u>merge costs</u>.
-     * <p/>
+     * <p>
      * The algorithm then returns a {@link FilteringResultSet} which iterates the {@link ResultSet} with the
      * <i>lowest</i> <u>merge cost</u>. During iteration, this {@link FilteringResultSet} calls a
      * {@link FilteringResultSet#isValid(Object, QueryOptions)} method for each object. This algorithm implements that method to
      * return true if the object matches all of the {@link SimpleQuery}s which had the <i>more expensive</i>
      * <u>merge costs</u>.
-     * <p/>
+     * <p>
      * As such the {@link ResultSet} which had the lowest merge cost drives the iteration.  Note therefore that this
      * method <i>does <u>not</u> perform set intersections in the conventional sense</i> (i.e. using
      * {@link Set#contains(Object)}). It has been tested empirically that it is usually cheaper to invoke
@@ -1207,7 +1262,7 @@ public class CollectionQueryEngine<O> implements QueryEngineInternal<O> {
      */
     <A> ResultSet<O> retrieveIntersectionOfSimpleQueries(Collection<SimpleQuery<O, ?>> queries, QueryOptions queryOptions, boolean indexMergeStrategyEnabled) {
         List<ResultSet<O>> resultSets = new ArrayList<ResultSet<O>>(queries.size());
-        for (SimpleQuery query : queries) {
+        for (SimpleQuery<O, ?> query : queries) {
             // Work around type erasure...
             @SuppressWarnings({"unchecked"})
             SimpleQuery<O, A> queryTyped = (SimpleQuery<O, A>) query;
@@ -1228,7 +1283,7 @@ public class CollectionQueryEngine<O> implements QueryEngineInternal<O> {
      */
     <A> ResultSet<O> retrieveIntersectionOfComparativeQueries(Collection<ComparativeQuery<O, ?>> queries, QueryOptions queryOptions) {
         List<ResultSet<O>> resultSets = new ArrayList<ResultSet<O>>(queries.size());
-        for (ComparativeQuery query : queries) {
+        for (ComparativeQuery<O, ?> query : queries) {
             // Work around type erasure...
             @SuppressWarnings({"unchecked"})
             ComparativeQuery<O, A> queryTyped = (ComparativeQuery<O, A>) query;
@@ -1245,17 +1300,17 @@ public class CollectionQueryEngine<O> implements QueryEngineInternal<O> {
 
     /**
      * Retrieves a union of the objects matching {@link SimpleQuery}s.
-     * <p/>
+     * <p>
      * <i>Definitions:
      * For a definition of <u>retrieval cost</u> see {@link ResultSet#getRetrievalCost()}.
      * For a definition of <u>merge cost</u> see {@link ResultSet#getMergeCost()}.
      * </i>
-     * <p/>
+     * <p>
      * The algorithm employed by this method is as follows.
-     * <p/>
+     * <p>
      * For each {@link SimpleQuery} supplied, retrieves a {@link ResultSet} for that {@link SimpleQuery}
      * from the index with the lowest <u>retrieval cost</u> which supports that {@link SimpleQuery}.
-     * <p/>
+     * <p>
      * The method then returns these {@link ResultSet}s in either a {@link ResultSetUnion} or a
      * {@link ResultSetUnionAll} object, depending on whether {@code logicalDuplicateElimination} was specified
      * or not. These concatenate the wrapped {@link ResultSet}s when iterated. In the case of {@link ResultSetUnion},

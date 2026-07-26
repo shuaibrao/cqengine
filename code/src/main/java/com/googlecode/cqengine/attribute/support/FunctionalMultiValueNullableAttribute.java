@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,8 +23,9 @@ import com.googlecode.cqengine.query.option.QueryOptions;
 /**
  * A {@link MultiValueNullableAttribute} which wraps a {@link MultiValueFunction}, for the purpose of allowing
  * attributes to be created from lambda expressions.
- * <p/>
- * These attributes can be created via {@link QueryFactory#nullableAttribute(Class, MultiValueFunction)}.
+ * <p>
+ * These attributes can be created via
+ * {@link QueryFactory#multiValueNullableAttribute(Class, Class, String, MultiValueFunction)}.
  *
  * @author npgall
  */

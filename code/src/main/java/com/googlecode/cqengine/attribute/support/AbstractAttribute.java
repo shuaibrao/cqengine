@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,28 +36,28 @@ public abstract class AbstractAttribute<O, A> implements Attribute<O, A> {
         this.attributeName = "<Unnamed attribute, " + getClass() + ">";
         this.objectType = readGenericObjectType(getClass(), attributeName);
         this.attributeType = readGenericAttributeType(getClass(), attributeName);
-        this.cachedHashCode = calcHashCode();
+        this.cachedHashCode = calculateHashCode(objectType, attributeType, attributeName);
     }
 
     public AbstractAttribute(String attributeName) {
         this.attributeName = attributeName;
         this.objectType = readGenericObjectType(getClass(), attributeName);
         this.attributeType = readGenericAttributeType(getClass(), attributeName);
-        this.cachedHashCode = calcHashCode();
+        this.cachedHashCode = calculateHashCode(objectType, attributeType, attributeName);
     }
 
     protected AbstractAttribute(Class<O> objectType, Class<A> attributeType) {
         this.attributeName = "<Unnamed attribute, " + getClass() + ">";
         this.objectType = objectType;
         this.attributeType = attributeType;
-        this.cachedHashCode = calcHashCode();
+        this.cachedHashCode = calculateHashCode(objectType, attributeType, attributeName);
     }
 
     protected AbstractAttribute(Class<O> objectType, Class<A> attributeType, String attributeName) {
         this.attributeName = attributeName;
         this.objectType = objectType;
         this.attributeType = attributeType;
-        this.cachedHashCode = calcHashCode();
+        this.cachedHashCode = calculateHashCode(objectType, attributeType, attributeName);
     }
     @Override
     public Class<O> getObjectType() {
@@ -87,7 +88,7 @@ public abstract class AbstractAttribute<O, A> implements Attribute<O, A> {
         if (this == o) return true;
         if (!(o instanceof AbstractAttribute)) return false;
 
-        AbstractAttribute that = (AbstractAttribute) o;
+        AbstractAttribute<?, ?> that = (AbstractAttribute<?, ?>) o;
 
         // TODO: reinstate this cachedHashCode comparison once EqualsVerifier supports cached hash code "shortcut":
         //if (cachedHashCode != that.cachedHashCode) return false;
@@ -109,6 +110,10 @@ public abstract class AbstractAttribute<O, A> implements Attribute<O, A> {
     }
 
     protected int calcHashCode() {
+        return calculateHashCode(objectType, attributeType, attributeName);
+    }
+
+    private static int calculateHashCode(Class<?> objectType, Class<?> attributeType, String attributeName) {
         int result = objectType.hashCode();
         result = 31 * result + attributeType.hashCode();
         result = 31 * result + attributeName.hashCode();

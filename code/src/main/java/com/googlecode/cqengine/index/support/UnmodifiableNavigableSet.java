@@ -21,7 +21,7 @@ import java.util.*;
 
 /**
  * A read-only view of a NavigableSet.
- * <p/>
+ * <p>
  * This is provided for compatibility with Java 6 which lacks a {@code Collections#unmodifiableNavigableSet()} method.
  */
 public class UnmodifiableNavigableSet<E> implements NavigableSet<E> {

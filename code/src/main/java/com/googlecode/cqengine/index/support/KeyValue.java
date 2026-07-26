@@ -17,7 +17,7 @@ package com.googlecode.cqengine.index.support;
 
 /**
  * Provides access to a key-value pair.
- * <p/>
+ * <p>
  * The implementation is free to generate and encapsulate the key and value in this object eagerly,
  * or generated it on-demand lazily.
  *

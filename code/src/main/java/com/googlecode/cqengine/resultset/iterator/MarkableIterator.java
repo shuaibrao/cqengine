@@ -21,12 +21,12 @@ import java.util.*;
 /**
  * An iterator which wraps a backing iterator, and which adds support for {@link #mark(int)} and {@link #reset()},
  * similar to an {@link InputStream}.
- * <p/>
+ * <p>
  * When {@link #mark(int)} is called, the iterator will start buffering the objects it serves, up to the given limit.
  * When {@link #reset()} is called, the iterator will start to replay the objects it buffered since {@link #mark(int)}
  * was called. When the iterator has then finished replaying the buffered objects, it will continue to read from the
  * backing iterator and add them to the buffer, until {@link #mark(int)} is called again.
- * <p/>
+ * <p>
  * To repeatedly replay objects from a certain point, call {@link #reset()} immediately followed by {@link #mark(int)}.
  * <br/>
  * To stop buffering objects, call mark with {@code readLimit} 0.
@@ -140,11 +140,11 @@ public class MarkableIterator<T> implements Iterator<T> {
 
     /**
      * Repositions this iterator to the position at the time the mark method was last called.
-     * <p/>
+     * <p>
      * If the mark method has not been called since the iterator was created, or the number of objects read from the
      * iterator since mark was last called is larger than the argument to mark at that last call,
      * then an IllegalStateException will be thrown.
-     * <p/>
+     * <p>
      * Otherwise, the iterator is reset to a state such that all the objects read since the most recent call to mark
      * will be resupplied to subsequent callers of the next method, followed by any objects that otherwise would have
      * been the next input data as of the time of the call to reset.

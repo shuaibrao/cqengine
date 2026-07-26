@@ -28,7 +28,6 @@ import java.util.List;
 /**
  * A query which wraps a {@link CompoundAttribute}, used only in the query engine's internal communication
  * with a {@link com.googlecode.cqengine.index.compound.CompoundIndex}.
- * <p/>
  * @author Niall Gallagher
  */
 public class CompoundQuery<O> implements Query<O> {
@@ -43,7 +42,7 @@ public class CompoundQuery<O> implements Query<O> {
 
     /**
      * {@inheritDoc}
-     * <p/>
+     * <p>
      * This implementation for {@link CompoundQuery} iterates each of the child {@link Equal} queries of the
      * {@link And} query from which the {@link CompoundQuery} was constructed, and for each child {@link Equal} query,
      * tests if the given object matches that query.

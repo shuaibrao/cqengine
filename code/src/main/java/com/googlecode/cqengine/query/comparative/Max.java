@@ -1,3 +1,6 @@
+// Modified by Shuaib Rao in 2026.
+// SPDX-License-Identifier: Apache-2.0
+
 package com.googlecode.cqengine.query.comparative;
 
 import com.googlecode.cqengine.attribute.Attribute;
@@ -29,7 +32,7 @@ public class Max<O, A extends Comparable<A>> extends SimpleComparativeQuery<O, A
         if (this == o) return true;
         if (!(o instanceof Max)) return false;
 
-        Max max = (Max) o;
+        Max<?, ?> max = (Max<?, ?>) o;
 
         return super.attribute.equals(max.attribute);
     }
@@ -45,7 +48,7 @@ public class Max<O, A extends Comparable<A>> extends SimpleComparativeQuery<O, A
         Set<O> results = new HashSet<>();
         for (O object : objectsInCollection) {
             A attributeValue = attribute.getValue(object, queryOptions);
-            maximumValue = evaluate(object, attributeValue, maximumValue, (Set<O>) results);
+            maximumValue = evaluate(object, attributeValue, maximumValue, results);
         }
         return results;
     }

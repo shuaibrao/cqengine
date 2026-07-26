@@ -21,7 +21,7 @@ import com.googlecode.cqengine.resultset.ResultSet;
 
 /**
  * An implementation of {@link FilteringResultSet} which filters objects based on whether they match a given query.
- * <p/>
+ * <p>
  * This can be useful to index which use a {@link com.googlecode.cqengine.quantizer.Quantizer}.
  *
  * @author Niall Gallagher

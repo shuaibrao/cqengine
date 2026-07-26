@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,11 +20,12 @@ import com.googlecode.cqengine.resultset.iterator.UnmodifiableIterator;
 
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.NoSuchElementException;
 import java.util.Set;
 
 /**
  * An iterator which wraps another and prevents duplicate objects from being returned.
- * <p/>
+ * <p>
  * The implementation starts returning objects from the wrapped iterator immediately, and records during iteration the
  * objects issued so far in a temporary collection. If the wrapped iterator returns the same object more than once,
  * this iterator will transparently skip it and move to the next object.
@@ -65,10 +67,10 @@ public class MaterializedDeduplicatedIterator<O> extends UnmodifiableIterator<O>
 
     @Override
     public O next() {
-        O next = nextObject;
-        if (next == null) {
-            throw new IllegalStateException("Detected an attempt to call iterator.next() without calling iterator.hasNext() immediately beforehand");
+        if (!hasNext()) {
+            throw new NoSuchElementException();
         }
+        O next = nextObject;
         nextObject = null;
         return next;
     }
