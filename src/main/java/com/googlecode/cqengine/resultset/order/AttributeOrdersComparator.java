@@ -20,10 +20,13 @@ import com.googlecode.cqengine.attribute.*;
 import com.googlecode.cqengine.query.option.AttributeOrder;
 import com.googlecode.cqengine.query.option.QueryOptions;
 
+import java.lang.ref.Reference;
+import java.lang.ref.ReferenceQueue;
+import java.lang.ref.WeakReference;
 import java.util.Comparator;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.IdentityHashMap;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -40,7 +43,9 @@ public class AttributeOrdersComparator<O> implements Comparator<O> {
     final List<AttributeOrder<O>> attributeSortOrders;
     final QueryOptions queryOptions;
     private final Object tieBreakerLock = new Object();
-    private final Map<O, Long> tieBreakerIds = new IdentityHashMap<O, Long>();
+    // Weak identity keys: a cached comparator must not pin every hash-colliding object it ever compared.
+    private final Map<TieBreakerKey, Long> tieBreakerIds = new HashMap<TieBreakerKey, Long>();
+    private final ReferenceQueue<Object> staleTieBreakerKeys = new ReferenceQueue<Object>();
     private long nextTieBreakerId;
 
     public AttributeOrdersComparator(List<AttributeOrder<O>> attributeSortOrders, QueryOptions queryOptions) {
@@ -90,7 +95,8 @@ public class AttributeOrdersComparator<O> implements Comparator<O> {
         //                              if comparator.compare(o1, o2) == -1, then it should be the case that
         //                                 comparator.compare(o2, o1) == +1.
         // Hash codes provide the first tie-breaker. Identity-based sequence numbers provide an exact total order when
-        // unequal objects also have equal hash codes.
+        // unequal objects also have equal hash codes. The sequence numbers are held via weak identity keys, so a
+        // long-lived comparator does not pin the objects it compared; an id is stable for as long as its object lives.
         int hashComparison = Integer.compare(o1.hashCode(), o2.hashCode());
         return hashComparison != 0
                 ? hashComparison
@@ -99,12 +105,28 @@ public class AttributeOrdersComparator<O> implements Comparator<O> {
 
     private long tieBreakerId(O object) {
         synchronized (tieBreakerLock) {
-            Long id = tieBreakerIds.get(object);
+            expungeStaleTieBreakerIds();
+            Long id = tieBreakerIds.get(new TieBreakerKey(object, null));
             if (id == null) {
                 id = nextTieBreakerId++;
-                tieBreakerIds.put(object, id);
+                tieBreakerIds.put(new TieBreakerKey(object, staleTieBreakerKeys), id);
             }
             return id;
+        }
+    }
+
+    private void expungeStaleTieBreakerIds() {
+        Reference<?> staleKey;
+        while ((staleKey = staleTieBreakerKeys.poll()) != null) {
+            // Removal relies on HashMap's reference-equality fast path: the enqueued key IS the stored key.
+            tieBreakerIds.remove(staleKey);
+        }
+    }
+
+    int retainedTieBreakerCount() {
+        synchronized (tieBreakerLock) {
+            expungeStaleTieBreakerIds();
+            return tieBreakerIds.size();
         }
     }
 
@@ -136,6 +158,33 @@ public class AttributeOrdersComparator<O> implements Comparator<O> {
             }
             // No differences found...
             return 0;
+        }
+    }
+
+    static final class TieBreakerKey extends WeakReference<Object> {
+
+        final int identityHashCode;
+
+        TieBreakerKey(Object referent, ReferenceQueue<Object> queue) {
+            super(referent, queue);
+            this.identityHashCode = System.identityHashCode(referent);
+        }
+
+        @Override
+        public int hashCode() {
+            return identityHashCode;
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            if (this == other) {
+                return true;
+            }
+            if (!(other instanceof TieBreakerKey)) {
+                return false;
+            }
+            Object referent = get();
+            return referent != null && referent == ((TieBreakerKey) other).get();
         }
     }
 }

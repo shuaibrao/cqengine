@@ -5874,7 +5874,7 @@ tasks.test {
 val verifyFastTestJava25 by tasks.registering(VerifyTestTaskResults::class) {
     description = "Verifies the exact Java 25 normal test inventory."
     group = "verification"
-    configureInventory(tasks.named<Test>("test"), 25, 79, 426)
+    configureInventory(tasks.named<Test>("test"), 25, 79, 427)
 }
 
 val fastTest by tasks.registering {
@@ -5957,7 +5957,7 @@ val fastTestJava21Execution by tasks.registering(Test::class) {
 val verifyFastTestJava21 by tasks.registering(VerifyTestTaskResults::class) {
     description = "Verifies the exact Java 21 normal test inventory."
     group = "verification"
-    configureInventory(fastTestJava21Execution, 21, 79, 426)
+    configureInventory(fastTestJava21Execution, 21, 79, 427)
 }
 
 val fastTestJava21 by tasks.registering {

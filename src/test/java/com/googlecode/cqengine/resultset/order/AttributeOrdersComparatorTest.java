@@ -77,6 +77,42 @@ public class AttributeOrdersComparatorTest {
     }
 
     @Test
+    public void tieBreakerIdsDoNotRetainCollectedObjects() throws InterruptedException {
+        SimpleAttribute<CollidingObject, Integer> group =
+                new SimpleAttribute<CollidingObject, Integer>("group") {
+                    @Override
+                    public Integer getValue(CollidingObject object, QueryOptions queryOptions) {
+                        return object.group;
+                    }
+                };
+        AttributeOrdersComparator<CollidingObject> comparator = new AttributeOrdersComparator<CollidingObject>(
+                Collections.singletonList(ascending(group)), noQueryOptions());
+
+        CollidingObject first = new CollidingObject(1, 1);
+        CollidingObject second = new CollidingObject(2, 1);
+        comparator.compare(first, second);
+        TestAssertions.assertEquals(2, comparator.retainedTieBreakerCount());
+
+        // Ids must stay stable while the objects are alive...
+        int comparison = comparator.compare(first, second);
+        TestAssertions.assertEquals(comparison, comparator.compare(first, second));
+        TestAssertions.assertEquals(2, comparator.retainedTieBreakerCount());
+
+        // ...and must be released once the objects become unreachable.
+        java.lang.ref.WeakReference<CollidingObject> firstRef = new java.lang.ref.WeakReference<CollidingObject>(first);
+        java.lang.ref.WeakReference<CollidingObject> secondRef = new java.lang.ref.WeakReference<CollidingObject>(second);
+        first = null;
+        second = null;
+        long deadline = System.currentTimeMillis() + 30_000;
+        while ((firstRef.get() != null || secondRef.get() != null || comparator.retainedTieBreakerCount() > 0)
+                && System.currentTimeMillis() < deadline) {
+            System.gc();
+            Thread.sleep(10);
+        }
+        TestAssertions.assertEquals(0, comparator.retainedTieBreakerCount());
+    }
+
+    @Test
     public void testSortAscending() {
         List<Car> cars = Arrays.asList(
                 new Car(0, "Ford",  "Taurus", Car.Color.BLACK, 4, 7000.00, Collections.<String>emptyList(), Collections.emptyList()),
