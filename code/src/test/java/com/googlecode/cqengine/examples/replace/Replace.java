@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -64,7 +65,10 @@ public class Replace {
         System.out.println("The only car in the collection, before the replacement: " + carFound);
 
         // Update the name of the Car with carId 1, by replacing it using MVCC...
-        Car oldVersion = cars.retrieve(equal(Car.CAR_ID, 1)).uniqueResult(); // Retrieve the existing version
+        Car oldVersion;
+        try (ResultSet<Car> results = cars.retrieve(equal(Car.CAR_ID, 1))) {
+            oldVersion = results.uniqueResult();
+        }
         Car newVersion = new Car(1, "New Ford Focus"); // Create a new car, same carId, different version
         cars.add(newVersion); // Collection now contains two versions of the same car
 
@@ -81,10 +85,9 @@ public class Replace {
 
     static Car retrieveOnlyOneVersion(IndexedCollection<Car> cars, int carId) {
         Query<Car> query = equal(Car.CAR_ID, carId);
-        ResultSet<Car> multipleCarVersions = cars.retrieve(query);
-        // Wrap in a result set which will return only one car per version number...
-        ResultSet<Car> deduplicatedCars = new DeduplicatingResultSet<Car, Integer>(Car.CAR_ID, multipleCarVersions, query, noQueryOptions());
-
-        return deduplicatedCars.uniqueResult();
+        try (ResultSet<Car> deduplicatedCars = new DeduplicatingResultSet<Car, Integer>(
+                Car.CAR_ID, cars.retrieve(query), query, noQueryOptions())) {
+            return deduplicatedCars.uniqueResult();
+        }
     }
 }

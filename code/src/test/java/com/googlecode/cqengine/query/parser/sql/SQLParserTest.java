@@ -15,6 +15,8 @@
  */
 package com.googlecode.cqengine.query.parser.sql;
 
+import com.googlecode.cqengine.testutil.ExpectedException;
+
 import com.googlecode.cqengine.ConcurrentIndexedCollection;
 import com.googlecode.cqengine.IndexedCollection;
 import com.googlecode.cqengine.attribute.Attribute;
@@ -26,8 +28,8 @@ import com.googlecode.cqengine.query.parser.common.ParseResult;
 import com.googlecode.cqengine.resultset.ResultSet;
 import com.googlecode.cqengine.testutil.Car;
 import com.googlecode.cqengine.testutil.CarFactory;
-import org.junit.Assert;
-import org.junit.Test;
+import com.googlecode.cqengine.testutil.TestAssertions;
+import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 
@@ -124,75 +126,81 @@ public class SQLParserTest {
         );
     }
 
-    @Test(expected = InvalidQueryException.class)
+    @Test
+    @ExpectedException(InvalidQueryException.class)
     public void testInvalidQuery_DuplicateQueries() {
         parser.query("SELECT * FROM cars WHERE 'price' < 1000.0 SELECT * FROM cars WHERE 'price' < 1000.0");
     }
 
-    @Test(expected = InvalidQueryException.class)
+    @Test
+    @ExpectedException(InvalidQueryException.class)
     public void testInvalidQuery_TrailingGibberish() {
         parser.query("SELECT * FROM cars WHERE 'price' < 1000.0 abc");
     }
 
-    @Test(expected = InvalidQueryException.class)
+    @Test
+    @ExpectedException(InvalidQueryException.class)
     public void testInvalidQuery_LeadingGibberish() {
         parser.query("abc SELECT * FROM cars WHERE 'price' < 1000.0");
     }
 
-    @Test(expected = InvalidQueryException.class)
+    @Test
+    @ExpectedException(InvalidQueryException.class)
     public void testInvalidQuery_UnclosedQuery() {
         parser.query("SELECT * FROM cars WHERE 'price' < 1000.0 AND ");
     }
 
 
-    @Test(expected = InvalidQueryException.class)
+    @Test
+    @ExpectedException(InvalidQueryException.class)
     public void testInvalidQuery_InvalidParameterType() {
         parser.query("SELECT * FROM cars WHERE 'doors' = 'foo'");
     }
 
-    @Test(expected = InvalidQueryException.class)
+    @Test
+    @ExpectedException(InvalidQueryException.class)
     public void testInvalidQuery_NullQuery() {
         parser.query(null);
     }
 
     static void assertQueriesEquals(Query<Car> expected, Query<Car> actual) {
-        Assert.assertEquals(expected, actual);
-        Assert.assertEquals(expected.toString(), actual.toString());
+        TestAssertions.assertEquals(expected, actual);
+        TestAssertions.assertEquals(expected.toString(), actual.toString());
     }
 
     @Test
     public void testOrderBy_NoOrdering() {
         ParseResult<Car> parseResult = parser.parse("SELECT * FROM cars WHERE 'manufacturer' = 'Ford'");
         assertQueriesEquals(equal(Car.MANUFACTURER, "Ford"), parseResult.getQuery());
-        Assert.assertEquals(noQueryOptions(), parseResult.getQueryOptions());
+        TestAssertions.assertEquals(noQueryOptions(), parseResult.getQueryOptions());
     }
 
     @Test
     public void testOrderBy_SimpleOrdering1() {
         ParseResult<Car> parseResult = parser.parse("SELECT * FROM cars WHERE 'manufacturer' = 'Ford' ORDER BY manufacturer ASC");
         assertQueriesEquals(equal(Car.MANUFACTURER, "Ford"), parseResult.getQuery());
-        Assert.assertEquals(queryOptions(orderBy(ascending(Car.MANUFACTURER))), parseResult.getQueryOptions());
+        TestAssertions.assertEquals(queryOptions(orderBy(ascending(Car.MANUFACTURER))), parseResult.getQueryOptions());
     }
 
     @Test
     public void testOrderBy_SimpleOrdering2() {
         ParseResult<Car> parseResult = parser.parse("SELECT * FROM cars WHERE 'manufacturer' = 'Ford' ORDER BY manufacturer asc");
         assertQueriesEquals(equal(Car.MANUFACTURER, "Ford"), parseResult.getQuery());
-        Assert.assertEquals(queryOptions(orderBy(ascending(Car.MANUFACTURER))), parseResult.getQueryOptions());
+        TestAssertions.assertEquals(queryOptions(orderBy(ascending(Car.MANUFACTURER))), parseResult.getQueryOptions());
     }
 
     @Test
     public void testOrderBy_ComplexOrdering() {
         ParseResult<Car> parseResult = parser.parse("SELECT * FROM cars WHERE 'manufacturer' = 'Ford' ORDER BY manufacturer ASC, carId DESC");
         assertQueriesEquals(equal(Car.MANUFACTURER, "Ford"), parseResult.getQuery());
-        Assert.assertEquals(queryOptions(orderBy(ascending(Car.MANUFACTURER), descending(Car.CAR_ID))), parseResult.getQueryOptions());
+        TestAssertions.assertEquals(queryOptions(orderBy(ascending(Car.MANUFACTURER), descending(Car.CAR_ID))), parseResult.getQueryOptions());
     }
 
     @Test
     public void testOrderBy_AscIsOptional() {
         ParseResult<Car> parseResult = parser.parse("SELECT * FROM cars WHERE 'manufacturer' = 'Ford' ORDER BY manufacturer, carId DESC");
         assertQueriesEquals(equal(Car.MANUFACTURER, "Ford"), parseResult.getQuery());
-        Assert.assertEquals(queryOptions(orderBy(ascending(Car.MANUFACTURER), descending(Car.CAR_ID))), parseResult.getQueryOptions());
+        TestAssertions.assertEquals(queryOptions(orderBy(ascending(Car.MANUFACTURER), descending(Car.CAR_ID))), parseResult.getQueryOptions());
     }
 
     @Test
@@ -201,7 +209,7 @@ public class SQLParserTest {
         cars.addAll(CarFactory.createCollectionOfCars(10));
 
         ResultSet<Car> results = parser.retrieve(cars, "SELECT * FROM cars WHERE (manufacturer = 'Honda' AND color <> 'WHITE') ORDER BY carId DESC");
-        Assert.assertEquals(2, results.size());
-        Assert.assertEquals(asList(5, 4), extractCarIds(results, new ArrayList<Integer>()));
+        TestAssertions.assertEquals(2, results.size());
+        TestAssertions.assertEquals(asList(5, 4), extractCarIds(results, new ArrayList<Integer>()));
     }
 }

@@ -18,9 +18,9 @@ package com.googlecode.cqengine.index.radix;
 import com.googlecode.concurrenttrees.radix.node.concrete.DefaultCharArrayNodeFactory;
 import com.googlecode.concurrenttrees.radix.node.concrete.SmartArrayBasedNodeFactory;
 import com.googlecode.cqengine.testutil.Car;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
-import static org.junit.Assert.*;
+import static com.googlecode.cqengine.testutil.TestAssertions.*;
 
 /**
  * Tests for {@link RadixTreeIndex}.

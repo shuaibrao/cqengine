@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,9 +48,10 @@ public class GenerateAttributeByteCode {
         cars.addAll(CarFactory.createCollectionOfCars(10));
 
         // Retrieve the cars whose Car.model field is "Civic" (i.e. the Honda Civic)...
-        ResultSet<Car> results = cars.retrieve(equal(MODEL, "Civic"));
-        for (Car car : results) {
-            System.out.println(car);
+        try (ResultSet<Car> results = cars.retrieve(equal(MODEL, "Civic"))) {
+            for (Car car : results) {
+                System.out.println(car);
+            }
         }
         // ..prints:
         // Car{carId=3, manufacturer='Honda', model='Civic', color=WHITE, doors=5, price=4000.0, features=[grade b]}

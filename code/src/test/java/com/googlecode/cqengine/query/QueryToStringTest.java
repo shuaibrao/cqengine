@@ -19,8 +19,8 @@ import com.googlecode.cqengine.ConcurrentIndexedCollection;
 import com.googlecode.cqengine.IndexedCollection;
 import com.googlecode.cqengine.examples.join.Garage;
 import com.googlecode.cqengine.testutil.Car;
-import org.junit.Assert;
-import org.junit.Test;
+import com.googlecode.cqengine.testutil.TestAssertions;
+import org.junit.jupiter.api.Test;
 
 import static com.googlecode.cqengine.query.QueryFactory.*;
 
@@ -37,7 +37,7 @@ public class QueryToStringTest {
                 equal(Car.COLOR, Car.Color.BLUE),
                 equal(Car.DOORS, 3)
         );
-        Assert.assertEquals(
+        TestAssertions.assertEquals(
                 "and(" +
                     "equal(\"manufacturer\", \"Toyota\"), " +
                     "equal(\"color\", BLUE), " +
@@ -59,7 +59,7 @@ public class QueryToStringTest {
                 )
         );
         // Note: QueryFactory expands 'in' queries to an 'or' of multiple 'equals' queries (logically equivalent)...
-        Assert.assertEquals(
+        TestAssertions.assertEquals(
                 "and(" +
                     "in(\"doors\", [2, 4]), " +
                     "existsIn(IndexedCollection<Garage>, " +

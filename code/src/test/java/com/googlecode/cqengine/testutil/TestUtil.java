@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +19,6 @@ package com.googlecode.cqengine.testutil;
 import com.googlecode.cqengine.attribute.Attribute;
 import com.googlecode.cqengine.resultset.ResultSet;
 
-import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.Set;
 
@@ -50,9 +50,14 @@ public class TestUtil {
     /**
      * Returns a set of the given vararg values. The set preserves the order of values given, but eliminates duplicates.
      */
+    @SafeVarargs
     @SuppressWarnings({"JavaDoc"})
     public static <A> Set<A> setOf(A... values) {
-        return new LinkedHashSet<A>(Arrays.asList(values));
+        Set<A> result = new LinkedHashSet<A>();
+        for (A value : values) {
+            result.add(value);
+        }
+        return result;
     }
 
     public static <A> Set<A> setOf(Iterable<A> values) {

@@ -22,8 +22,8 @@ import com.googlecode.cqengine.attribute.SimpleNullableAttribute;
 import com.googlecode.cqengine.examples.introduction.Car;
 import com.googlecode.cqengine.index.standingquery.StandingQueryIndex;
 import com.googlecode.cqengine.query.option.QueryOptions;
-import org.junit.Assert;
-import org.junit.Test;
+import com.googlecode.cqengine.testutil.TestAssertions;
+import org.junit.jupiter.api.Test;
 
 import static com.googlecode.cqengine.query.QueryFactory.*;
 import java.util.Arrays;
@@ -50,7 +50,7 @@ public class HasTest {
         cars.add(new Car(2, null, "dirty and unreliable, flat tyre", Arrays.asList("spare tyre", "radio")));
         cars.add(new Car(3, "honda civic", "has a flat tyre and high mileage", Arrays.asList("radio")));
 
-        Assert.assertEquals(cars.retrieve(has(NAME)).size(), 2);
-        Assert.assertEquals(cars.retrieve(not(has(NAME))).size(), 1);
+        TestAssertions.assertEquals(cars.retrieve(has(NAME)).size(), 2);
+        TestAssertions.assertEquals(cars.retrieve(not(has(NAME))).size(), 1);
     }
 }

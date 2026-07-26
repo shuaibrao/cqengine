@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,13 +22,14 @@ import com.googlecode.cqengine.attribute.SimpleAttribute;
 import com.googlecode.cqengine.query.option.QueryOptions;
 import com.googlecode.cqengine.testutil.Car;
 import com.googlecode.cqengine.testutil.CarFactory;
-import org.junit.Rule;
-import org.junit.Test;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 
 import static com.googlecode.cqengine.query.QueryFactory.*;
-import static org.junit.Assert.assertEquals;
+import static com.googlecode.cqengine.testutil.TestAssertions.assertEquals;
+import static com.googlecode.cqengine.testutil.TestAssertions.assertNotEquals;
 
 /**
  * Tests for {@link PartialSQLiteIndex}.
@@ -42,7 +44,7 @@ public class PartialSQLiteIndexTest {
         public Car getValue(Integer carId, QueryOptions queryOptions) { return CarFactory.createCar(carId); }
     };
 
-    @Rule
+    @RegisterExtension
     public TemporaryDatabase.TemporaryInMemoryDatabase temporaryInMemoryDatabase = new TemporaryDatabase.TemporaryInMemoryDatabase();
 
     @Test
@@ -57,5 +59,16 @@ public class PartialSQLiteIndexTest {
 
         assertEquals(75,         indexedCollection.retrieve(and(equal(Car.MANUFACTURER, "Ford"), between(Car.CAR_ID, 2, 4)), queryOptions).getRetrievalCost());
         assertEquals(2147483647, indexedCollection.retrieve(and(equal(Car.MANUFACTURER, "Ford"), between(Car.CAR_ID, 2, 5)), queryOptions).getRetrievalCost());
+    }
+
+    @Test
+    public void separatesPartialFiltersWhichCollidedUnderTheLegacySanitizer() {
+        PartialSQLiteIndex<String, Car, Integer> punctuated = PartialSQLiteIndex.onAttributeWithFilterQuery(
+                Car.MANUFACTURER, OBJECT_TO_ID, ID_TO_OBJECT, equal(Car.MANUFACTURER, "a-b"));
+        PartialSQLiteIndex<String, Car, Integer> plain = PartialSQLiteIndex.onAttributeWithFilterQuery(
+                Car.MANUFACTURER, OBJECT_TO_ID, ID_TO_OBJECT, equal(Car.MANUFACTURER, "ab"));
+
+        assertEquals(punctuated.legacyTableNameSuffix, plain.legacyTableNameSuffix);
+        assertNotEquals(punctuated.tableNameSuffix, plain.tableNameSuffix);
     }
 }

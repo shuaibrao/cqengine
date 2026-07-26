@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,13 +16,12 @@
  */
 package com.googlecode.cqengine.examples.nestedobjects;
 
-import com.google.common.base.Function;
 import com.googlecode.cqengine.*;
 import com.googlecode.cqengine.attribute.*;
 import com.googlecode.cqengine.query.option.QueryOptions;
+import com.googlecode.cqengine.resultset.ResultSet;
 import java.util.*;
 import static com.googlecode.cqengine.query.QueryFactory.*;
-import static com.google.common.collect.Iterables.*;
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
 
@@ -35,27 +35,12 @@ import static java.util.Collections.singletonList;
  */
 public class NestedObjectsExample {
 
-    // For Java 8: A multi-value attribute which returns the names of products ordered by a user
-//    static final Attribute<User, String> PRODUCT_NAMES_ORDERED = new MultiValueAttribute<User, String>() {
-//        public Iterable<String> getValues(User user, QueryOptions queryOptions) {
-//            return user.orders.stream()
-//                    .map(order -> order.products).flatMap(Collection::stream)
-//                    .map(product -> product.name)::iterator;
-//        }
-//    };
-
-    // For Java 6: A multi-value attribute which returns the names of products ordered by a user
     static final Attribute<User, String> PRODUCT_NAMES_ORDERED = new MultiValueAttribute<User, String>() {
         public Iterable<String> getValues(User user, QueryOptions queryOptions) {
-            return concat(transform(user.orders, new Function<Order, Iterable<String>>() {
-                public Iterable<String> apply(Order order) {
-                    return transform(order.products, new Function<Product, String>() {
-                        public String apply(Product product) {
-                            return product.name;
-                        }
-                    });
-                }
-            }));
+            return () -> user.orders.stream()
+                    .flatMap(order -> order.products.stream())
+                    .map(product -> product.name)
+                    .iterator();
         }
     };
 
@@ -74,9 +59,11 @@ public class NestedObjectsExample {
         IndexedCollection<User> users = new ConcurrentIndexedCollection<User>();
         users.addAll(asList(user1, user2, user3));
 
-        for (User user : users.retrieve(equal(PRODUCT_NAMES_ORDERED, "Snickers Bar"))) {
-            System.out.println(user.userId);
-        } // ...prints 1, 3
+        try (ResultSet<User> results = users.retrieve(equal(PRODUCT_NAMES_ORDERED, "Snickers Bar"))) {
+            for (User user : results) {
+                System.out.println(user.userId);
+            } // ...prints 1, 3
+        }
     }
 
 

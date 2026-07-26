@@ -20,12 +20,12 @@ import com.googlecode.cqengine.attribute.Attribute;
 import com.googlecode.cqengine.attribute.SimpleAttribute;
 import com.googlecode.cqengine.index.hash.HashIndex;
 import com.googlecode.cqengine.testutil.Car;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
 import static com.googlecode.cqengine.metadata.AttributeMetadataTest.createIndexedCollectionOfCars;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
+import static com.googlecode.cqengine.testutil.TestAssertions.assertEquals;
+import static com.googlecode.cqengine.testutil.TestAssertions.assertNotNull;
 
 /**
  * Unit tests for {@link MetadataEngine}.

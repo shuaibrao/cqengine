@@ -1,17 +1,19 @@
+// Copyright 2026 Shuaib Rao
+// SPDX-License-Identifier: Apache-2.0
 package com.googlecode.cqengine.persistence.disk;
 
 import com.googlecode.cqengine.ConcurrentIndexedCollection;
 import com.googlecode.cqengine.IndexedCollection;
 import com.googlecode.cqengine.attribute.SimpleAttribute;
-import org.junit.Assert;
-import org.junit.Test;
+import com.googlecode.cqengine.testutil.TestAssertions;
+import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static com.googlecode.cqengine.query.QueryFactory.attribute;
+import static com.googlecode.cqengine.query.QueryFactory.simpleAttribute;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
 /**
@@ -42,7 +44,8 @@ public class DiskSharedCacheConcurrencyTest {
         }
 
         // An attribute which reads the id field of the POJO...
-        final SimpleAttribute<TestPojo, Integer> primaryKey = attribute(object -> object.id);
+        final SimpleAttribute<TestPojo, Integer> primaryKey =
+                simpleAttribute(TestPojo.class, Integer.class, "id", object -> object.id);
 
         // Create a temp file...
         File tempFile = DiskPersistence.createTempFile();
@@ -72,9 +75,9 @@ public class DiskSharedCacheConcurrencyTest {
         latch.await(20, SECONDS);
 
         // Assert that the same number of objects were inserted as there were background threads...
-        Assert.assertEquals(NUM_BACKGROUND_THREADS, collection.size());
+        TestAssertions.assertEquals(NUM_BACKGROUND_THREADS, collection.size());
 
         // Delete the temp file...
-        Assert.assertEquals(true, tempFile.delete());
+        TestAssertions.assertEquals(true, tempFile.delete());
     }
 }

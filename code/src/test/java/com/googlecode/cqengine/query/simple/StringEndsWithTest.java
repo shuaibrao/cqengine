@@ -17,12 +17,12 @@ package com.googlecode.cqengine.query.simple;
 
 import com.googlecode.cqengine.attribute.Attribute;
 import com.googlecode.cqengine.attribute.SelfAttribute;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import static com.googlecode.cqengine.query.QueryFactory.endsWith;
 import static com.googlecode.cqengine.query.QueryFactory.noQueryOptions;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static com.googlecode.cqengine.testutil.TestAssertions.assertFalse;
+import static com.googlecode.cqengine.testutil.TestAssertions.assertTrue;
 
 /**
  * @author Niall Gallagher

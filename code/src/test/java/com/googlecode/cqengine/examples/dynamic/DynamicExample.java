@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,10 +34,10 @@ import static com.googlecode.cqengine.query.QueryFactory.*;
  */
 public class DynamicExample {
 
-    @SuppressWarnings("unchecked")
     public static void main(String[] args) {
         // Generate attributes dynamically for fields in the given POJO...
-        Map<String, Attribute<Car, Comparable>> attributes = DynamicIndexer.generateAttributesForPojo(Car.class);
+        Map<String, Attribute<Car, ? extends Comparable<?>>> attributes =
+                DynamicIndexer.generateAttributesForPojo(Car.class);
         // Build indexes on the dynamically generated attributes...
         IndexedCollection<Car> cars = DynamicIndexer.newAutoIndexedCollection(attributes.values());
 
@@ -47,16 +48,16 @@ public class DynamicExample {
         cars.add(new Car(3, "honda", "civic", 5, 11000));
 
         Query<Car> query = and(
-                equal(attributes.get("manufacturer"), "ford"),
-                lessThan(attributes.get("doors"), value(5)),
-                greaterThan(attributes.get("horsepower"), value(3000))
+                equalDynamic(attributes.get("manufacturer"), "ford"),
+                lessThanDynamic(attributes.get("doors"), 5),
+                greaterThanDynamic(attributes.get("horsepower"), 3000)
         );
-        ResultSet<Car> results = cars.retrieve(query);
-
-        System.out.println("Ford cars with less than 5 doors and horsepower greater than 3000:- ");
-        System.out.println("Using NavigableIndex: " + (results.getRetrievalCost() == 40));
-        for (Car car : results) {
-            System.out.println(car);
+        try (ResultSet<Car> results = cars.retrieve(query)) {
+            System.out.println("Ford cars with less than 5 doors and horsepower greater than 3000:- ");
+            System.out.println("Using NavigableIndex: " + (results.getRetrievalCost() == 40));
+            for (Car car : results) {
+                System.out.println(car);
+            }
         }
 
         // Prints:
@@ -64,11 +65,18 @@ public class DynamicExample {
         //    Using NavigableIndex: true
         //    Car{carId=1, manufacturer='ford', model='focus', doors=4, horsepower=9000}
     }
+    @SuppressWarnings("unchecked") // Attribute types are discovered at runtime and paired with matching values here.
+    static <O, A> Query<O> equalDynamic(Attribute<O, ?> attribute, A value) {
+        return equal((Attribute<O, A>) attribute, value);
+    }
 
+    @SuppressWarnings("unchecked") // Attribute types are discovered at runtime and paired with matching values here.
+    static <O, A extends Comparable<A>> Query<O> lessThanDynamic(Attribute<O, ?> attribute, A value) {
+        return lessThan((Attribute<O, A>) attribute, value);
+    }
 
-
-    // This method is required for compatibility with Java 8 compiler (not required for Java 6 or 7 compiler)...
-    static Comparable value(Comparable c) {
-        return c;
+    @SuppressWarnings("unchecked") // Attribute types are discovered at runtime and paired with matching values here.
+    static <O, A extends Comparable<A>> Query<O> greaterThanDynamic(Attribute<O, ?> attribute, A value) {
+        return greaterThan((Attribute<O, A>) attribute, value);
     }
 }

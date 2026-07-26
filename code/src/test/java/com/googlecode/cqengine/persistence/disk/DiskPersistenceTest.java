@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,9 +27,9 @@ import com.googlecode.cqengine.testutil.Car;
 import com.googlecode.cqengine.testutil.CarFactory;
 import nl.jqno.equalsverifier.EqualsVerifier;
 import nl.jqno.equalsverifier.Warning;
-import org.junit.Assert;
-import org.junit.Ignore;
-import org.junit.Test;
+import com.googlecode.cqengine.testutil.TestAssertions;
+import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Test;
 import org.sqlite.SQLiteConfig;
 import org.sqlite.SQLiteDataSource;
 
@@ -45,14 +46,33 @@ import static java.util.stream.Collectors.toSet;
 public class DiskPersistenceTest {
 
     @Test
+    public void testCloseIsIdempotentAndRejectsFurtherUse() {
+        DiskPersistence<Car, Integer> persistence = DiskPersistence.onPrimaryKey(Car.CAR_ID);
+        File persistenceFile = persistence.getFile();
+
+        persistence.close();
+        persistence.close();
+
+        TestAssertions.assertTrue(persistence.closed);
+        try {
+            persistence.getBytesUsed();
+            TestAssertions.fail("Expected closed persistence to reject further use");
+        }
+        catch (IllegalStateException expected) {
+            TestAssertions.assertTrue(expected.getMessage().contains("has been closed"));
+        }
+        TestAssertions.assertTrue("Failed to delete temp file:" + persistenceFile, persistenceFile.delete());
+    }
+
+    @Test
     public void testGetBytesUsed() {
         DiskPersistence<Car, Integer> persistence = DiskPersistence.onPrimaryKey(Car.CAR_ID);
         @SuppressWarnings("MismatchedQueryAndUpdateOfCollection")
         IndexedCollection<Car> cars = new ConcurrentIndexedCollection<Car>(persistence);
         cars.addAll(CarFactory.createCollectionOfCars(50));
         long bytesUsed = persistence.getBytesUsed();
-        Assert.assertTrue("Bytes used should be greater than zero: " + bytesUsed, bytesUsed > 0);
-        Assert.assertTrue("Failed to delete temp file:" + persistence.getFile(), persistence.getFile().delete());
+        TestAssertions.assertTrue("Bytes used should be greater than zero: " + bytesUsed, bytesUsed > 0);
+        TestAssertions.assertTrue("Failed to delete temp file:" + persistence.getFile(), persistence.getFile().delete());
     }
 
     @Test
@@ -62,14 +82,14 @@ public class DiskPersistenceTest {
         IndexedCollection<Car> cars = new ConcurrentIndexedCollection<Car>(persistence);
         cars.addAll(CarFactory.createCollectionOfCars(100));
         long bytesUsedWhenFullyPopulated = persistence.getBytesUsed();
-        Assert.assertTrue("Bytes used when fully populated should be greater than zero: " + bytesUsedWhenFullyPopulated, bytesUsedWhenFullyPopulated > 0);
+        TestAssertions.assertTrue("Bytes used when fully populated should be greater than zero: " + bytesUsedWhenFullyPopulated, bytesUsedWhenFullyPopulated > 0);
         cars.removeAll(CarFactory.createCollectionOfCars(100));
         long bytesUsedWhenObjectsRemoved = persistence.getBytesUsed();
-        Assert.assertTrue("Bytes used when objects removed (" + bytesUsedWhenObjectsRemoved + ") should remain the same as when fully populated (" + bytesUsedWhenFullyPopulated + ")", bytesUsedWhenObjectsRemoved == bytesUsedWhenFullyPopulated);
+        TestAssertions.assertTrue("Bytes used when objects removed (" + bytesUsedWhenObjectsRemoved + ") should remain the same as when fully populated (" + bytesUsedWhenFullyPopulated + ")", bytesUsedWhenObjectsRemoved == bytesUsedWhenFullyPopulated);
         persistence.compact(); // Truncates size of the database, but not to zero as the tables which were created remain (although empty)
         long bytesUsedAfterCompaction = persistence.getBytesUsed();
-        Assert.assertTrue("Bytes used after compaction (" + bytesUsedAfterCompaction + ") should be less than when fully populated (" + bytesUsedWhenFullyPopulated + ")", bytesUsedAfterCompaction < bytesUsedWhenFullyPopulated);
-        Assert.assertTrue("Failed to delete temp file:" + persistence.getFile(), persistence.getFile().delete());
+        TestAssertions.assertTrue("Bytes used after compaction (" + bytesUsedAfterCompaction + ") should be less than when fully populated (" + bytesUsedWhenFullyPopulated + ")", bytesUsedAfterCompaction < bytesUsedWhenFullyPopulated);
+        TestAssertions.assertTrue("Failed to delete temp file:" + persistence.getFile(), persistence.getFile().delete());
     }
 
     @Test
@@ -81,14 +101,14 @@ public class DiskPersistenceTest {
         cars.addAll(CarFactory.createCollectionOfCars(50));
         persistence.compact();
         long initialBytesUsed = persistence.getBytesUsed();
-        Assert.assertTrue("Initial bytes used should be greater than zero: " + initialBytesUsed, initialBytesUsed > 0);
+        TestAssertions.assertTrue("Initial bytes used should be greater than zero: " + initialBytesUsed, initialBytesUsed > 0);
         persistence.expand(bytesToExpand);
         long bytesUsedAfterExpanding = persistence.getBytesUsed();
-        Assert.assertTrue("Bytes used after expanding (" + bytesUsedAfterExpanding + ") should have been increased by at least bytes to expand (" + bytesToExpand + ") above initial bytes used (" + initialBytesUsed + ")", bytesUsedAfterExpanding >= (initialBytesUsed + bytesToExpand));
+        TestAssertions.assertTrue("Bytes used after expanding (" + bytesUsedAfterExpanding + ") should have been increased by at least bytes to expand (" + bytesToExpand + ") above initial bytes used (" + initialBytesUsed + ")", bytesUsedAfterExpanding >= (initialBytesUsed + bytesToExpand));
         persistence.compact();
         long bytesUsedAfterCompaction = persistence.getBytesUsed();
-        Assert.assertTrue("Bytes used after compaction (" + bytesUsedAfterCompaction + ") should be equal to initial bytes used (" + initialBytesUsed + ")", bytesUsedAfterCompaction == initialBytesUsed);
-        Assert.assertTrue("Failed to delete temp file:" + persistence.getFile(), persistence.getFile().delete());
+        TestAssertions.assertTrue("Bytes used after compaction (" + bytesUsedAfterCompaction + ") should be equal to initial bytes used (" + initialBytesUsed + ")", bytesUsedAfterCompaction == initialBytesUsed);
+        TestAssertions.assertTrue("Failed to delete temp file:" + persistence.getFile(), persistence.getFile().delete());
     }
 
     @Test
@@ -99,9 +119,9 @@ public class DiskPersistenceTest {
         Index<Car> offHeapIndex = OffHeapIndex.onAttribute(Car.MANUFACTURER);
         Index<Car> navigableIndex = NavigableIndex.onAttribute(Car.MANUFACTURER);
 
-        Assert.assertTrue(persistence.supportsIndex(diskIndex));
-        Assert.assertFalse(persistence.supportsIndex(offHeapIndex));
-        Assert.assertFalse(persistence.supportsIndex(navigableIndex));
+        TestAssertions.assertTrue(persistence.supportsIndex(diskIndex));
+        TestAssertions.assertFalse(persistence.supportsIndex(offHeapIndex));
+        TestAssertions.assertFalse(persistence.supportsIndex(navigableIndex));
     }
 
     @Test
@@ -111,7 +131,13 @@ public class DiskPersistenceTest {
         SQLiteDataSource ds2 = new SQLiteDataSource(new SQLiteConfig());
         ds2.setUrl("bar");
         EqualsVerifier.forClass(DiskPersistence.class)
-                .withIgnoredFields("sqLiteDataSource", "persistentConnection", "closed", "useReadWriteLock", "readWriteLock")
+                .withIgnoredFields(
+                        "sqLiteDataSource",
+                        "persistentConnection",
+                        "closed",
+                        "useReadWriteLock",
+                        "readWriteLock",
+                        "busyTimeoutMillis")
                 .suppress(Warning.NULL_FIELDS, Warning.STRICT_INHERITANCE)
                 .withPrefabValues(SQLiteDataSource.class, ds1, ds2)
                 .verify();
@@ -153,8 +179,8 @@ public class DiskPersistenceTest {
             }
         }
         // Assert we got the same results both times...
-        Assert.assertEquals(expectedCarIds, actualCarIds);
-        Assert.assertTrue("Failed to delete temp file:" + persistenceFile, persistenceFile.delete());
+        TestAssertions.assertEquals(expectedCarIds, actualCarIds);
+        TestAssertions.assertTrue("Failed to delete temp file:" + persistenceFile, persistenceFile.delete());
     }
 
 
@@ -162,7 +188,7 @@ public class DiskPersistenceTest {
     // === Manual tests, used to verify disk persistence compatibility between CQEngine versions... ===
     // ================================================================================================
 
-    @Test @Ignore
+    @Test @Disabled
     public void testSaveToDisk() {
         Set<Car> collectionOfCars = CarFactory.createCollectionOfCars(50);
         Set<Integer> expectedCarIds = collectionOfCars.stream().map(Car::getCarId).collect(toSet());
@@ -180,11 +206,11 @@ public class DiskPersistenceTest {
         // Sanity check that we saved the cars correctly...
         Set<Integer> actualCarIds = cars.stream().map(Car::getCarId).collect(toSet());
 
-        Assert.assertEquals(expectedCarIds, actualCarIds);
+        TestAssertions.assertEquals(expectedCarIds, actualCarIds);
         System.out.println("Saved to disk: " + actualCarIds);
     }
 
-    @Test @Ignore
+    @Test @Disabled
     public void testReadFromDisk() {
         Set<Car> collectionOfCars = CarFactory.createCollectionOfCars(50);
         Set<Integer> expectedCarIds = collectionOfCars.stream().map(Car::getCarId).collect(toSet());
@@ -199,7 +225,7 @@ public class DiskPersistenceTest {
         // Retrieve the cars from disk...
         Set<Integer> actualCarIds = cars.stream().map(Car::getCarId).collect(toSet());
 
-        Assert.assertEquals(expectedCarIds, actualCarIds);
+        TestAssertions.assertEquals(expectedCarIds, actualCarIds);
         System.out.println("Loaded from disk: " + actualCarIds);
     }
 }

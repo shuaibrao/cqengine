@@ -15,8 +15,11 @@
  */
 package com.googlecode.cqengine.engine;
 
+import com.googlecode.cqengine.testutil.ExpectedException;
+
 import com.googlecode.cqengine.ConcurrentIndexedCollection;
 import com.googlecode.cqengine.IndexedCollection;
+import com.googlecode.cqengine.index.Index;
 import com.googlecode.cqengine.index.compound.CompoundIndex;
 import com.googlecode.cqengine.index.hash.HashIndex;
 import com.googlecode.cqengine.index.navigable.NavigableIndex;
@@ -35,8 +38,8 @@ import com.googlecode.cqengine.resultset.ResultSet;
 import com.googlecode.cqengine.testutil.Car;
 import com.googlecode.cqengine.testutil.CarFactory;
 import com.googlecode.cqengine.testutil.IterationCountingSet;
-import org.junit.Assert;
-import org.junit.Test;
+import com.googlecode.cqengine.testutil.TestAssertions;
+import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 import java.util.Iterator;
@@ -48,7 +51,8 @@ import static com.googlecode.cqengine.resultset.iterator.IteratorUtil.countEleme
 
 public class CollectionQueryEngineTest {
 
-    @Test(expected = IllegalStateException.class)
+    @Test
+    @ExpectedException(IllegalStateException.class)
     public void testAddIndex_ArgumentValidation1() {
         CollectionQueryEngine<Car> queryEngine = new CollectionQueryEngine<Car>();
         queryEngine.init(emptyObjectStore(), queryOptionsWithOnHeapPersistence());
@@ -56,7 +60,8 @@ public class CollectionQueryEngineTest {
         queryEngine.addIndex(null, noQueryOptions());
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
+    @ExpectedException(IllegalStateException.class)
     public void testUnexpectedQueryTye() {
         CollectionQueryEngine<Car> queryEngine = new CollectionQueryEngine<Car>();
         queryEngine.init(emptyObjectStore(), queryOptionsWithOnHeapPersistence());
@@ -71,11 +76,12 @@ public class CollectionQueryEngineTest {
 
     @Test
     public void testGetClassName() throws Exception {
-        Assert.assertEquals(CollectionQueryEngineTest.class.getName(), CollectionQueryEngine.getClassNameNullSafe(this));
-        Assert.assertNull(CollectionQueryEngine.getClassNameNullSafe(null));
+        TestAssertions.assertEquals(CollectionQueryEngineTest.class.getName(), CollectionQueryEngine.getClassNameNullSafe(this));
+        TestAssertions.assertNull(CollectionQueryEngine.getClassNameNullSafe(null));
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
+    @ExpectedException(IllegalStateException.class)
     public void testAddDuplicateStandingQueryIndex() {
         CollectionQueryEngine<Car> queryEngine = new CollectionQueryEngine<Car>();
         queryEngine.init(emptyObjectStore(), queryOptionsWithOnHeapPersistence());
@@ -84,7 +90,8 @@ public class CollectionQueryEngineTest {
         queryEngine.addIndex(StandingQueryIndex.onQuery(QueryFactory.has(Car.CAR_ID)), noQueryOptions());
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
+    @ExpectedException(IllegalStateException.class)
     public void testAddDuplicateCompoundIndex() {
         CollectionQueryEngine<Car> queryEngine = new CollectionQueryEngine<Car>();
         queryEngine.init(emptyObjectStore(), queryOptionsWithOnHeapPersistence());
@@ -98,12 +105,13 @@ public class CollectionQueryEngineTest {
         CollectionQueryEngine<Car> queryEngine = new CollectionQueryEngine<Car>();
         queryEngine.init(emptyObjectStore(), queryOptionsWithOnHeapPersistence());
 
-        Assert.assertTrue(queryEngine.isMutable());
+        TestAssertions.assertTrue(queryEngine.isMutable());
         queryEngine.addIndex(createImmutableIndex(), noQueryOptions());
-        Assert.assertFalse(queryEngine.isMutable());
+        TestAssertions.assertFalse(queryEngine.isMutable());
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
+    @ExpectedException(IllegalStateException.class)
     public void testEnsureMutable() {
         CollectionQueryEngine<Car> queryEngine = new CollectionQueryEngine<Car>();
         queryEngine.init(emptyObjectStore(), queryOptionsWithOnHeapPersistence());
@@ -112,7 +120,8 @@ public class CollectionQueryEngineTest {
         queryEngine.addAll(ObjectSet.fromCollection(Collections.singleton(CarFactory.createCar(1))), noQueryOptions());
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
+    @ExpectedException(IllegalStateException.class)
     public void testAddDuplicateIndex() {
         CollectionQueryEngine<Car> queryEngine = new CollectionQueryEngine<Car>();
         queryEngine.init(emptyObjectStore(), queryOptionsWithOnHeapPersistence());
@@ -131,6 +140,37 @@ public class CollectionQueryEngineTest {
     }
 
     @Test
+    public void testRegistersObjectStoreBackingIndexOnce() {
+        TrackingHashIndex backingIndex = new TrackingHashIndex();
+        ObjectStore<Car> objectStore = new ConcurrentOnHeapObjectStore<Car>() {
+            @Override
+            public Index<Car> getBackingIndex() {
+                return backingIndex;
+            }
+        };
+        CollectionQueryEngine<Car> queryEngine = new CollectionQueryEngine<Car>();
+
+        queryEngine.init(objectStore, queryOptionsWithOnHeapPersistence());
+
+        Iterator<Index<Car>> indexes = queryEngine.getIndexes().iterator();
+        TestAssertions.assertTrue(indexes.hasNext());
+        TestAssertions.assertSame(backingIndex, indexes.next());
+        TestAssertions.assertFalse(indexes.hasNext());
+        TestAssertions.assertEquals(1, backingIndex.initCount);
+    }
+
+    @Test
+    public void testObjectStoreWithoutBackingIndexAddsNothing() {
+        ObjectStore<Car> objectStore = emptyObjectStore();
+        CollectionQueryEngine<Car> queryEngine = new CollectionQueryEngine<Car>();
+
+        TestAssertions.assertNull(objectStore.getBackingIndex());
+        queryEngine.init(objectStore, queryOptionsWithOnHeapPersistence());
+
+        TestAssertions.assertEquals(0, countElements(queryEngine.getIndexes()));
+    }
+
+    @Test
     @SuppressWarnings({"MismatchedQueryAndUpdateOfCollection", "StatementWithEmptyBody"})
     public void testOrQueryCollectionScan() {
         IterationCountingSet<Car> iterationCountingSet = new IterationCountingSet<Car>(CarFactory.createCollectionOfCars(10));
@@ -144,7 +184,7 @@ public class CollectionQueryEngineTest {
         }
 
         // The two-branch or() query should have been evaluated by scanning the collection only once...
-        Assert.assertEquals(iterationCountingSet.size(), iterationCountingSet.getItemsIteratedCount());
+        TestAssertions.assertEquals(iterationCountingSet.size(), iterationCountingSet.getItemsIteratedCount());
     }
 
     @Test
@@ -158,8 +198,8 @@ public class CollectionQueryEngineTest {
         List<Car> carsList = resultSet.stream().collect(Collectors.toList());
         Iterator<Integer> carIds = resultSet.stream().map(Car::getCarId).iterator();
 
-        Assert.assertEquals(0, carsList.size());
-        Assert.assertFalse(carIds.hasNext());
+        TestAssertions.assertEquals(0, carsList.size());
+        TestAssertions.assertFalse(carIds.hasNext());
     }
 
     @Test
@@ -182,25 +222,26 @@ public class CollectionQueryEngineTest {
         HashIndex<Boolean, Car> index5 = HashIndex.onAttribute(forStandingQuery(equal(Car.MANUFACTURER, "Ford")));
         queryEngine.addIndex(index5, noQueryOptions());
 
-        Assert.assertEquals(5, countElements(queryEngine.getIndexes()));
+        TestAssertions.assertEquals(5, countElements(queryEngine.getIndexes()));
 
         queryEngine.removeIndex(index1, noQueryOptions());
-        Assert.assertEquals(4, countElements(queryEngine.getIndexes()));
+        TestAssertions.assertEquals(4, countElements(queryEngine.getIndexes()));
 
         queryEngine.removeIndex(index2, noQueryOptions());
-        Assert.assertEquals(3, countElements(queryEngine.getIndexes()));
+        TestAssertions.assertEquals(3, countElements(queryEngine.getIndexes()));
 
         queryEngine.removeIndex(index3, noQueryOptions());
-        Assert.assertEquals(2, countElements(queryEngine.getIndexes()));
+        TestAssertions.assertEquals(2, countElements(queryEngine.getIndexes()));
 
         queryEngine.removeIndex(index4, noQueryOptions());
-        Assert.assertEquals(1, countElements(queryEngine.getIndexes()));
+        TestAssertions.assertEquals(1, countElements(queryEngine.getIndexes()));
 
         queryEngine.removeIndex(index5, noQueryOptions());
-        Assert.assertEquals(0, countElements(queryEngine.getIndexes()));
+        TestAssertions.assertEquals(0, countElements(queryEngine.getIndexes()));
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
+    @ExpectedException(IllegalStateException.class)
     public void testRemoveIndex_ArgumentValidation1() {
         CollectionQueryEngine<Car> queryEngine = new CollectionQueryEngine<Car>();
         queryEngine.init(emptyObjectStore(), queryOptionsWithOnHeapPersistence());
@@ -227,5 +268,22 @@ public class CollectionQueryEngineTest {
                 return false;
             }
         };
+    }
+
+    static class TrackingHashIndex extends HashIndex<Integer, Car> {
+        int initCount;
+
+        TrackingHashIndex() {
+            super(
+                    new HashIndex.DefaultIndexMapFactory<Integer, Car>(),
+                    new HashIndex.DefaultValueSetFactory<Car>(),
+                    Car.CAR_ID);
+        }
+
+        @Override
+        public void init(ObjectStore<Car> objectStore, QueryOptions queryOptions) {
+            initCount++;
+            super.init(objectStore, queryOptions);
+        }
     }
 }

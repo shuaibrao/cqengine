@@ -22,8 +22,8 @@ import com.googlecode.cqengine.index.support.KeyStatistics;
 import com.googlecode.cqengine.index.support.KeyStatisticsIndex;
 import com.googlecode.cqengine.testutil.Car;
 import com.googlecode.cqengine.testutil.CarFactory;
-import org.junit.Assert;
-import org.junit.Test;
+import com.googlecode.cqengine.testutil.TestAssertions;
+import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
 import java.util.Set;
@@ -45,9 +45,9 @@ public class HashIndexTest {
         collection.addAll(CarFactory.createCollectionOfCars(20));
 
         Set<String> distinctModels = setOf(MODEL_INDEX.getDistinctKeys(noQueryOptions()));
-        Assert.assertEquals(setOf("Accord", "Avensis", "Civic", "Focus", "Fusion", "Hilux", "Insight", "M6", "Prius", "Taurus"), distinctModels);
+        TestAssertions.assertEquals(setOf("Accord", "Avensis", "Civic", "Focus", "Fusion", "Hilux", "Insight", "M6", "Prius", "Taurus"), distinctModels);
         for (String model : distinctModels) {
-            Assert.assertEquals(Integer.valueOf(2), MODEL_INDEX.getCountForKey(model, noQueryOptions()));
+            TestAssertions.assertEquals(Integer.valueOf(2), MODEL_INDEX.getCountForKey(model, noQueryOptions()));
         }
     }
 
@@ -59,7 +59,7 @@ public class HashIndexTest {
 
         collection.addAll(CarFactory.createCollectionOfCars(20));
 
-        Assert.assertEquals(Integer.valueOf(4), MANUFACTURER_INDEX.getCountOfDistinctKeys(noQueryOptions()));
+        TestAssertions.assertEquals(Integer.valueOf(4), MANUFACTURER_INDEX.getCountOfDistinctKeys(noQueryOptions()));
     }
 
     @Test
@@ -71,7 +71,7 @@ public class HashIndexTest {
         collection.addAll(CarFactory.createCollectionOfCars(20));
 
         Set<KeyStatistics<String>> keyStatistics = setOf(MANUFACTURER_INDEX.getStatisticsForDistinctKeys(noQueryOptions()));
-        Assert.assertEquals(setOf(
+        TestAssertions.assertEquals(setOf(
                         new KeyStatistics<String>("Ford", 6),
                         new KeyStatistics<String>("Honda", 6),
                         new KeyStatistics<String>("Toyota", 6),
@@ -90,7 +90,7 @@ public class HashIndexTest {
         // This is a bit hacky, but OTOH we should not break encapsulation of AbstractMapBasedAttributeIndex...
         Field valueSetFactoryField = AbstractMapBasedAttributeIndex.class.getDeclaredField("valueSetFactory");
         valueSetFactoryField.setAccessible(true);
-        Assert.assertTrue("HashIndex should be configured with CompactValueSetFactory",
+        TestAssertions.assertTrue("HashIndex should be configured with CompactValueSetFactory",
                 valueSetFactoryField.get(hashIndex) instanceof HashIndex.CompactValueSetFactory);
     }
 }

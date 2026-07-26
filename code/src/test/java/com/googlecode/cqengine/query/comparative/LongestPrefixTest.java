@@ -1,8 +1,7 @@
 package com.googlecode.cqengine.query.comparative;
 
 import static com.googlecode.cqengine.query.QueryFactory.*;
-import static org.junit.Assert.*;
-import static org.junit.Assert.assertEquals;
+import static com.googlecode.cqengine.testutil.TestAssertions.*;
 
 import com.googlecode.cqengine.ConcurrentIndexedCollection;
 import com.googlecode.cqengine.IndexedCollection;
@@ -12,18 +11,18 @@ import com.googlecode.cqengine.query.QueryFactory;
 import com.googlecode.cqengine.resultset.ResultSet;
 import com.googlecode.cqengine.testutil.MobileTerminating;
 import com.googlecode.cqengine.testutil.MobileTerminatingFactory;
-import com.tngtech.java.junit.dataprovider.DataProvider;
-import com.tngtech.java.junit.dataprovider.DataProviderRunner;
-import com.tngtech.java.junit.dataprovider.UseDataProvider;
-import org.junit.BeforeClass;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import com.googlecode.cqengine.attribute.Attribute;
 import com.googlecode.cqengine.attribute.SelfAttribute;
-import org.junit.runner.RunWith;
 
 import java.util.Arrays;
 import java.util.Iterator;
+import java.util.stream.Stream;
 
 /**
  * Unit tests for {@link LongestPrefix} query.
@@ -35,35 +34,32 @@ import java.util.Iterator;
  * <p>
  * These tests and the support for the {@link LongestPrefix} query, were contributed by Glen Lockhart of Openet-Labs.
  */
-@RunWith(DataProviderRunner.class)
 public class LongestPrefixTest {
 
     private static IndexedCollection<MobileTerminating> mobileTerminatingCache;
     private static IndexedCollection<MobileTerminating> mobileTerminatingCacheNoIndex;
 
-    @DataProvider
-    public static Object[][] mobileTerminatingScenarios() {
-        return new Object[][] {
-                {"35380",          "op1",       1},
-                {"35380123",       "op1",       1},
-                {"3538123",        "op2",       1},
-                {"35382",          "op3",       1},
-                {"353822",         "op4",       1},
-                {"35387",          "op5",       1},
-                {"3538712345",     "op6",       1},
-                {"44123",          "op7",       1},
-                {"4480",           "op8,op9",   2},
-                {"33380",          "op10",      1},
-                {"33381",          "op11",      1},
-                {"1234",           "op12",      1},
-                {"111",            "op13",      1},
-                {"777",            "",          0},
-                {"353",            "na",        1},
-                {"354",            "",          0},
-        };
+    public static Stream<Arguments> mobileTerminatingScenarios() {
+        return Stream.of(
+                Arguments.of("35380", "op1", 1),
+                Arguments.of("35380123", "op1", 1),
+                Arguments.of("3538123", "op2", 1),
+                Arguments.of("35382", "op3", 1),
+                Arguments.of("353822", "op4", 1),
+                Arguments.of("35387", "op5", 1),
+                Arguments.of("3538712345", "op6", 1),
+                Arguments.of("44123", "op7", 1),
+                Arguments.of("4480", "op8,op9", 2),
+                Arguments.of("33380", "op10", 1),
+                Arguments.of("33381", "op11", 1),
+                Arguments.of("1234", "op12", 1),
+                Arguments.of("111", "op13", 1),
+                Arguments.of("777", "", 0),
+                Arguments.of("353", "na", 1),
+                Arguments.of("354", "", 0));
     }
 
-    @BeforeClass
+    @BeforeAll
     public static void setupMTCache() {
         mobileTerminatingCache = new ConcurrentIndexedCollection<MobileTerminating>();
         mobileTerminatingCache.addIndex(InvertedRadixTreeIndex.onAttribute(MobileTerminating.PREFIX));
@@ -73,15 +69,15 @@ public class LongestPrefixTest {
         mobileTerminatingCacheNoIndex.addAll(MobileTerminatingFactory.getCollectionOfMobileTerminating());
     }
 
-    @Test
-    @UseDataProvider(value = "mobileTerminatingScenarios")
+    @ParameterizedTest(name = "indexed {0} -> {1}")
+    @MethodSource("mobileTerminatingScenarios")
     public void testLongestPrefix(String prefix, String expectedOperator, Integer expectedCount) {
         Query<MobileTerminating> q = longestPrefix(MobileTerminating.PREFIX, prefix);
         validateLongestPrefixWithCache(q, mobileTerminatingCache, expectedOperator, expectedCount);
     }
 
-    @Test
-    @UseDataProvider(value = "mobileTerminatingScenarios")
+    @ParameterizedTest(name = "scan {0} -> {1}")
+    @MethodSource("mobileTerminatingScenarios")
     public void testLongestPrefixWithoutIndex(String prefix, String expectedOperator, Integer expectedCount) {
         Query<MobileTerminating> q = longestPrefix(MobileTerminating.PREFIX, prefix);
         validateLongestPrefixWithCache(q, mobileTerminatingCacheNoIndex, expectedOperator, expectedCount);

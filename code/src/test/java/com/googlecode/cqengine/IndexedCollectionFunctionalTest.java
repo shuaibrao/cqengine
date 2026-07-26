@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -52,12 +53,7 @@ import com.googlecode.cqengine.testutil.Car;
 import com.googlecode.cqengine.testutil.CarFactory;
 import com.googlecode.cqengine.testutil.DiskConcurrentIndexedCollection;
 import com.googlecode.cqengine.testutil.OffHeapConcurrentIndexedCollection;
-import com.tngtech.java.junit.dataprovider.DataProvider;
-import com.tngtech.java.junit.dataprovider.DataProviderRunner;
-import com.tngtech.java.junit.dataprovider.UseDataProvider;
-import org.junit.AssumptionViolatedException;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.opentest4j.TestAbortedException;
 
 import java.io.File;
 import java.io.IOException;
@@ -68,14 +64,13 @@ import static com.googlecode.cqengine.query.QueryFactory.*;
 import static com.googlecode.cqengine.query.option.EngineThresholds.INDEX_ORDERING_SELECTIVITY;
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
-import static org.junit.Assert.*;
+import static com.googlecode.cqengine.testutil.TestAssertions.*;
 
 /**
  * Tests CQEngine handing a wide range of queries, with different configurations of indexes.
  *
  * @author Niall Gallagher
  */
-@RunWith(DataProviderRunner.class)
 public class IndexedCollectionFunctionalTest {
 
     static final Set<Car> REGULAR_DATASET = CarFactory.createCollectionOfCars(1000);
@@ -84,9 +79,10 @@ public class IndexedCollectionFunctionalTest {
     // Note: Unfortunately ObjectLockingIndexedCollection can slow down the functional test a lot when
     // disk indexes are in use (because it splits bulk inserts into a separate transaction per object).
     // Set this true to skip the slow scenarios *during development only!*...
-    static final boolean SKIP_SLOW_SCENARIOS =
-            "true".equalsIgnoreCase(System.getProperty("cqengine.skip.slow.scenarios")) // system property
-            || "true".equalsIgnoreCase(System.getenv("cqengine_skip_slow_scenarios")); // environment variable
+    static final boolean SKIP_SLOW_SCENARIOS = Boolean.parseBoolean(System.getProperty(
+            "cqengine.skip.slow.scenarios",
+            System.getenv("cqengine_skip_slow_scenarios")
+    ));
 
     static final boolean RUN_HIGH_PRIORITY_SCENARIOS_ONLY = false;
 
@@ -1468,8 +1464,8 @@ public class IndexedCollectionFunctionalTest {
         Boolean clearDataSet = false;
         Boolean alsoEvaluateWithIndexMergeStrategy = false;
         Iterable<? extends QueryToEvaluate> queriesToEvaluate = Collections.emptyList();
-        Iterable<Class> collectionImplementations;
-        Iterable<Iterable<Index>> indexCombinations;
+        Iterable<Class<?>> collectionImplementations;
+        Iterable<Iterable<Index<Car>>> indexCombinations;
     }
 
     public static class Scenario {
@@ -1484,15 +1480,16 @@ public class IndexedCollectionFunctionalTest {
         Query<Car> query = none(Car.class);
         QueryOptions queryOptions = noQueryOptions();
         ExpectedResults expectedResults = null;
-        Class collectionImplementation;
-        Iterable<Index> indexCombination;
+        Class<?> collectionImplementation;
+        Iterable<Index<Car>> indexCombination;
         boolean useIndexMergeStrategy = false;
         boolean highPriority = false;
 
         @Override
         public String toString() {
             return "[" +
-                    "name='" + name + '\'' +
+                    "scenarioNumber=" + scenarioNumber +
+                    ", name='" + name + '\'' +
                     ", line=" + lineNumber +
                     ", collection=" + collectionImplementation.getSimpleName().replace("IndexedCollection", "").toLowerCase() +
                     ", indexes=" + getIndexDescriptions(indexCombination) +
@@ -1507,8 +1504,14 @@ public class IndexedCollectionFunctionalTest {
         }
     }
 
-    @DataProvider
-    public static List<List<Object>> expandMacroScenarios() {
+    public static List<List<Object>> expandMacroScenarios(
+            int shardIndex, int shardCount, int expectedScenarioCount) {
+        if (shardCount < 1) {
+            throw new IllegalArgumentException("shardCount must be greater than zero");
+        }
+        if (shardIndex < 0 || shardIndex >= shardCount) {
+            throw new IllegalArgumentException("shardIndex must be between zero and shardCount - 1");
+        }
         List<MacroScenario> macroScenarios = getMacroScenarios();
         List<List<Object>> scenarios = new ArrayList<List<Object>>();
         final long finalStartTime = System.currentTimeMillis();
@@ -1516,8 +1519,8 @@ public class IndexedCollectionFunctionalTest {
         for (int i = 0; i < macroScenarios.size(); i++) {
             final MacroScenario macroScenario = macroScenarios.get(i);
             try {
-                for (final Class currentCollectionImplementation : macroScenario.collectionImplementations) {
-                    for (final Iterable<Index> currentIndexCombination : macroScenario.indexCombinations) {
+                for (final Class<?> currentCollectionImplementation : macroScenario.collectionImplementations) {
+                    for (final Iterable<Index<Car>> currentIndexCombination : macroScenario.indexCombinations) {
                         for (final QueryToEvaluate currentQueryToEvaluate : macroScenario.queriesToEvaluate) {
                             Scenario scenario = new Scenario() {{
                                 name = macroScenario.name;
@@ -1563,6 +1566,22 @@ public class IndexedCollectionFunctionalTest {
                 throw new IllegalStateException("Configuration issue for MacroScenario " + i + " in the list: " + macroScenario.name, e);
             }
         }
+        int expandedScenarioCount = scenarioCount.get();
+        if (expandedScenarioCount != expectedScenarioCount) {
+            throw new IllegalStateException("Expected " + expectedScenarioCount
+                    + " functional scenarios but expanded " + expandedScenarioCount);
+        }
+        List<List<Object>> selectedScenarios = new ArrayList<List<Object>>();
+        for (List<Object> scenarioArguments : scenarios) {
+            Scenario scenario = (Scenario) scenarioArguments.get(0);
+            if ((scenario.scenarioNumber - 1) % shardCount == shardIndex) {
+                selectedScenarios.add(scenarioArguments);
+            }
+        }
+        scenarios = selectedScenarios;
+        System.out.println("    === Functional shard " + shardIndex + "/"
+                + shardCount + ": " + scenarios.size() + "/" + expandedScenarioCount
+                + " scenarios ===");
         if (SKIP_SLOW_SCENARIOS) {
             System.out.println("    === Note: slow scenarios in the functional test are disabled ===");
         } else {
@@ -1571,12 +1590,10 @@ public class IndexedCollectionFunctionalTest {
         return scenarios;
     }
 
-    @Test
-    @UseDataProvider(value = "expandMacroScenarios")
     @SuppressWarnings("unchecked")
     public void testScenario(Scenario scenario) {
         if (RUN_HIGH_PRIORITY_SCENARIOS_ONLY && !scenario.highPriority) {
-            throw new AssumptionViolatedException("Skipping non-high priority scenario");
+            throw new TestAbortedException("Skipping non-high priority scenario");
         }
 
         if (!IndexedCollection.class.isAssignableFrom(scenario.collectionImplementation)) {
@@ -1675,7 +1692,8 @@ public class IndexedCollectionFunctionalTest {
                 lastStatusTimestamp = currentTime;
             }
             if (persistence instanceof CompositePersistence) {
-                CompositePersistence compositePersistence = (CompositePersistence) persistence;
+                CompositePersistence<Car, Integer> compositePersistence =
+                        (CompositePersistence<Car, Integer>) persistence;
                 closePersistenceIfNecessary(compositePersistence.getPrimaryPersistence());
                 closePersistenceIfNecessary(compositePersistence.getSecondaryPersistence());
                 List<? extends Persistence<Car, Integer>> additionalPersistences = compositePersistence.getAdditionalPersistences();
@@ -1689,9 +1707,10 @@ public class IndexedCollectionFunctionalTest {
         }
     }
 
+    @SuppressWarnings("unchecked") // Runtime type check establishes the persistence implementation and key types.
     static void closePersistenceIfNecessary(Persistence<Car, Integer> persistence) {
         if (persistence instanceof DiskPersistence) {
-            DiskPersistence diskPersistence = (DiskPersistence) persistence;
+            DiskPersistence<Car, Integer> diskPersistence = (DiskPersistence<Car, Integer>) persistence;
             diskPersistence.close();
             File diskPersistenceFile = diskPersistence.getFile();
             if (!diskPersistenceFile.delete()) {
@@ -1707,7 +1726,7 @@ public class IndexedCollectionFunctionalTest {
         if (persistence != null && !(persistence instanceof OnHeapPersistence)) {
             // Persistence is non-heap therefore has a primary key index already.
             if (indexToBeAdded instanceof AttributeIndex) {
-                if (Car.CAR_ID.equals(((AttributeIndex) indexToBeAdded).getAttribute())) {
+                if (Car.CAR_ID.equals(((AttributeIndex<?, ?>) indexToBeAdded).getAttribute())) {
                     // Collection will already have an identity index on this attribute...
                     return true;
                 }
@@ -1887,28 +1906,37 @@ public class IndexedCollectionFunctionalTest {
         }
     }
 
-    @SuppressWarnings("unchecked")
-    static List<Class> classes(Class<?>... indexedCollectionClasses) {
-        return Arrays.<Class>asList(indexedCollectionClasses);
+    static List<Class<?>> classes(Class<?>... indexedCollectionClasses) {
+        return Arrays.asList(indexedCollectionClasses);
 
     }
 
-    static Iterable<? extends Index> noIndexes() {
+    static Iterable<Index<Car>> noIndexes() {
         return indexCombination();
     }
-    static Iterable<Index> indexCombination(Index... indexes) {
-        return Arrays.asList(indexes);
+
+    @SafeVarargs
+    static Iterable<Index<Car>> indexCombination(Index<Car>... indexes) {
+        List<Index<Car>> result = new ArrayList<Index<Car>>(indexes.length);
+        for (Index<Car> index : indexes) {
+            result.add(index);
+        }
+        return result;
     }
 
-    @SuppressWarnings("unchecked")
-    static Iterable<Iterable<Index>> indexCombinations(Iterable... indexSets) {
-        return Arrays.<Iterable<Index>>asList(indexSets);
+    @SafeVarargs
+    static Iterable<Iterable<Index<Car>>> indexCombinations(Iterable<Index<Car>>... indexSets) {
+        List<Iterable<Index<Car>>> result = new ArrayList<Iterable<Index<Car>>>(indexSets.length);
+        for (Iterable<Index<Car>> indexSet : indexSets) {
+            result.add(indexSet);
+        }
+        return result;
     }
 
-    static String getIndexDescriptions(Iterable<Index> indexes) {
+    static String getIndexDescriptions(Iterable<? extends Index<?>> indexes) {
         StringBuilder sb = new StringBuilder("[");
-        for (Iterator<Index> iterator = indexes.iterator(); iterator.hasNext(); ) {
-            Index index = iterator.next();
+        for (Iterator<? extends Index<?>> iterator = indexes.iterator(); iterator.hasNext(); ) {
+            Index<?> index = iterator.next();
             sb.append(getIndexDescription(index));
             if (iterator.hasNext()) {
                 sb.append(", ");
@@ -1918,7 +1946,7 @@ public class IndexedCollectionFunctionalTest {
         return sb.toString();
     }
 
-    static String getIndexDescription(Index index) {
+    static String getIndexDescription(Index<?> index) {
         String description = index.getClass().getSimpleName();
         if (description.isEmpty()) {
             // Anonymous inner class, use enclosing class name...
@@ -1931,7 +1959,7 @@ public class IndexedCollectionFunctionalTest {
             description += ".onAttribute(<CompoundAttribute>)";
         }
         else if (index instanceof AttributeIndex) {
-            Attribute attribute = ((AttributeIndex) index).getAttribute();
+            Attribute<?, ?> attribute = ((AttributeIndex<?, ?>) index).getAttribute();
             if (attribute instanceof StandingQueryAttribute) {
                 description += ".onAttribute(" + attribute.getAttributeName() + ")";
             }
@@ -1966,6 +1994,8 @@ public class IndexedCollectionFunctionalTest {
     }
 
     static class AppendableCollection extends LinkedList<String> implements Appendable {
+
+        private static final long serialVersionUID = 1L;
 
         final String lineSeparator = System.getProperty("line.separator");
         @Override

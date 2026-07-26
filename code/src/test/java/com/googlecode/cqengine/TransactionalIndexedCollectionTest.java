@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,28 +16,31 @@
  */
 package com.googlecode.cqengine;
 
-import com.google.common.collect.testing.SetTestSuiteBuilder;
-import com.google.common.collect.testing.TestStringSetGenerator;
-import com.google.common.collect.testing.features.CollectionFeature;
-import com.google.common.collect.testing.features.CollectionSize;
 import com.googlecode.cqengine.persistence.offheap.OffHeapPersistence;
 import com.googlecode.cqengine.persistence.onheap.OnHeapPersistence;
 import com.googlecode.cqengine.persistence.support.CollectionWrappingObjectStore;
 import com.googlecode.cqengine.persistence.support.ObjectStore;
+import com.googlecode.cqengine.persistence.support.PersistenceFlags;
 import com.googlecode.cqengine.query.QueryFactory;
+import com.googlecode.cqengine.query.option.FlagsEnabled;
+import com.googlecode.cqengine.query.option.QueryOptions;
 import com.googlecode.cqengine.resultset.ResultSet;
 import com.googlecode.cqengine.resultset.stored.StoredSetBasedResultSet;
 import com.googlecode.cqengine.testutil.Car;
-import junit.framework.TestCase;
-import junit.framework.TestSuite;
-import org.junit.Assert;
+import com.googlecode.cqengine.testutil.MutableSetContract;
+import com.googlecode.cqengine.testutil.TestAssertions;
+import org.junit.jupiter.api.DynamicTest;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestFactory;
 
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.stream.Stream;
 
 import static com.googlecode.cqengine.query.QueryFactory.*;
 import static com.googlecode.cqengine.query.option.ArgumentValidationStrategy.SKIP;
 import static com.googlecode.cqengine.testutil.CarFactory.createCar;
+import static com.googlecode.cqengine.testutil.TestAssertions.*;
 import static java.util.Arrays.asList;
 
 /**
@@ -44,48 +48,33 @@ import static java.util.Arrays.asList;
  * which applies to all implementations of {@link IndexedCollection} can be found in
  * {@link com.googlecode.cqengine.IndexedCollectionFunctionalTest}.
  * <p/>
- * In addition to the unit tests in this class, this class also runs a further several hundred unit tests in
- * <a href="https://code.google.com/p/guava-libraries/source/browse/guava-testlib">guava-testlib</a> on the
- * IndexedCollection to validate its compliance with the API specifications of java.util.Set.
+ * The Jupiter behavior matrix in this class validates the mutable {@link Set} contract for on-heap and off-heap
+ * collections.
  *
  * @author Niall Gallagher
  */
-public class TransactionalIndexedCollectionTest extends TestCase {
+public class TransactionalIndexedCollectionTest {
 
-    public static junit.framework.Test suite() {
-        TestSuite suite = new TestSuite();
-        suite.addTest(SetTestSuiteBuilder.using(onHeapIndexedCollectionGenerator())
-                .withFeatures(CollectionSize.ANY, CollectionFeature.GENERAL_PURPOSE)
-                .named("OnHeap_TransactionalIndexedCollectionAPICompliance")
-                .createTestSuite());
-        suite.addTest(SetTestSuiteBuilder.using(offHeapIndexedCollectionGenerator())
-                .withFeatures(CollectionSize.ANY, CollectionFeature.GENERAL_PURPOSE)
-                .named("OffHeap_TransactionalIndexedCollectionAPICompliance")
-                .createTestSuite());
-        suite.addTestSuite(TransactionalIndexedCollectionTest.class);
-        return suite;
+    @TestFactory
+    Stream<DynamicTest> mutableSetContract() {
+        return Stream.concat(
+                MutableSetContract.tests("on-heap TransactionalIndexedCollection", TransactionalIndexedCollectionTest::newOnHeapCollection),
+                MutableSetContract.tests("off-heap TransactionalIndexedCollection", TransactionalIndexedCollectionTest::newOffHeapCollection));
     }
 
-    private static TestStringSetGenerator onHeapIndexedCollectionGenerator() {
-        return new TestStringSetGenerator() {
-            @Override protected Set<String> create(String[] elements) {
-                IndexedCollection<String> indexedCollection = new TransactionalIndexedCollection<String>(String.class, OnHeapPersistence.onPrimaryKey(QueryFactory.selfAttribute(String.class)));
-                indexedCollection.addAll(Arrays.asList(elements));
-                return indexedCollection;
-            }
-        };
+    private static Set<String> newOnHeapCollection() {
+        return new TransactionalIndexedCollection<String>(
+                String.class,
+                OnHeapPersistence.onPrimaryKey(QueryFactory.selfAttribute(String.class)));
     }
 
-    private static TestStringSetGenerator offHeapIndexedCollectionGenerator() {
-        return new TestStringSetGenerator() {
-            @Override protected Set<String> create(String[] elements) {
-                IndexedCollection<String> indexedCollection = new TransactionalIndexedCollection<String>(String.class, OffHeapPersistence.onPrimaryKey(QueryFactory.selfAttribute(String.class)));
-                indexedCollection.addAll(Arrays.asList(elements));
-                return indexedCollection;
-            }
-        };
+    private static Set<String> newOffHeapCollection() {
+        return new TransactionalIndexedCollection<String>(
+                String.class,
+                OffHeapPersistence.onPrimaryKey(QueryFactory.selfAttribute(String.class)));
     }
 
+    @Test
     public void testWritePath() {
         TransactionalIndexedCollection<Car> collection = new TransactionalIndexedCollection<Car>(Car.class);
         // Version number initially starts at 1...
@@ -114,6 +103,7 @@ public class TransactionalIndexedCollectionTest extends TestCase {
         assertEquals(8, collection.currentVersion.versionNumber);
     }
 
+    @Test
     public void testReadPath() throws InterruptedException, ExecutionException {
         // Set up the initial collection to contain 2 objects...
         final TransactionalIndexedCollection<Car> collection = new TransactionalIndexedCollection<Car>(Car.class);
@@ -173,26 +163,27 @@ public class TransactionalIndexedCollectionTest extends TestCase {
         // Make this control thread sleep to allow time for the writing thread to enter update() where it should block...
         Thread.sleep(1000L);
         // Assert that the writing thread is indeed blocked...
-        Assert.assertFalse("Writing thread should block while there is an open ResultSet", writeFinishedSignal.tryAcquire());
+        TestAssertions.assertFalse("Writing thread should block while there is an open ResultSet", writeFinishedSignal.tryAcquire());
 
         // Unblock the reading thread to allow it to read objects from the ResultSet it opened earlier,
         // and then to close its ResultSet...
         readBlock.release();
         // Now validate that the reading thread did not see any of the modifications submitted to the writing thread...
-        Assert.assertEquals(asSet(createCar(1), createCar(2)), resultsFromFirstRead.get());
+        TestAssertions.assertEquals(asSet(createCar(1), createCar(2)), resultsFromFirstRead.get());
 
         // Make this control thread sleep to allow time for the writing thread to finish...
         Thread.sleep(1000L);
         // Assert that the writing thread is now unblocked...
-        Assert.assertTrue("Writing thread should have completed after the open ResultSet was closed", writeFinishedSignal.tryAcquire());
+        TestAssertions.assertTrue("Writing thread should have completed after the open ResultSet was closed", writeFinishedSignal.tryAcquire());
 
         // Now validate (in this control thread) that the modifications by the writing thread are visible...
         ResultSet<Car> resultsFromSecondRead = collection.retrieve(all(Car.class));
         Set<Car> materializedResultsFromSecondRead = asSet(resultsFromSecondRead);
         resultsFromSecondRead.close();
-        Assert.assertEquals(asSet(createCar(1), createCar(3), createCar(4)), materializedResultsFromSecondRead);
+        TestAssertions.assertEquals(asSet(createCar(1), createCar(3), createCar(4)), materializedResultsFromSecondRead);
     }
 
+    @Test
     public void testConstructor() {
         TransactionalIndexedCollection<Car> indexedCollection = new TransactionalIndexedCollection<Car>(
                 Car.class,
@@ -202,6 +193,21 @@ public class TransactionalIndexedCollectionTest extends TestCase {
         assertEquals(1L, indexedCollection.currentVersion.versionNumber);
     }
 
+    @Test
+    public void testWritesRemainVisibleToRequestScopeOverrides() {
+        DirectionAwareTransactionalCollection collection =
+                new DirectionAwareTransactionalCollection();
+
+        collection.writeScopes.clear();
+        collection.update(Collections.<String>emptySet(), Collections.singleton("one"));
+        TestAssertions.assertEquals(Collections.singletonList(Boolean.TRUE), collection.writeScopes);
+
+        collection.writeScopes.clear();
+        collection.retainAll(Collections.singleton("one"));
+        TestAssertions.assertEquals(Collections.singletonList(Boolean.TRUE), collection.writeScopes);
+    }
+
+    @Test
     public void testArgumentValidation_NotDisjoint() {
         Set<Integer> s1 = asSet(1, 2, 3);
         Set<Integer> s2 = asSet(3, 4, 5); // overlaps
@@ -215,6 +221,7 @@ public class TransactionalIndexedCollectionTest extends TestCase {
         }
     }
 
+    @Test
     public void testArgumentValidation_NotDisjoint_ValidationSkipped() {
         Set<Integer> s1 = asSet(1, 2, 3);
         Set<Integer> s2 = asSet(3, 4, 5); // overlaps
@@ -222,6 +229,7 @@ public class TransactionalIndexedCollectionTest extends TestCase {
         indexedCollection.update(s1, s2, queryOptions(argumentValidation(SKIP)));
     }
 
+    @Test
     public void testArgumentValidation_Disjoint() {
         Set<Integer> s1 = asSet(1, 2, 3);
         Set<Integer> s2 = asSet(4, 5, 6); // does not overlap
@@ -229,6 +237,7 @@ public class TransactionalIndexedCollectionTest extends TestCase {
         indexedCollection.update(s1, s2);
     }
 
+    @Test
     public void testStrictReplacement() {
         {
             // Verify that with STRICT_REPLACEMENT, when some objects to be replaced are not stored, collection is not modified...
@@ -253,6 +262,7 @@ public class TransactionalIndexedCollectionTest extends TestCase {
         }
     }
 
+    @Test
     public void testIterableContains() {
         final Set<Integer> collection = asSet(1, 2, 3);
         ResultSet<Integer> resultSet = new StoredSetBasedResultSet<Integer>(collection);
@@ -266,6 +276,7 @@ public class TransactionalIndexedCollectionTest extends TestCase {
         assertFalse(TransactionalIndexedCollection.iterableContains(iterable, 4));
     }
 
+    @Test
     public void testObjectStoreContainsAllIterable() {
         final ObjectStore<Integer> objectStore = new CollectionWrappingObjectStore<Integer>(asSet(1, 2, 3));
 
@@ -279,6 +290,33 @@ public class TransactionalIndexedCollectionTest extends TestCase {
         assertTrue(TransactionalIndexedCollection.objectStoreContainsAllIterable(objectStore, asIterable(Collections.<Integer>emptySet()), noQueryOptions()));
     }
 
+    static class DirectionAwareTransactionalCollection
+            extends TransactionalIndexedCollection<String> {
+        final List<Boolean> writeScopes = new ArrayList<Boolean>();
+        boolean constructed;
+
+        DirectionAwareTransactionalCollection() {
+            super(String.class);
+            constructed = true;
+        }
+
+        @Override
+        protected RequestScope openRequestScope(QueryOptions queryOptions) {
+            if (!constructed) {
+                throw new AssertionError("Request-scope override invoked during construction");
+            }
+            boolean write = FlagsEnabled.isFlagEnabled(
+                    queryOptions, PersistenceFlags.WRITE_REQUEST);
+            boolean read = FlagsEnabled.isFlagEnabled(
+                    queryOptions, PersistenceFlags.READ_REQUEST);
+            if (!write || read) {
+                throw new AssertionError("Transactional mutation was not classified as write");
+            }
+            writeScopes.add(Boolean.TRUE);
+            return super.openRequestScope(queryOptions);
+        }
+    }
+
     static <O> Iterable<O> asIterable(final Collection<O> collection) {
         return new Iterable<O>() {
             @Override
@@ -287,8 +325,13 @@ public class TransactionalIndexedCollectionTest extends TestCase {
             }
         };
     }
+    @SafeVarargs
     static <O> Set<O> asSet(O... objects) {
-        return new LinkedHashSet<O>(asList(objects));
+        Set<O> result = new LinkedHashSet<O>();
+        for (O object : objects) {
+            result.add(object);
+        }
+        return result;
     }
     static <O> Set<O> asSet(ResultSet<O> resultSet) {
         Set<O> results = new LinkedHashSet<O>();

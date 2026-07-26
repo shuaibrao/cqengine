@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +17,7 @@
 package com.googlecode.cqengine.entity;
 
 import com.googlecode.cqengine.testutil.Car;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
@@ -35,6 +36,7 @@ public class MapEntityTest extends RegularMapTest {
         super.testMapFunctionality();
     }
 
+    @SuppressWarnings("rawtypes") // Overrides the legacy raw-Map test fixture contract.
     protected Map buildNewCar(int carId, String manufacturer, String model, Car.Color color, int doors, double price, List<String> features) {
         return mapEntity(createMap(carId, manufacturer, model, color, doors, price, features));
     }

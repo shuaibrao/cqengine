@@ -21,12 +21,12 @@ import com.googlecode.cqengine.query.Query;
 import com.googlecode.cqengine.query.logical.And;
 import com.googlecode.cqengine.query.logical.Or;
 import com.googlecode.cqengine.resultset.ResultSet;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 
 import static com.googlecode.cqengine.query.QueryFactory.*;
 import static java.util.Arrays.asList;
-import static org.junit.Assert.*;
+import static com.googlecode.cqengine.testutil.TestAssertions.*;
 
 public class NoneTest {
 

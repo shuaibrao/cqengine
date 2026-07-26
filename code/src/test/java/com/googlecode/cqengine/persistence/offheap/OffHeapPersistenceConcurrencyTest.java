@@ -20,8 +20,8 @@ import com.googlecode.cqengine.IndexedCollection;
 import com.googlecode.cqengine.resultset.ResultSet;
 import com.googlecode.cqengine.testutil.Car;
 import com.googlecode.cqengine.testutil.CarFactory;
-import org.junit.Assert;
-import org.junit.Test;
+import com.googlecode.cqengine.testutil.TestAssertions;
+import org.junit.jupiter.api.Test;
 
 import java.util.*;
 import java.util.concurrent.ExecutorService;
@@ -65,7 +65,7 @@ public class OffHeapPersistenceConcurrencyTest {
                 "WritingTask 1 finished removing 1 item" // Finally was granted write lock
 
         );
-        Assert.assertEquals(expected, sequenceLog);
+        TestAssertions.assertEquals(expected, sequenceLog);
 
     }
 

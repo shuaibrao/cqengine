@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2019 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +24,7 @@ import com.googlecode.cqengine.index.support.KeyValue;
 import com.googlecode.cqengine.index.support.KeyValueMaterialized;
 import com.googlecode.cqengine.testutil.Car;
 import com.googlecode.cqengine.testutil.CarFactory;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 import java.util.LinkedHashSet;
@@ -32,7 +33,7 @@ import java.util.Set;
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
 import static java.util.stream.Collectors.toSet;
-import static org.junit.Assert.*;
+import static com.googlecode.cqengine.testutil.TestAssertions.*;
 
 /**
  * Unit tests for {@link AttributeMetadata}.
@@ -142,8 +143,13 @@ public class AttributeMetadataTest {
         return collection;
     }
 
+    @SafeVarargs
     static <T> Set<T> asSet(T... elements) {
-        return new LinkedHashSet<>(asList(elements));
+        Set<T> result = new LinkedHashSet<T>();
+        for (T element : elements) {
+            result.add(element);
+        }
+        return result;
     }
 
     static <A> KeyFrequency<A> frequency(A value, int count) {

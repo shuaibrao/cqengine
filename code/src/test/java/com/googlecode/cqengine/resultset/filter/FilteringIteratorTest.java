@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,17 +16,20 @@
  */
 package com.googlecode.cqengine.resultset.filter;
 
+import com.googlecode.cqengine.testutil.ExpectedException;
+
 import com.googlecode.cqengine.query.option.QueryOptions;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.List;
 import java.util.NoSuchElementException;
 
 import static com.googlecode.cqengine.query.QueryFactory.noQueryOptions;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.CoreMatchers.nullValue;
-import static org.junit.Assert.assertThat;
+import static com.googlecode.cqengine.testutil.TestAssertions.assertEquals;
+import static com.googlecode.cqengine.testutil.TestAssertions.assertFalse;
+import static com.googlecode.cqengine.testutil.TestAssertions.assertNull;
+import static com.googlecode.cqengine.testutil.TestAssertions.assertTrue;
 
 public class FilteringIteratorTest {
     @Test
@@ -40,7 +44,7 @@ public class FilteringIteratorTest {
         iterator.hasNext();
         iterator.hasNext();
         iterator.hasNext();
-        assertThat(iterator.next(), is("abc"));
+        assertEquals("abc", iterator.next());
     }
 
     @Test
@@ -52,7 +56,7 @@ public class FilteringIteratorTest {
                 return true;
             }
         };
-        assertThat(iterator.next(), is("abc"));
+        assertEquals("abc", iterator.next());
     }
 
     @Test
@@ -64,10 +68,10 @@ public class FilteringIteratorTest {
                 return true;
             }
         };
-        assertThat(iterator.next(), is("abc"));
-        assertThat(iterator.next(), nullValue());
-        assertThat(iterator.next(), is("cde"));
-        assertThat(iterator.hasNext(), is(false));
+        assertEquals("abc", iterator.next());
+        assertNull(iterator.next());
+        assertEquals("cde", iterator.next());
+        assertFalse(iterator.hasNext());
     }
 
     @Test
@@ -79,9 +83,9 @@ public class FilteringIteratorTest {
                 return object.startsWith("aa");
             }
         };
-        assertThat(iterator.next(), is("aaa"));
-        assertThat(iterator.next(), is("aab"));
-        assertThat(iterator.hasNext(), is(false));
+        assertEquals("aaa", iterator.next());
+        assertEquals("aab", iterator.next());
+        assertFalse(iterator.hasNext());
     }
 
     @Test
@@ -94,8 +98,8 @@ public class FilteringIteratorTest {
             }
         };
 
-        assertThat(iterator.hasNext(), is(false));
-        assertThat(iterator.hasNext(), is(false));
+        assertFalse(iterator.hasNext());
+        assertFalse(iterator.hasNext());
     }
 
     @Test
@@ -108,14 +112,15 @@ public class FilteringIteratorTest {
             }
         };
 
-        assertThat(iterator.hasNext(), is(true));
-        assertThat("first string value", iterator.next(), is("aaa"));
-        assertThat(iterator.hasNext(), is(true));
-        assertThat("second null value", iterator.next(), nullValue());
-        assertThat(iterator.hasNext(), is(true));
+        assertTrue(iterator.hasNext());
+        assertEquals("first string value", "aaa", iterator.next());
+        assertTrue(iterator.hasNext());
+        assertNull("second null value", iterator.next());
+        assertTrue(iterator.hasNext());
     }
 
-    @Test(expected = NoSuchElementException.class)
+    @Test
+    @ExpectedException(NoSuchElementException.class)
     public void testEmptyDelegate() {
         List<String> testList = Arrays.asList();
         FilteringIterator<String> iterator = new FilteringIterator<String>(testList.iterator(), noQueryOptions()) {

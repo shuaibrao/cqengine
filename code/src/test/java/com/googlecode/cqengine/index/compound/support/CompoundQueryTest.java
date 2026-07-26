@@ -16,10 +16,10 @@
 package com.googlecode.cqengine.index.compound.support;
 
 import com.googlecode.cqengine.testutil.Car;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import static com.googlecode.cqengine.query.QueryFactory.*;
-import static org.junit.Assert.*;
+import static com.googlecode.cqengine.testutil.TestAssertions.*;
 
 /**
  * @author niall.gallagher

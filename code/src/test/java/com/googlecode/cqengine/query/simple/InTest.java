@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +16,8 @@
  */
 package com.googlecode.cqengine.query.simple;
 
+import com.googlecode.cqengine.testutil.ExpectedException;
+
 import com.googlecode.cqengine.ConcurrentIndexedCollection;
 import com.googlecode.cqengine.IndexedCollection;
 import com.googlecode.cqengine.attribute.Attribute;
@@ -22,8 +25,8 @@ import com.googlecode.cqengine.attribute.SimpleNullableAttribute;
 import com.googlecode.cqengine.examples.introduction.Car;
 import com.googlecode.cqengine.index.navigable.NavigableIndex;
 import com.googlecode.cqengine.query.option.QueryOptions;
-import org.junit.Assert;
-import org.junit.Test;
+import com.googlecode.cqengine.testutil.TestAssertions;
+import org.junit.jupiter.api.Test;
 
 import java.util.*;
 
@@ -52,8 +55,8 @@ public class InTest {
         cars.add(new Car(2, "honda", null, null));
         cars.add(new Car(3, "toyota", null, null));
 
-        Assert.assertEquals(cars.retrieve(in(NAME, "ford", "honda")).size(), 2);
-        Assert.assertEquals(cars.retrieve(in(NAME, Arrays.asList("ford", "honda"))).size(), 2);
+        TestAssertions.assertEquals(cars.retrieve(in(NAME, "ford", "honda")).size(), 2);
+        TestAssertions.assertEquals(cars.retrieve(in(NAME, Arrays.asList("ford", "honda"))).size(), 2);
     }
 
     @Test
@@ -73,8 +76,8 @@ public class InTest {
         cars.add(new Car(2, "honda", null, null));
         cars.add(new Car(3, "toyota", null, null));
 
-        Assert.assertEquals(cars.retrieve(in(NAME, "ford")).size(), 1);
-        Assert.assertEquals(cars.retrieve(in(NAME, Collections.singletonList("ford"))).size(), 1);
+        TestAssertions.assertEquals(cars.retrieve(in(NAME, "ford")).size(), 1);
+        TestAssertions.assertEquals(cars.retrieve(in(NAME, Collections.singletonList("ford"))).size(), 1);
     }
 
     @Test
@@ -94,11 +97,12 @@ public class InTest {
         cars.add(new Car(2, "honda", null, null));
         cars.add(new Car(3, "toyota", null, null));
 
-        Assert.assertEquals(cars.retrieve(in(NAME)).size(), 0);
-        Assert.assertEquals(cars.retrieve(in(NAME, new ArrayList<String>())).size(), 0);
+        TestAssertions.assertEquals(cars.retrieve(in(NAME)).size(), 0);
+        TestAssertions.assertEquals(cars.retrieve(in(NAME, new ArrayList<String>())).size(), 0);
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
+    @ExpectedException(NullPointerException.class)
     public void testInNull() {
         Attribute<Car, String> NAME = new SimpleNullableAttribute<Car, String>("name") {
             public String getValue(Car car, QueryOptions queryOptions) {
@@ -106,5 +110,24 @@ public class InTest {
             }
         };
         in(NAME, (Collection<String>) null);
+    }
+
+    @Test
+    public void snapshotsValuesToKeepItsCachedHashAndMatchesStable() {
+        Attribute<Car, String> name = new SimpleNullableAttribute<Car, String>("name") {
+            public String getValue(Car car, QueryOptions queryOptions) {
+                return car.name;
+            }
+        };
+        Set<String> sourceValues = new LinkedHashSet<String>(Arrays.asList("ford", "honda"));
+        In<Car, String> query = new In<Car, String>(name, true, sourceValues);
+        int originalHashCode = query.hashCode();
+
+        sourceValues.clear();
+        sourceValues.add("toyota");
+
+        TestAssertions.assertEquals(Arrays.asList("ford", "honda"), new ArrayList<String>(query.getValues()));
+        TestAssertions.assertEquals(originalHashCode, query.hashCode());
+        TestAssertions.assertThrows(UnsupportedOperationException.class, () -> query.getValues().add("toyota"));
     }
 }

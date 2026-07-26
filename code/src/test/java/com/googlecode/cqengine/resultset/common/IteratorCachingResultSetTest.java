@@ -17,13 +17,13 @@ package com.googlecode.cqengine.resultset.common;
 
 import com.googlecode.cqengine.resultset.ResultSet;
 import com.googlecode.cqengine.testutil.Car;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.Iterator;
 
 import static com.googlecode.cqengine.testutil.CarFactory.createCar;
-import static org.junit.Assert.assertNotSame;
-import static org.junit.Assert.assertSame;
+import static com.googlecode.cqengine.testutil.TestAssertions.assertNotSame;
+import static com.googlecode.cqengine.testutil.TestAssertions.assertSame;
 import static org.mockito.Mockito.*;
 
 /**

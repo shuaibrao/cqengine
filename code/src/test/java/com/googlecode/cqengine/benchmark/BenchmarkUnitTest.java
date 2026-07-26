@@ -18,11 +18,11 @@ package com.googlecode.cqengine.benchmark;
 import com.googlecode.cqengine.benchmark.tasks.*;
 import com.googlecode.cqengine.testutil.Car;
 import com.googlecode.cqengine.testutil.CarFactory;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.Collection;
 
-import static org.junit.Assert.*;
+import static com.googlecode.cqengine.testutil.TestAssertions.*;
 
 /**
  * Tests for the benchmark itself.

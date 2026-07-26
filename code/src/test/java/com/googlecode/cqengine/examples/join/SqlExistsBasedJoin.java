@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +20,7 @@ import com.googlecode.cqengine.ConcurrentIndexedCollection;
 import com.googlecode.cqengine.IndexedCollection;
 import com.googlecode.cqengine.examples.introduction.Car;
 import com.googlecode.cqengine.query.Query;
+import com.googlecode.cqengine.resultset.ResultSet;
 import static com.googlecode.cqengine.query.QueryFactory.*;
 import static java.util.Arrays.asList;
 
@@ -56,21 +58,25 @@ public class SqlExistsBasedJoin {
                 )
         );
 
-        for (Car car : cars.retrieve(carsQuery)) {
-            Query<Garage> garagesWhichServiceThisCarInDublin
-                    = and(equal(Garage.BRANDS_SERVICED, car.name), equal(Garage.LOCATION, "Dublin"));
-            boolean first = true;
-            for (Garage garage : garages.retrieve(garagesWhichServiceThisCarInDublin)) {
-                if (first) {
-                    // Print this only when we have actually retrieved the first garage, in case the
-                    // collection was modified removing the first garage before the inner loop :)...
-                    System.out.println(car.name + " has a sunroof or is convertible, " +
-                            "and can be serviced in Dublin at the following garages:- " );
-                    first = false;
+        try (ResultSet<Car> carResults = cars.retrieve(carsQuery)) {
+            for (Car car : carResults) {
+                Query<Garage> garagesWhichServiceThisCarInDublin
+                        = and(equal(Garage.BRANDS_SERVICED, car.name), equal(Garage.LOCATION, "Dublin"));
+                boolean first = true;
+                try (ResultSet<Garage> garageResults = garages.retrieve(garagesWhichServiceThisCarInDublin)) {
+                    for (Garage garage : garageResults) {
+                        if (first) {
+                            // Print this only when we have actually retrieved the first garage, in case the
+                            // collection was modified removing the first garage before the inner loop :)...
+                            System.out.println(car.name + " has a sunroof or is convertible, " +
+                                    "and can be serviced in Dublin at the following garages:- " );
+                            first = false;
+                        }
+                        System.out.println("---> " + garage);
+                    }
                 }
-                System.out.println("---> " + garage);
+                System.out.println();
             }
-            System.out.println();
         }
         /* ..prints:
 

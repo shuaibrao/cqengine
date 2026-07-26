@@ -20,12 +20,12 @@ import com.googlecode.cqengine.IndexedCollection;
 import com.googlecode.cqengine.index.standingquery.StandingQueryIndex;
 import com.googlecode.cqengine.query.Query;
 import com.googlecode.cqengine.resultset.ResultSet;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import static com.googlecode.cqengine.query.QueryFactory.*;
 import static java.util.Arrays.asList;
-import static org.junit.Assert.*;
-import static org.junit.Assert.assertEquals;
+import static com.googlecode.cqengine.testutil.TestAssertions.*;
+import static com.googlecode.cqengine.testutil.TestAssertions.assertEquals;
 
 public class StringMatchesRegexTest {
 

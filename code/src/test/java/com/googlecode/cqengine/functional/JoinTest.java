@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,15 +21,15 @@ import com.googlecode.cqengine.IndexedCollection;
 import com.googlecode.cqengine.examples.introduction.Car;
 import com.googlecode.cqengine.examples.join.Garage;
 import com.googlecode.cqengine.query.Query;
-import org.junit.Assert;
-import org.junit.Test;
+import com.googlecode.cqengine.testutil.TestAssertions;
+import org.junit.jupiter.api.Test;
 
 import java.util.*;
 
 import static com.googlecode.cqengine.query.QueryFactory.*;
 import static java.util.Arrays.asList;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static com.googlecode.cqengine.testutil.TestAssertions.assertEquals;
+import static com.googlecode.cqengine.testutil.TestAssertions.assertTrue;
 
 /**
  * @author Niall Gallagher
@@ -165,16 +166,21 @@ public class JoinTest {
         }
 
         assertEquals("join results should contain 2 cars", 2, results.size());
-        Assert.assertTrue("join results should contain car1", results.containsKey(car1));
-        Assert.assertTrue("join results should contain car4", results.containsKey(car4));
+        TestAssertions.assertTrue("join results should contain car1", results.containsKey(car1));
+        TestAssertions.assertTrue("join results should contain car4", results.containsKey(car4));
 
         assertEquals("join results for car1", asSet(garage3, garage4), results.get(car1));
         assertEquals("join results for car4", asSet(garage2), results.get(car4));
     }
 
 
+    @SafeVarargs
     static <T> Set<T> asSet(T... objects) {
-        return asSet(asList(objects));
+        Set<T> results = new LinkedHashSet<T>();
+        for (T object : objects) {
+            results.add(object);
+        }
+        return results;
     }
 
     static <T> Set<T> asSet(Iterable<T> objects) {

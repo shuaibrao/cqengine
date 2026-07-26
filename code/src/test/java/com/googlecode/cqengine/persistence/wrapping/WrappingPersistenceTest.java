@@ -24,7 +24,7 @@ import com.googlecode.cqengine.persistence.support.ObjectStore;
 import com.googlecode.cqengine.resultset.ResultSet;
 import com.googlecode.cqengine.testutil.Car;
 import com.googlecode.cqengine.testutil.CarFactory;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.Collection;
 import java.util.HashSet;
@@ -34,7 +34,7 @@ import java.util.Set;
 import static com.googlecode.cqengine.IndexedCollectionFunctionalTest.asSet;
 import static com.googlecode.cqengine.IndexedCollectionFunctionalTest.extractCarIds;
 import static com.googlecode.cqengine.query.QueryFactory.greaterThan;
-import static org.junit.Assert.*;
+import static com.googlecode.cqengine.testutil.TestAssertions.*;
 
 /**
  * Tests for {@link WrappingPersistence}.

@@ -17,7 +17,7 @@ package com.googlecode.cqengine.index.support;
 
 import com.googlecode.cqengine.query.QueryFactory;
 import com.googlecode.cqengine.testutil.Car;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import static com.googlecode.cqengine.query.QueryFactory.noQueryOptions;
 import static org.mockito.Mockito.*;

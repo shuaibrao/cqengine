@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,8 +16,13 @@
  */
 package com.googlecode.cqengine.index.sqlite.support;
 
-import org.junit.Assert;
-import org.junit.Test;
+import com.googlecode.cqengine.testutil.ExpectedException;
+
+import com.googlecode.cqengine.index.sqlite.SQLiteBusyException;
+import com.googlecode.cqengine.testutil.TestAssertions;
+import org.junit.jupiter.api.Test;
+import org.sqlite.SQLiteErrorCode;
+import org.sqlite.SQLiteException;
 
 import java.io.Closeable;
 import java.math.BigDecimal;
@@ -31,6 +37,124 @@ import static org.mockito.Mockito.*;
  * @author Silvano Riz
  */
 public class DBUtilsTest {
+
+    @Test
+    public void mapsBaseAndExtendedSQLiteBusyCodesWithoutLosingDriverDetails() {
+        SQLiteErrorCode[] busyCodes = {
+                SQLiteErrorCode.SQLITE_BUSY,
+                SQLiteErrorCode.SQLITE_BUSY_RECOVERY,
+                SQLiteErrorCode.SQLITE_BUSY_SNAPSHOT,
+                SQLiteErrorCode.SQLITE_BUSY_TIMEOUT
+        };
+
+        for (SQLiteErrorCode busyCode : busyCodes) {
+            SQLiteException driverFailure = new SQLiteException("database is locked", busyCode);
+
+            RuntimeException mappedFailure = DBUtils.wrapAsRuntimeException("Mutation failed", driverFailure);
+
+            TestAssertions.assertTrue(mappedFailure instanceof SQLiteBusyException);
+            SQLiteBusyException busyFailure = (SQLiteBusyException) mappedFailure;
+            TestAssertions.assertEquals(SQLiteErrorCode.SQLITE_BUSY.code, busyFailure.getPrimaryErrorCode());
+            TestAssertions.assertEquals(busyCode.code, busyFailure.getExtendedErrorCode());
+            TestAssertions.assertSame(driverFailure, busyFailure.getSQLiteException());
+            TestAssertions.assertSame(driverFailure, busyFailure.getCause());
+        }
+    }
+
+    @Test
+    public void findsNestedSQLiteBusyFailureAndLeavesOtherFailuresOnExistingContract() {
+        SQLiteException driverFailure =
+                new SQLiteException("database is locked", SQLiteErrorCode.SQLITE_BUSY_TIMEOUT);
+        SQLException nestedFailure = new SQLException("JDBC wrapper", driverFailure);
+
+        SQLiteBusyException busyFailure = (SQLiteBusyException)
+                DBUtils.wrapAsRuntimeException("Mutation failed", nestedFailure);
+        TestAssertions.assertSame(driverFailure, busyFailure.getSQLiteException());
+
+        SQLException ordinaryFailure = new SQLException("broken", "state", SQLiteErrorCode.SQLITE_IOERR.code);
+        RuntimeException mappedOrdinaryFailure = DBUtils.wrapAsRuntimeException("Mutation failed", ordinaryFailure);
+        TestAssertions.assertEquals(IllegalStateException.class, mappedOrdinaryFailure.getClass());
+        TestAssertions.assertSame(ordinaryFailure, mappedOrdinaryFailure.getCause());
+    }
+
+    @Test
+    public void validatesSQLiteIdentifierComponentsWithoutRewritingThem() {
+        String maximumLength = "a".repeat(DBUtils.MAX_SQLITE_IDENTIFIER_COMPONENT_LENGTH);
+
+        TestAssertions.assertEquals("cars_2026", DBUtils.validateSQLiteIdentifierComponent("cars_2026"));
+        TestAssertions.assertEquals(maximumLength, DBUtils.validateSQLiteIdentifierComponent(maximumLength));
+        TestAssertions.assertEquals("", DBUtils.validateSQLiteIdentifierSuffix(""));
+        TestAssertions.assertEquals("_partial_query1", DBUtils.validateSQLiteIdentifierSuffix("_partial_query1"));
+    }
+
+    @Test
+    public void rejectsNullAndEmptySQLiteIdentifierComponents() {
+        TestAssertions.assertThrows(NullPointerException.class, () -> DBUtils.validateSQLiteIdentifierComponent(null));
+        TestAssertions.assertThrows(IllegalArgumentException.class, () -> DBUtils.validateSQLiteIdentifierComponent(""));
+        TestAssertions.assertThrows(NullPointerException.class, () -> DBUtils.validateSQLiteIdentifierSuffix(null));
+    }
+
+    @Test
+    public void rejectsLongSQLiteIdentifierComponentsAndSuffixes() {
+        String overLimit = "a".repeat(DBUtils.MAX_SQLITE_IDENTIFIER_COMPONENT_LENGTH + 1);
+
+        TestAssertions.assertThrows(
+                IllegalArgumentException.class, () -> DBUtils.validateSQLiteIdentifierComponent(overLimit));
+        TestAssertions.assertThrows(IllegalArgumentException.class, () -> DBUtils.validateSQLiteIdentifierSuffix(overLimit));
+    }
+
+    @Test
+    public void rejectsPunctuationAndUnicodeSQLiteIdentifierComponents() {
+        String[] rejected = {"cars;DROP_TABLE", "cars\"quoted", "cars'quoted", "cars-name", "cars name", "café", "车辆"};
+
+        for (String input : rejected) {
+            TestAssertions.assertThrows(
+                    "Expected identifier to be rejected",
+                    IllegalArgumentException.class,
+                    () -> DBUtils.validateSQLiteIdentifierComponent(input));
+            TestAssertions.assertThrows(
+                    "Expected suffix to be rejected",
+                    IllegalArgumentException.class,
+                    () -> DBUtils.validateSQLiteIdentifierSuffix(input));
+        }
+    }
+
+    @Test
+    public void versionTwoIndexNamesAreStableAndSeparateLegacyCollisions() {
+        TestAssertions.assertEquals("ab", DBUtils.sanitizeForTableName("a-b"));
+        TestAssertions.assertEquals("ab", DBUtils.sanitizeForTableName("ab"));
+        TestAssertions.assertEquals(
+                "v2_cbdbd444dd997d951fb3f9cb102775f1e9af453fa0465a8e022f600a7e76a913",
+                DBUtils.createSQLiteIndexTableNameV2("features", ""));
+        TestAssertions.assertNotEquals(
+                DBUtils.createSQLiteIndexTableNameV2("a-b", ""),
+                DBUtils.createSQLiteIndexTableNameV2("ab", ""));
+        TestAssertions.assertNotEquals(
+                DBUtils.createSQLiteIndexTableNameV2("a", "bc"),
+                DBUtils.createSQLiteIndexTableNameV2("ab", "c"));
+    }
+
+    @Test
+    public void versionTwoPartialSuffixHashesTheUnsanitizedFilterDescription() {
+        TestAssertions.assertEquals(
+                "_partial_v2_d9f39648b1d4e94153a49acaf5d783d37b2e27e190f967df7b51a4444bfb0561",
+                DBUtils.createPartialIndexTableNameSuffixV2("equal(\"name\",\"a-b\")"));
+        TestAssertions.assertNotEquals(
+                DBUtils.createPartialIndexTableNameSuffixV2("a-b"),
+                DBUtils.createPartialIndexTableNameSuffixV2("ab"));
+    }
+
+    @Test
+    public void versionTwoIndexNamesRejectMissingLogicalInputs() {
+        TestAssertions.assertThrows(
+                NullPointerException.class, () -> DBUtils.createSQLiteIndexTableNameV2(null, ""));
+        TestAssertions.assertThrows(
+                IllegalArgumentException.class, () -> DBUtils.createSQLiteIndexTableNameV2("", ""));
+        TestAssertions.assertThrows(
+                NullPointerException.class, () -> DBUtils.createSQLiteIndexTableNameV2("name", null));
+        TestAssertions.assertThrows(
+                NullPointerException.class, () -> DBUtils.createPartialIndexTableNameSuffixV2(null));
+    }
 
     @Test
     public void testWrapConnectionInCloseable() throws Exception {
@@ -149,28 +273,29 @@ public class DBUtilsTest {
     @Test
     public void testGetDBTypeForClass() throws Exception {
 
-        Assert.assertEquals("INTEGER", DBUtils.getDBTypeForClass(Integer.class));
-        Assert.assertEquals("INTEGER", DBUtils.getDBTypeForClass(Long.class));
-        Assert.assertEquals("INTEGER", DBUtils.getDBTypeForClass(Short.class));
-        Assert.assertEquals("INTEGER", DBUtils.getDBTypeForClass(Boolean.class));
+        TestAssertions.assertEquals("INTEGER", DBUtils.getDBTypeForClass(Integer.class));
+        TestAssertions.assertEquals("INTEGER", DBUtils.getDBTypeForClass(Long.class));
+        TestAssertions.assertEquals("INTEGER", DBUtils.getDBTypeForClass(Short.class));
+        TestAssertions.assertEquals("INTEGER", DBUtils.getDBTypeForClass(Boolean.class));
 
-        Assert.assertEquals("REAL", DBUtils.getDBTypeForClass(Float.class));
-        Assert.assertEquals("REAL", DBUtils.getDBTypeForClass(Double.class));
+        TestAssertions.assertEquals("REAL", DBUtils.getDBTypeForClass(Float.class));
+        TestAssertions.assertEquals("REAL", DBUtils.getDBTypeForClass(Double.class));
 
-        Assert.assertEquals("TEXT", DBUtils.getDBTypeForClass(String.class));
-        Assert.assertEquals("TEXT", DBUtils.getDBTypeForClass(CharSequence.class));
-        Assert.assertEquals("TEXT", DBUtils.getDBTypeForClass(BigDecimal.class));
+        TestAssertions.assertEquals("TEXT", DBUtils.getDBTypeForClass(String.class));
+        TestAssertions.assertEquals("TEXT", DBUtils.getDBTypeForClass(CharSequence.class));
+        TestAssertions.assertEquals("TEXT", DBUtils.getDBTypeForClass(BigDecimal.class));
 
-        Assert.assertEquals("INTEGER", DBUtils.getDBTypeForClass(java.util.Date.class));
-        Assert.assertEquals("INTEGER", DBUtils.getDBTypeForClass(java.sql.Date.class));
-        Assert.assertEquals("INTEGER", DBUtils.getDBTypeForClass(Time.class));
-        Assert.assertEquals("INTEGER", DBUtils.getDBTypeForClass(Timestamp.class));
+        TestAssertions.assertEquals("INTEGER", DBUtils.getDBTypeForClass(java.util.Date.class));
+        TestAssertions.assertEquals("INTEGER", DBUtils.getDBTypeForClass(java.sql.Date.class));
+        TestAssertions.assertEquals("INTEGER", DBUtils.getDBTypeForClass(Time.class));
+        TestAssertions.assertEquals("INTEGER", DBUtils.getDBTypeForClass(Timestamp.class));
 
-        Assert.assertEquals("BLOB", DBUtils.getDBTypeForClass(byte[].class));
+        TestAssertions.assertEquals("BLOB", DBUtils.getDBTypeForClass(byte[].class));
 
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
+    @ExpectedException(IllegalStateException.class)
     public void testGetDBTypeForClass_UnsupportedType() throws Exception {
         DBUtils.getDBTypeForClass(Calendar.class);
     }

@@ -20,8 +20,8 @@ import com.googlecode.cqengine.query.QueryFactory;
 import com.googlecode.cqengine.resultset.stored.StoredSetBasedResultSet;
 import com.googlecode.cqengine.testutil.Car;
 import com.googlecode.cqengine.testutil.CarFactory;
-import org.junit.Assert;
-import org.junit.Test;
+import com.googlecode.cqengine.testutil.TestAssertions;
+import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -44,20 +44,20 @@ public class DeduplicatingResultSetTest {
         IndexedCollectionFunctionalTest.extractCarIds(deduplicatingResultSet, carIdsReturned);
 
         // Should return the first distinct Manufacturer...
-        Assert.assertEquals(4, deduplicatingResultSet.size());
-        Assert.assertEquals(0, deduplicatingResultSet.getRetrievalCost());
-        Assert.assertEquals(10, deduplicatingResultSet.getMergeCost());
-        Assert.assertEquals(4, carIdsReturned.size());
-        Assert.assertEquals(0, carIdsReturned.get(0).intValue());
-        Assert.assertEquals(3, carIdsReturned.get(1).intValue());
-        Assert.assertEquals(6, carIdsReturned.get(2).intValue());
-        Assert.assertEquals(9, carIdsReturned.get(3).intValue());
+        TestAssertions.assertEquals(4, deduplicatingResultSet.size());
+        TestAssertions.assertEquals(0, deduplicatingResultSet.getRetrievalCost());
+        TestAssertions.assertEquals(10, deduplicatingResultSet.getMergeCost());
+        TestAssertions.assertEquals(4, carIdsReturned.size());
+        TestAssertions.assertEquals(0, carIdsReturned.get(0).intValue());
+        TestAssertions.assertEquals(3, carIdsReturned.get(1).intValue());
+        TestAssertions.assertEquals(6, carIdsReturned.get(2).intValue());
+        TestAssertions.assertEquals(9, carIdsReturned.get(3).intValue());
 
-        Assert.assertTrue(deduplicatingResultSet.contains(CarFactory.createCar(0)));
-        Assert.assertTrue(deduplicatingResultSet.contains(CarFactory.createCar(3)));
-        Assert.assertTrue(deduplicatingResultSet.contains(CarFactory.createCar(6)));
-        Assert.assertTrue(deduplicatingResultSet.contains(CarFactory.createCar(9)));
-        Assert.assertFalse(deduplicatingResultSet.contains(CarFactory.createCar(1)));
+        TestAssertions.assertTrue(deduplicatingResultSet.contains(CarFactory.createCar(0)));
+        TestAssertions.assertTrue(deduplicatingResultSet.contains(CarFactory.createCar(3)));
+        TestAssertions.assertTrue(deduplicatingResultSet.contains(CarFactory.createCar(6)));
+        TestAssertions.assertTrue(deduplicatingResultSet.contains(CarFactory.createCar(9)));
+        TestAssertions.assertFalse(deduplicatingResultSet.contains(CarFactory.createCar(1)));
 
         deduplicatingResultSet.close(); // No op.
     }

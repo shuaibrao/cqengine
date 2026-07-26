@@ -3,7 +3,7 @@ package com.googlecode.cqengine.resultset;
 import com.googlecode.cqengine.ConcurrentIndexedCollection;
 import com.googlecode.cqengine.IndexedCollection;
 import com.googlecode.cqengine.resultset.stored.StoredSetBasedResultSet;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -14,7 +14,7 @@ import static com.googlecode.cqengine.query.QueryFactory.selfAttribute;
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptySet;
 import static java.util.stream.Collectors.toList;
-import static org.junit.Assert.*;
+import static com.googlecode.cqengine.testutil.TestAssertions.*;
 
 /**
  * Unit tests for the base {@link ResultSet}.

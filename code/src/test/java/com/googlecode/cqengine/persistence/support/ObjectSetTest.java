@@ -19,16 +19,20 @@ import com.googlecode.cqengine.index.support.CloseableIterator;
 import com.googlecode.cqengine.query.option.QueryOptions;
 import com.googlecode.cqengine.testutil.Car;
 import com.googlecode.cqengine.testutil.CarFactory;
-import org.junit.Assert;
-import org.junit.Test;
+import com.googlecode.cqengine.testutil.TestAssertions;
+import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import static com.googlecode.cqengine.query.QueryFactory.noQueryOptions;
-import static org.junit.Assert.*;
+import static com.googlecode.cqengine.testutil.TestAssertions.*;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
@@ -39,6 +43,52 @@ import static org.mockito.Mockito.when;
  * @author niall.gallagher
  */
 public class ObjectSetTest {
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void externalObjectSetMonitorCannotBlockIteratorCreationOrClose() throws Exception {
+        ObjectStore<Car> objectStore = mock(ObjectStore.class);
+        CloseableIterator<Car> delegate = mock(CloseableIterator.class);
+        when(objectStore.iterator(Mockito.<QueryOptions>any())).thenReturn(delegate);
+        ObjectSet<Car> objectSet = ObjectSet.fromObjectStore(objectStore, noQueryOptions());
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        try {
+            CloseableIterator<Car> iterator;
+            synchronized (objectSet) {
+                Future<CloseableIterator<Car>> creation = executor.submit(objectSet::iterator);
+                iterator = creation.get(5, TimeUnit.SECONDS);
+            }
+            synchronized (objectSet) {
+                Future<?> close = executor.submit(iterator::close);
+                close.get(5, TimeUnit.SECONDS);
+            }
+        }
+        finally {
+            executor.shutdownNow();
+            objectSet.close();
+        }
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void externalIteratorMonitorCannotBlockIteratorClose() throws Exception {
+        ObjectStore<Car> objectStore = mock(ObjectStore.class);
+        CloseableIterator<Car> delegate = mock(CloseableIterator.class);
+        when(objectStore.iterator(Mockito.<QueryOptions>any())).thenReturn(delegate);
+        ObjectSet<Car> objectSet = ObjectSet.fromObjectStore(objectStore, noQueryOptions());
+        CloseableIterator<Car> iterator = objectSet.iterator();
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        try {
+            synchronized (iterator) {
+                Future<?> close = executor.submit(iterator::close);
+                close.get(5, TimeUnit.SECONDS);
+            }
+        }
+        finally {
+            executor.shutdownNow();
+            objectSet.close();
+        }
+    }
 
     // ====== Tests for ObjectStore-based implementation of ObjectSet... ======
 
@@ -67,8 +117,8 @@ public class ObjectSetTest {
 
         ObjectSet<Car> objectSet = ObjectSet.fromObjectStore(objectStore, noQueryOptions());
         CloseableIterator<Car> objectSetIterator = objectSet.iterator();
-        Assert.assertTrue(objectSetIterator.hasNext());
-        Assert.assertNotNull(objectSetIterator.next());
+        TestAssertions.assertTrue(objectSetIterator.hasNext());
+        TestAssertions.assertNotNull(objectSetIterator.next());
         objectSetIterator.remove();
         Mockito.verify(closeableIterator, times(1)).remove();
     }
@@ -96,7 +146,7 @@ public class ObjectSetTest {
         when(objectStore.iterator(Mockito.<QueryOptions>any())).thenReturn(closeableIterator);
 
         ObjectSet<Car> objectSet = ObjectSet.fromObjectStore(objectStore, noQueryOptions());
-        Assert.assertEquals(true, objectSet.isEmpty());
+        TestAssertions.assertEquals(true, objectSet.isEmpty());
         Mockito.verify(closeableIterator, times(1)).close();
     }
 
@@ -109,7 +159,7 @@ public class ObjectSetTest {
         when(objectStore.iterator(Mockito.<QueryOptions>any())).thenReturn(closeableIterator);
 
         ObjectSet<Car> objectSet = ObjectSet.fromObjectStore(objectStore, noQueryOptions());
-        Assert.assertEquals(false, objectSet.isEmpty());
+        TestAssertions.assertEquals(false, objectSet.isEmpty());
         Mockito.verify(closeableIterator, times(1)).close();
     }
 
@@ -135,8 +185,8 @@ public class ObjectSetTest {
 
         ObjectSet<Car> objectSet = ObjectSet.fromCollection(collection);
         CloseableIterator<Car> objectSetIterator = objectSet.iterator();
-        Assert.assertTrue(objectSetIterator.hasNext());
-        Assert.assertNotNull(objectSetIterator.next());
+        TestAssertions.assertTrue(objectSetIterator.hasNext());
+        TestAssertions.assertNotNull(objectSetIterator.next());
         objectSetIterator.remove();
         Mockito.verify(iterator, times(1)).remove();
     }
@@ -148,7 +198,7 @@ public class ObjectSetTest {
         when(collection.isEmpty()).thenReturn(true);
 
         ObjectSet<Car> objectSet = ObjectSet.fromCollection(collection);
-        Assert.assertEquals(true, objectSet.isEmpty());
+        TestAssertions.assertEquals(true, objectSet.isEmpty());
     }
 
     @Test
@@ -158,6 +208,6 @@ public class ObjectSetTest {
         when(collection.isEmpty()).thenReturn(false);
 
         ObjectSet<Car> objectSet = ObjectSet.fromCollection(collection);
-        Assert.assertEquals(false, objectSet.isEmpty());
+        TestAssertions.assertEquals(false, objectSet.isEmpty());
     }
 }

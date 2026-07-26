@@ -15,8 +15,8 @@
  */
 package com.googlecode.cqengine.index.compound.support;
 
-import org.junit.Assert;
-import org.junit.Test;
+import com.googlecode.cqengine.testutil.TestAssertions;
+import org.junit.jupiter.api.Test;
 
 import java.util.*;
 
@@ -28,7 +28,7 @@ public class TupleCombinationGeneratorTest {
     @Test
     public void testGenerateCombinations_EmptyOuterList() {
         List<List<Object>> permutations = TupleCombinationGenerator.generateCombinations(Collections.<List<Object>>emptyList());
-        Assert.assertTrue(permutations.isEmpty());
+        TestAssertions.assertTrue(permutations.isEmpty());
     }
 
     @Test
@@ -39,7 +39,7 @@ public class TupleCombinationGeneratorTest {
             add(Arrays.<Object>asList(2.0, 3.0, 4.0));
         }};
         List<List<Object>> permutations = TupleCombinationGenerator.generateCombinations(inputLists);
-        Assert.assertEquals(
+        TestAssertions.assertEquals(
                 "[[1, bar, 2.0], [1, bar, 3.0], [1, bar, 4.0], [1, baz, 2.0], [1, baz, 3.0], [1, baz, 4.0]]",
                 permutations.toString()
         );
@@ -53,7 +53,7 @@ public class TupleCombinationGeneratorTest {
             add(Arrays.<Object>asList(3.0, 4.0));
         }};
         List<List<Object>> permutations = TupleCombinationGenerator.generateCombinations(inputLists);
-        Assert.assertEquals(
+        TestAssertions.assertEquals(
                 "[[1, bar, 3.0], [1, bar, 4.0], [1, baz, 3.0], [1, baz, 4.0], [2, bar, 3.0], [2, bar, 4.0], [2, baz, 3.0], [2, baz, 4.0]]",
                 permutations.toString()
         );
@@ -67,7 +67,7 @@ public class TupleCombinationGeneratorTest {
             add(Arrays.<Object>asList(2.0));
         }};
         List<List<Object>> permutations = TupleCombinationGenerator.generateCombinations(inputLists);
-        Assert.assertEquals(
+        TestAssertions.assertEquals(
                 "[[1, bar, 2.0], [1, baz, 2.0], [2, bar, 2.0], [2, baz, 2.0], [3, bar, 2.0], [3, baz, 2.0]]",
                 permutations.toString()
         );
@@ -81,7 +81,7 @@ public class TupleCombinationGeneratorTest {
             add(Arrays.<Object>asList(2.0, 3.0, 4.0));
         }};
         List<List<Object>> permutations = TupleCombinationGenerator.generateCombinations(inputLists);
-        Assert.assertTrue(permutations.isEmpty());
+        TestAssertions.assertTrue(permutations.isEmpty());
     }
 
     @Test
@@ -92,7 +92,7 @@ public class TupleCombinationGeneratorTest {
             add(Arrays.<Object>asList(2.0, 3.0, 4.0));
         }};
         List<List<Object>> permutations = TupleCombinationGenerator.generateCombinations(inputLists);
-        Assert.assertTrue(permutations.isEmpty());
+        TestAssertions.assertTrue(permutations.isEmpty());
     }
 
     @Test
@@ -103,13 +103,13 @@ public class TupleCombinationGeneratorTest {
             add(Collections.emptyList());
         }};
         List<List<Object>> permutations = TupleCombinationGenerator.generateCombinations(inputLists);
-        Assert.assertTrue(permutations.isEmpty());
+        TestAssertions.assertTrue(permutations.isEmpty());
     }
 
     @Test
     public void testConstructor() {
         // Test the constructor (for test coverage only)...
         TupleCombinationGenerator combinationGenerator = new TupleCombinationGenerator();
-        Assert.assertNotNull(combinationGenerator);
+        TestAssertions.assertNotNull(combinationGenerator);
     }
 }

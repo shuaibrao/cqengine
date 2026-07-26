@@ -15,66 +15,49 @@
  */
 package com.googlecode.cqengine;
 
-import com.google.common.collect.testing.SetTestSuiteBuilder;
-import com.google.common.collect.testing.TestStringSetGenerator;
-import com.google.common.collect.testing.features.CollectionFeature;
-import com.google.common.collect.testing.features.CollectionSize;
 import com.googlecode.cqengine.persistence.offheap.OffHeapPersistence;
 import com.googlecode.cqengine.persistence.onheap.OnHeapPersistence;
 import com.googlecode.cqengine.query.QueryFactory;
-import junit.framework.TestCase;
-import junit.framework.TestSuite;
+import com.googlecode.cqengine.testutil.MutableSetContract;
+import org.junit.jupiter.api.DynamicTest;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestFactory;
 
-import java.util.Arrays;
 import java.util.Set;
+import java.util.stream.Stream;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * Unit tests for {@link ObjectLockingIndexedCollection}. Note that tests for support behavior (such as query processing)
  * which applies to all implementations of {@link IndexedCollection} can be found in
  * {@link com.googlecode.cqengine.IndexedCollectionFunctionalTest}.
  * <p/>
- * In addition to the unit tests in this class, this class also runs a further several hundred unit tests in
- * <a href="https://code.google.com/p/guava-libraries/source/browse/guava-testlib">guava-testlib</a> on the
- * IndexedCollection to validate its compliance with the API specifications of java.util.Set.
+ * The Jupiter behavior matrix in this class validates the mutable {@link Set} contract for on-heap and off-heap
+ * collections.
  *
  * @author Niall Gallagher
  */
-public class ObjectLockingIndexedCollectionTest extends TestCase {
+public class ObjectLockingIndexedCollectionTest {
 
-    public static junit.framework.Test suite() {
-        TestSuite suite = new TestSuite();
-        suite.addTest(SetTestSuiteBuilder.using(onHeapIndexedCollectionGenerator())
-                .withFeatures(CollectionSize.ANY, CollectionFeature.GENERAL_PURPOSE)
-                .named("OnHeap_ObjectLockingIndexedCollectionAPICompliance")
-                .createTestSuite());
-        suite.addTest(SetTestSuiteBuilder.using(offHeapIndexedCollectionGenerator())
-                .withFeatures(CollectionSize.ANY, CollectionFeature.GENERAL_PURPOSE)
-                .named("OffHeap_ObjectLockingIndexedCollectionAPICompliance")
-                .createTestSuite());
-        suite.addTestSuite(ObjectLockingIndexedCollectionTest.class);
-        return suite;
+    @TestFactory
+    Stream<DynamicTest> mutableSetContract() {
+        return Stream.concat(
+                MutableSetContract.tests("on-heap ObjectLockingIndexedCollection", ObjectLockingIndexedCollectionTest::newOnHeapCollection),
+                MutableSetContract.tests("off-heap ObjectLockingIndexedCollection", ObjectLockingIndexedCollectionTest::newOffHeapCollection));
     }
 
-    private static TestStringSetGenerator onHeapIndexedCollectionGenerator() {
-        return new TestStringSetGenerator() {
-            @Override protected Set<String> create(String[] elements) {
-                IndexedCollection<String> indexedCollection = new ObjectLockingIndexedCollection<String>(OnHeapPersistence.onPrimaryKey(QueryFactory.selfAttribute(String.class)));
-                indexedCollection.addAll(Arrays.asList(elements));
-                return indexedCollection;
-            }
-        };
+    private static Set<String> newOnHeapCollection() {
+        return new ObjectLockingIndexedCollection<String>(
+                OnHeapPersistence.onPrimaryKey(QueryFactory.selfAttribute(String.class)));
     }
 
-    private static TestStringSetGenerator offHeapIndexedCollectionGenerator() {
-        return new TestStringSetGenerator() {
-            @Override protected Set<String> create(String[] elements) {
-                IndexedCollection<String> indexedCollection = new ObjectLockingIndexedCollection<String>(OffHeapPersistence.onPrimaryKey(QueryFactory.selfAttribute(String.class)));
-                indexedCollection.addAll(Arrays.asList(elements));
-                return indexedCollection;
-            }
-        };
+    private static Set<String> newOffHeapCollection() {
+        return new ObjectLockingIndexedCollection<String>(
+                OffHeapPersistence.onPrimaryKey(QueryFactory.selfAttribute(String.class)));
     }
 
+    @Test
     public void testConstructor() {
         ObjectLockingIndexedCollection<Integer> collection1 = new ObjectLockingIndexedCollection<Integer>();
         ObjectLockingIndexedCollection<Integer> collection2 = new ObjectLockingIndexedCollection<Integer>(new OnHeapPersistence<Integer, Integer>());

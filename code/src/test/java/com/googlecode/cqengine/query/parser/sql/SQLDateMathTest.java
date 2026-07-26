@@ -16,11 +16,11 @@
 package com.googlecode.cqengine.query.parser.sql;
 
 import com.googlecode.cqengine.query.parser.sql.support.DateMathParser;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.Date;
 
-import static org.junit.Assert.assertNotNull;
+import static com.googlecode.cqengine.testutil.TestAssertions.assertNotNull;
 
 /**
  * Unit tests for {@link DateMathParser}.

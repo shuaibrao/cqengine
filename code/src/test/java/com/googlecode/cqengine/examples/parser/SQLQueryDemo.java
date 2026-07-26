@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,12 +40,12 @@ public class SQLQueryDemo {
         IndexedCollection<Car> cars = new ConcurrentIndexedCollection<Car>();
         cars.addAll(CarFactory.createCollectionOfCars(10));
 
-        ResultSet<Car> results = parser.retrieve(cars, "SELECT * FROM cars WHERE (" +
-                                        "(manufacturer = 'Ford' OR manufacturer = 'Honda') " +
-                                        "AND price <= 5000.0 " +
-                                        "AND color NOT IN ('GREEN', 'WHITE')) " +
-                                        "ORDER BY manufacturer DESC, price ASC");
-
-        results.forEach(System.out::println); // Prints: Honda Accord, Ford Fusion, Ford Focus
+        try (ResultSet<Car> results = parser.retrieve(cars, "SELECT * FROM cars WHERE (" +
+                "(manufacturer = 'Ford' OR manufacturer = 'Honda') " +
+                "AND price <= 5000.0 " +
+                "AND color NOT IN ('GREEN', 'WHITE')) " +
+                "ORDER BY manufacturer DESC, price ASC")) {
+            results.forEach(System.out::println); // Prints: Honda Accord, Ford Fusion, Ford Focus
+        }
     }
 }

@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +20,7 @@ import com.googlecode.cqengine.ConcurrentIndexedCollection;
 import com.googlecode.cqengine.IndexedCollection;
 import com.googlecode.cqengine.examples.introduction.Car;
 import com.googlecode.cqengine.query.Query;
+import com.googlecode.cqengine.resultset.ResultSet;
 import static com.googlecode.cqengine.query.QueryFactory.*;
 import static java.util.Arrays.asList;
 
@@ -55,8 +57,10 @@ public class SqlExists {
                 )
         );
 
-        for (Car car : cars.retrieve(carsQuery)) {
-            System.out.println(car.name + " has a sunroof or is convertible, and can be serviced in Dublin");
+        try (ResultSet<Car> results = cars.retrieve(carsQuery)) {
+            for (Car car : results) {
+                System.out.println(car.name + " has a sunroof or is convertible, and can be serviced in Dublin");
+            }
         }
         /* ..prints:
 

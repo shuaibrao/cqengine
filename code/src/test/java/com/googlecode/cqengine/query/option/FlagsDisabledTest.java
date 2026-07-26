@@ -15,12 +15,12 @@
  */
 package com.googlecode.cqengine.query.option;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import static com.googlecode.cqengine.query.QueryFactory.queryOptions;
 import static com.googlecode.cqengine.query.QueryFactory.disableFlags;
 import static com.googlecode.cqengine.query.option.FlagsDisabled.isFlagDisabled;
-import static org.junit.Assert.*;
+import static com.googlecode.cqengine.testutil.TestAssertions.*;
 
 /**
  * @author niall.gallagher

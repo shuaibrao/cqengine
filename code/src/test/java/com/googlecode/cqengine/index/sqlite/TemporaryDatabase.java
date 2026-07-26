@@ -17,11 +17,10 @@ package com.googlecode.cqengine.index.sqlite;
 
 import com.googlecode.cqengine.index.Index;
 import com.googlecode.cqengine.query.option.QueryOptions;
-import org.junit.Assert;
-import org.junit.rules.TemporaryFolder;
-import org.junit.rules.TestRule;
-import org.junit.runner.Description;
-import org.junit.runners.model.Statement;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.extension.AfterEachCallback;
+import org.junit.jupiter.api.extension.BeforeEachCallback;
+import org.junit.jupiter.api.extension.ExtensionContext;
 import org.sqlite.SQLiteConfig;
 import org.sqlite.SQLiteDataSource;
 
@@ -30,6 +29,8 @@ import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
@@ -37,7 +38,7 @@ import java.util.HashSet;
 import java.util.Set;
 
 /**
- * Set of utility classes and {@link org.junit.Rule} to test Disk index against a temporary SQLite database.
+ * Utilities and Jupiter extensions for testing disk indexes against temporary SQLite databases.
  *
  * @author Silvano Riz
  */
@@ -106,16 +107,17 @@ public class TemporaryDatabase {
     }
 
     /**
-     * {@link org.junit.Rule} that allows to create and safely delete an SQLite temporary database file.
+     * Jupiter extension that creates and safely deletes a temporary SQLite database file.
      *
      * @author Silvano Riz
      */
-    public static class TemporaryFileDatabase extends TemporaryFolder {
+    public static class TemporaryFileDatabase implements BeforeEachCallback, AfterEachCallback {
 
         SQLiteDataSource dataSource;
         SQLiteConfig config;
         String url;
         File dbFile;
+        Path temporaryDirectory;
         Set<Connection> singleConnections = new HashSet<Connection>();
 
         public TemporaryFileDatabase() {
@@ -126,11 +128,10 @@ public class TemporaryDatabase {
             this.config = config;
         }
 
-        @Override
         public void before() {
             try {
-                super.before();
-                dbFile = newFile();
+                temporaryDirectory = Files.createTempDirectory("cqengine-sqlite-test-");
+                dbFile = Files.createTempFile(temporaryDirectory, "database-", ".sqlite").toFile();
                 url = "jdbc:sqlite:" + dbFile.getAbsolutePath();
                 dataSource = new SQLiteDataSource(config);
                 dataSource.setUrl(url);
@@ -140,14 +141,30 @@ public class TemporaryDatabase {
             }
         }
 
-        @Override
         public void after() {
-            super.after();
-            Assert.assertFalse(dbFile.exists());
-
             for (Connection connection : singleConnections) {
                 closeQuietly(connection);
             }
+            singleConnections.clear();
+
+            try {
+                Files.deleteIfExists(dbFile.toPath());
+                Files.deleteIfExists(temporaryDirectory);
+            }
+            catch (Exception exception) {
+                throw new IllegalStateException("Unable to delete temporary SQLite database", exception);
+            }
+            Assertions.assertFalse(dbFile.exists());
+        }
+
+        @Override
+        public void beforeEach(ExtensionContext context) {
+            before();
+        }
+
+        @Override
+        public void afterEach(ExtensionContext context) {
+            after();
 
         }
 
@@ -176,11 +193,11 @@ public class TemporaryDatabase {
     }
 
     /**
-     * {@link org.junit.Rule} that allows to create and safely shut down an SQLite in-memory database.
+     * Jupiter extension that creates and safely closes an in-memory SQLite database.
      *
      * @author Silvano Riz
      */
-    public static class TemporaryInMemoryDatabase implements TestRule {
+    public static class TemporaryInMemoryDatabase implements BeforeEachCallback, AfterEachCallback {
 
         Connection connection = null;
         SQLiteConfig config = null;
@@ -190,22 +207,6 @@ public class TemporaryDatabase {
         public TemporaryInMemoryDatabase(final SQLiteConfig config){
             this.config = config;
         }
-
-        @Override
-        public Statement apply(final Statement base, final Description description) {
-            return new Statement() {
-                @Override
-                public void evaluate() throws Throwable {
-                    before();
-                    try {
-                        base.evaluate();
-                    } finally {
-                        after();
-                    }
-                }
-            };
-        }
-
 
         public void after() {
             closeQuietly(connection);
@@ -221,6 +222,16 @@ public class TemporaryDatabase {
             } catch (Exception e) {
                 throw new IllegalStateException("Cannot create in-memory database connection", e);
             }
+        }
+
+        @Override
+        public void beforeEach(ExtensionContext context) {
+            before();
+        }
+
+        @Override
+        public void afterEach(ExtensionContext context) {
+            after();
         }
 
         /**

@@ -15,8 +15,10 @@
  */
 package com.googlecode.cqengine.quantizer;
 
-import org.junit.Assert;
-import org.junit.Test;
+import com.googlecode.cqengine.testutil.ExpectedException;
+
+import com.googlecode.cqengine.testutil.TestAssertions;
+import org.junit.jupiter.api.Test;
 
 import java.math.BigInteger;
 
@@ -29,19 +31,20 @@ public class BigIntegerQuantizerTest {
     public void testWithCompressionFactor_5() throws Exception {
         Quantizer<BigInteger> quantizer = BigIntegerQuantizer.withCompressionFactor(5);
         // Note: comparing using toString, as double comparison with epsilon would not distinguish 0.0 from -0.0...
-        Assert.assertEquals("0", quantizer.getQuantizedValue(BigInteger.valueOf(0)).toString());
-        Assert.assertEquals("0", quantizer.getQuantizedValue(BigInteger.valueOf(4)).toString());
-        Assert.assertEquals("5", quantizer.getQuantizedValue(BigInteger.valueOf(5)).toString());
-        Assert.assertEquals("5", quantizer.getQuantizedValue(BigInteger.valueOf(9)).toString());
-        Assert.assertEquals("10", quantizer.getQuantizedValue(BigInteger.valueOf(11)).toString());
-        Assert.assertEquals("0", quantizer.getQuantizedValue(BigInteger.valueOf(-0)).toString());
-        Assert.assertEquals("0", quantizer.getQuantizedValue(BigInteger.valueOf(-4)).toString());
-        Assert.assertEquals("-5", quantizer.getQuantizedValue(BigInteger.valueOf(-5)).toString());
-        Assert.assertEquals("-5", quantizer.getQuantizedValue(BigInteger.valueOf(-9)).toString());
-        Assert.assertEquals("-10", quantizer.getQuantizedValue(BigInteger.valueOf(-11)).toString());
+        TestAssertions.assertEquals("0", quantizer.getQuantizedValue(BigInteger.valueOf(0)).toString());
+        TestAssertions.assertEquals("0", quantizer.getQuantizedValue(BigInteger.valueOf(4)).toString());
+        TestAssertions.assertEquals("5", quantizer.getQuantizedValue(BigInteger.valueOf(5)).toString());
+        TestAssertions.assertEquals("5", quantizer.getQuantizedValue(BigInteger.valueOf(9)).toString());
+        TestAssertions.assertEquals("10", quantizer.getQuantizedValue(BigInteger.valueOf(11)).toString());
+        TestAssertions.assertEquals("0", quantizer.getQuantizedValue(BigInteger.valueOf(-0)).toString());
+        TestAssertions.assertEquals("0", quantizer.getQuantizedValue(BigInteger.valueOf(-4)).toString());
+        TestAssertions.assertEquals("-5", quantizer.getQuantizedValue(BigInteger.valueOf(-5)).toString());
+        TestAssertions.assertEquals("-5", quantizer.getQuantizedValue(BigInteger.valueOf(-9)).toString());
+        TestAssertions.assertEquals("-10", quantizer.getQuantizedValue(BigInteger.valueOf(-11)).toString());
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
+    @ExpectedException(IllegalArgumentException.class)
     public void testWithCompressionFactor_1() throws Exception {
         BigIntegerQuantizer.withCompressionFactor(1);
     }

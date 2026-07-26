@@ -2,11 +2,11 @@ package com.googlecode.cqengine.query.simple;
 
 import static com.googlecode.cqengine.query.QueryFactory.isPrefixOf;
 import static com.googlecode.cqengine.query.QueryFactory.noQueryOptions;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static com.googlecode.cqengine.testutil.TestAssertions.assertEquals;
+import static com.googlecode.cqengine.testutil.TestAssertions.assertFalse;
+import static com.googlecode.cqengine.testutil.TestAssertions.assertTrue;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import com.googlecode.cqengine.attribute.Attribute;
 import com.googlecode.cqengine.attribute.SelfAttribute;

@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,8 +26,8 @@ import com.googlecode.cqengine.testutil.Car;
 import com.googlecode.cqengine.testutil.CarFactory;
 import nl.jqno.equalsverifier.EqualsVerifier;
 import nl.jqno.equalsverifier.Warning;
-import org.junit.Assert;
-import org.junit.Test;
+import com.googlecode.cqengine.testutil.TestAssertions;
+import org.junit.jupiter.api.Test;
 import org.sqlite.SQLiteConfig;
 import org.sqlite.SQLiteDataSource;
 
@@ -36,13 +37,32 @@ import org.sqlite.SQLiteDataSource;
 public class OffHeapPersistenceTest {
 
     @Test
+    public void testCloseIsIdempotentAndRejectsFurtherUse() {
+        OffHeapPersistence<Car, Integer> persistence = OffHeapPersistence.onPrimaryKey(Car.CAR_ID);
+        TestAssertions.assertNotNull(persistence.persistentConnection);
+
+        persistence.close();
+        persistence.close();
+
+        TestAssertions.assertTrue(persistence.closed);
+        TestAssertions.assertNull(persistence.persistentConnection);
+        try {
+            persistence.getBytesUsed();
+            TestAssertions.fail("Expected closed persistence to reject further use");
+        }
+        catch (IllegalStateException expected) {
+            TestAssertions.assertTrue(expected.getMessage().contains("has been closed"));
+        }
+    }
+
+    @Test
     public void testGetBytesUsed() {
         OffHeapPersistence<Car, Integer> persistence = OffHeapPersistence.onPrimaryKey(Car.CAR_ID);
         @SuppressWarnings("MismatchedQueryAndUpdateOfCollection")
         IndexedCollection<Car> cars = new ConcurrentIndexedCollection<Car>(persistence);
         cars.addAll(CarFactory.createCollectionOfCars(50));
         long bytesUsed = persistence.getBytesUsed();
-        Assert.assertTrue("Bytes used should be greater than zero: " + bytesUsed, bytesUsed > 0);
+        TestAssertions.assertTrue("Bytes used should be greater than zero: " + bytesUsed, bytesUsed > 0);
     }
 
     @Test
@@ -52,13 +72,13 @@ public class OffHeapPersistenceTest {
         IndexedCollection<Car> cars = new ConcurrentIndexedCollection<Car>(persistence);
         cars.addAll(CarFactory.createCollectionOfCars(100));
         long bytesUsedWhenFullyPopulated = persistence.getBytesUsed();
-        Assert.assertTrue("Bytes used when fully populated should be greater than zero: " + bytesUsedWhenFullyPopulated, bytesUsedWhenFullyPopulated > 0);
+        TestAssertions.assertTrue("Bytes used when fully populated should be greater than zero: " + bytesUsedWhenFullyPopulated, bytesUsedWhenFullyPopulated > 0);
         cars.removeAll(CarFactory.createCollectionOfCars(100));
         long bytesUsedWhenObjectsRemoved = persistence.getBytesUsed();
-        Assert.assertTrue("Bytes used when objects removed (" + bytesUsedWhenObjectsRemoved + ") should remain the same as when fully populated (" + bytesUsedWhenFullyPopulated + ")", bytesUsedWhenObjectsRemoved == bytesUsedWhenFullyPopulated);
+        TestAssertions.assertTrue("Bytes used when objects removed (" + bytesUsedWhenObjectsRemoved + ") should remain the same as when fully populated (" + bytesUsedWhenFullyPopulated + ")", bytesUsedWhenObjectsRemoved == bytesUsedWhenFullyPopulated);
         persistence.compact(); // Truncates size of the database, but not to zero as the tables which were created remain (although empty)
         long bytesUsedAfterCompaction = persistence.getBytesUsed();
-        Assert.assertTrue("Bytes used after compaction (" + bytesUsedAfterCompaction + ") should be less than when fully populated (" + bytesUsedWhenFullyPopulated + ")", bytesUsedAfterCompaction < bytesUsedWhenFullyPopulated);
+        TestAssertions.assertTrue("Bytes used after compaction (" + bytesUsedAfterCompaction + ") should be less than when fully populated (" + bytesUsedWhenFullyPopulated + ")", bytesUsedAfterCompaction < bytesUsedWhenFullyPopulated);
     }
 
     @Test
@@ -70,13 +90,13 @@ public class OffHeapPersistenceTest {
         cars.addAll(CarFactory.createCollectionOfCars(50));
         persistence.compact();
         long initialBytesUsed = persistence.getBytesUsed();
-        Assert.assertTrue("Initial bytes used should be greater than zero: " + initialBytesUsed, initialBytesUsed > 0);
+        TestAssertions.assertTrue("Initial bytes used should be greater than zero: " + initialBytesUsed, initialBytesUsed > 0);
         persistence.expand(bytesToExpand);
         long bytesUsedAfterExpanding = persistence.getBytesUsed();
-        Assert.assertTrue("Bytes used after expanding (" + bytesUsedAfterExpanding + ") should have been increased by at least bytes to expand (" + bytesToExpand + ") above initial bytes used (" + initialBytesUsed + ")", bytesUsedAfterExpanding >= (initialBytesUsed + bytesToExpand));
+        TestAssertions.assertTrue("Bytes used after expanding (" + bytesUsedAfterExpanding + ") should have been increased by at least bytes to expand (" + bytesToExpand + ") above initial bytes used (" + initialBytesUsed + ")", bytesUsedAfterExpanding >= (initialBytesUsed + bytesToExpand));
         persistence.compact();
         long bytesUsedAfterCompaction = persistence.getBytesUsed();
-        Assert.assertTrue("Bytes used after compaction (" + bytesUsedAfterCompaction + ") should be equal to initial bytes used (" + initialBytesUsed + ")", bytesUsedAfterCompaction == initialBytesUsed);
+        TestAssertions.assertTrue("Bytes used after compaction (" + bytesUsedAfterCompaction + ") should be equal to initial bytes used (" + initialBytesUsed + ")", bytesUsedAfterCompaction == initialBytesUsed);
     }
 
     @Test
@@ -87,9 +107,9 @@ public class OffHeapPersistenceTest {
         Index<Car> diskIndex = DiskIndex.onAttribute(Car.MANUFACTURER);
         Index<Car> navigableIndex = NavigableIndex.onAttribute(Car.MANUFACTURER);
 
-        Assert.assertTrue(persistence.supportsIndex(offHeapIndex));
-        Assert.assertFalse(persistence.supportsIndex(diskIndex));
-        Assert.assertFalse(persistence.supportsIndex(navigableIndex));
+        TestAssertions.assertTrue(persistence.supportsIndex(offHeapIndex));
+        TestAssertions.assertFalse(persistence.supportsIndex(diskIndex));
+        TestAssertions.assertFalse(persistence.supportsIndex(navigableIndex));
     }
 
     @Test

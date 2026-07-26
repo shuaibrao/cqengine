@@ -18,9 +18,9 @@ package com.googlecode.cqengine.index.sqlite;
 import com.googlecode.cqengine.index.sqlite.TemporaryDatabase.TemporaryInMemoryDatabase;
 import com.googlecode.cqengine.index.sqlite.support.DBUtils;
 import com.googlecode.cqengine.query.QueryFactory;
-import org.junit.Assert;
-import org.junit.Rule;
-import org.junit.Test;
+import com.googlecode.cqengine.testutil.TestAssertions;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.jupiter.api.Test;
 
 import java.sql.*;
 import java.util.LinkedHashMap;
@@ -37,7 +37,7 @@ import static com.googlecode.cqengine.query.QueryFactory.noQueryOptions;
  */
 public class SQLiteConcurrentStatementTest {
 
-    @Rule
+    @RegisterExtension
     public TemporaryInMemoryDatabase temporaryDatabase = new TemporaryInMemoryDatabase();
 
     @Test
@@ -67,7 +67,7 @@ public class SQLiteConcurrentStatementTest {
                 PreparedStatement rstmt2 = connection.prepareStatement("SELECT COUNT(column2) FROM test_table WHERE column1 >= 3 AND column1 <= 5 AND column2 = ?;");
                 rstmt2.setBytes(1, column2);
                 ResultSet rs2 = rstmt2.executeQuery();
-                Assert.assertTrue(rs2.next());
+                TestAssertions.assertTrue(rs2.next());
                 Integer count = rs2.getInt(1);
                 rs2.close();
                 rstmt2.close();
@@ -75,10 +75,10 @@ public class SQLiteConcurrentStatementTest {
             }
             rs1.close();
             rstmt1.close();
-            Assert.assertEquals(3, results.size());
-            Assert.assertEquals(Integer.valueOf(1), results.get(3));
-            Assert.assertEquals(Integer.valueOf(1), results.get(4));
-            Assert.assertEquals(Integer.valueOf(1), results.get(5));
+            TestAssertions.assertEquals(3, results.size());
+            TestAssertions.assertEquals(Integer.valueOf(1), results.get(3));
+            TestAssertions.assertEquals(Integer.valueOf(1), results.get(4));
+            TestAssertions.assertEquals(Integer.valueOf(1), results.get(5));
         }
         finally {
             DBUtils.closeQuietly(connection);

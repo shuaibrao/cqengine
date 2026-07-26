@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +22,7 @@ import com.googlecode.cqengine.attribute.Attribute;
 import com.googlecode.cqengine.attribute.SimpleAttribute;
 import com.googlecode.cqengine.query.Query;
 import com.googlecode.cqengine.query.option.QueryOptions;
+import com.googlecode.cqengine.resultset.ResultSet;
 
 import static com.googlecode.cqengine.query.QueryFactory.*;
 
@@ -58,8 +60,10 @@ public class ThreeWayJoin {
                 existsIn(userRoles, User.USER_ID, UserRole.USER_ID,
                         existsIn(roles, UserRole.ROLE_ID, Role.ROLE_ID, equal(Role.ROLE_NAME, "Manager")));
 
-        for (User u : users.retrieve(usersWhoAreManagers)) {
-            System.out.println(u.userName);
+        try (ResultSet<User> results = users.retrieve(usersWhoAreManagers)) {
+            for (User u : results) {
+                System.out.println(u.userName);
+            }
         }
         // ..prints: Jane, Jesse
     }

@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,8 +49,10 @@ public class Wildcard {
         collection.addIndex(RadixTreeIndex.onAttribute(SELF));
         collection.addIndex(ReversedRadixTreeIndex.onAttribute(SELF));
 
-        for (String match : retrieveWildcardMatches(collection, "T", "T")) {
-            System.out.println(match); // TOAST, TEST, TT
+        try (ResultSet<String> matches = retrieveWildcardMatches(collection, "T", "T")) {
+            for (String match : matches) {
+                System.out.println(match); // TOAST, TEST, TT
+            }
         }
     }
 

@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,14 +26,14 @@ import com.googlecode.cqengine.query.option.QueryOptions;
 import com.googlecode.cqengine.testutil.Car;
 import nl.jqno.equalsverifier.EqualsVerifier;
 import nl.jqno.equalsverifier.Warning;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
 import static com.googlecode.cqengine.index.support.PartialIndex.supportsQueryInternal;
 import static com.googlecode.cqengine.query.QueryFactory.*;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static com.googlecode.cqengine.testutil.TestAssertions.assertEquals;
+import static com.googlecode.cqengine.testutil.TestAssertions.assertFalse;
+import static com.googlecode.cqengine.testutil.TestAssertions.assertTrue;
 import static org.mockito.Mockito.*;
 
 /**
@@ -55,7 +56,7 @@ public class PartialIndexTest {
     public void testEqualsAndHashCode_PartialDiskIndex() {
         EqualsVerifier.forClass(PartialDiskIndex.class)
                 .withNonnullFields("filterQuery", "attribute", "backingIndex")
-                .withIgnoredFields("attribute", "tableNameSuffix")
+                .withIgnoredFields("attribute", "tableNameSuffix", "legacyTableNameSuffix")
                 .suppress(Warning.STRICT_INHERITANCE, Warning.NONFINAL_FIELDS)
                 .verify();
     }
@@ -64,14 +65,15 @@ public class PartialIndexTest {
     public void testEqualsAndHashCode_PartialOffHeapIndex() {
         EqualsVerifier.forClass(PartialOffHeapIndex.class)
                 .withNonnullFields("filterQuery", "attribute", "backingIndex")
-                .withIgnoredFields("attribute", "tableNameSuffix")
+                .withIgnoredFields("attribute", "tableNameSuffix", "legacyTableNameSuffix")
                 .suppress(Warning.STRICT_INHERITANCE, Warning.NONFINAL_FIELDS)
                 .verify();
     }
 
     @Test
     public void testGetterMethods() {
-        PartialIndex partialIndex = PartialNavigableIndex.onAttributeWithFilterQuery(Car.MANUFACTURER, between(Car.CAR_ID, 2, 5));
+        PartialNavigableIndex<String, Car> partialIndex =
+                PartialNavigableIndex.onAttributeWithFilterQuery(Car.MANUFACTURER, between(Car.CAR_ID, 2, 5));
         assertEquals(Car.MANUFACTURER, partialIndex.getAttribute());
         assertEquals(between(Car.CAR_ID, 2, 5), partialIndex.getFilterQuery());
         assertFalse(partialIndex.isQuantized());
@@ -185,7 +187,7 @@ public class PartialIndexTest {
 
     @SuppressWarnings("unchecked")
     static SortedKeyStatisticsAttributeIndex<Integer, Car> backingIndexSupportsQuery(Query<Car> querySupportedByBackingIndex) {
-        SortedKeyStatisticsAttributeIndex attributeIndex = mock(SortedKeyStatisticsAttributeIndex.class);
+        SortedKeyStatisticsAttributeIndex<Integer, Car> attributeIndex = mock(SortedKeyStatisticsAttributeIndex.class);
         when(attributeIndex.supportsQuery(Mockito.eq(querySupportedByBackingIndex), Mockito.<QueryOptions>any())).thenReturn(true);
         return attributeIndex;
     }

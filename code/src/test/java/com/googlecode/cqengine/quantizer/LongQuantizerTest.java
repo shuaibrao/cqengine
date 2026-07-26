@@ -15,8 +15,10 @@
  */
 package com.googlecode.cqengine.quantizer;
 
-import org.junit.Assert;
-import org.junit.Test;
+import com.googlecode.cqengine.testutil.ExpectedException;
+
+import com.googlecode.cqengine.testutil.TestAssertions;
+import org.junit.jupiter.api.Test;
 
 /**
  * @author Niall Gallagher
@@ -27,19 +29,20 @@ public class LongQuantizerTest {
     public void testWithCompressionFactor_5() throws Exception {
         Quantizer<Long> quantizer = LongQuantizer.withCompressionFactor(5);
         // Note: comparing using toString, as double comparison with epsilon would not distinguish 0.0 from -0.0...
-        Assert.assertEquals("0", quantizer.getQuantizedValue(0L).toString());
-        Assert.assertEquals("0", quantizer.getQuantizedValue(4L).toString());
-        Assert.assertEquals("5", quantizer.getQuantizedValue(5L).toString());
-        Assert.assertEquals("5", quantizer.getQuantizedValue(9L).toString());
-        Assert.assertEquals("10", quantizer.getQuantizedValue(11L).toString());
-        Assert.assertEquals("0", quantizer.getQuantizedValue(-0L).toString());
-        Assert.assertEquals("0", quantizer.getQuantizedValue(-4L).toString());
-        Assert.assertEquals("-5", quantizer.getQuantizedValue(-5L).toString());
-        Assert.assertEquals("-5", quantizer.getQuantizedValue(-9L).toString());
-        Assert.assertEquals("-10", quantizer.getQuantizedValue(-11L).toString());
+        TestAssertions.assertEquals("0", quantizer.getQuantizedValue(0L).toString());
+        TestAssertions.assertEquals("0", quantizer.getQuantizedValue(4L).toString());
+        TestAssertions.assertEquals("5", quantizer.getQuantizedValue(5L).toString());
+        TestAssertions.assertEquals("5", quantizer.getQuantizedValue(9L).toString());
+        TestAssertions.assertEquals("10", quantizer.getQuantizedValue(11L).toString());
+        TestAssertions.assertEquals("0", quantizer.getQuantizedValue(-0L).toString());
+        TestAssertions.assertEquals("0", quantizer.getQuantizedValue(-4L).toString());
+        TestAssertions.assertEquals("-5", quantizer.getQuantizedValue(-5L).toString());
+        TestAssertions.assertEquals("-5", quantizer.getQuantizedValue(-9L).toString());
+        TestAssertions.assertEquals("-10", quantizer.getQuantizedValue(-11L).toString());
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
+    @ExpectedException(IllegalArgumentException.class)
     public void testWithCompressionFactor_1() throws Exception {
         LongQuantizer.withCompressionFactor(1);
     }

@@ -16,8 +16,8 @@
 package com.googlecode.cqengine.resultset.order;
 
 import com.googlecode.cqengine.resultset.stored.StoredSetBasedResultSet;
-import org.junit.Test;
-import org.junit.Assert;
+import org.junit.jupiter.api.Test;
+import com.googlecode.cqengine.testutil.TestAssertions;
 
 import java.util.Collections;
 import java.util.Iterator;
@@ -30,7 +30,7 @@ public class MaterializedDeduplicatedResultSetTest {
     public void testMaterializingResultSetIterator() throws Exception {
         final MaterializedDeduplicatedResultSet<Object> set = new MaterializedDeduplicatedResultSet<Object>(new StoredSetBasedResultSet<Object>(Collections.<Object>singleton(this)));
         final Iterator<Object> it = set.iterator();
-        Assert.assertTrue(it.hasNext());
-        Assert.assertTrue(it.hasNext());
+        TestAssertions.assertTrue(it.hasNext());
+        TestAssertions.assertTrue(it.hasNext());
     }
 }

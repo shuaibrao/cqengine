@@ -15,8 +15,8 @@
  */
 package com.googlecode.cqengine.quantizer;
 
-import org.junit.Assert;
-import org.junit.Test;
+import com.googlecode.cqengine.testutil.TestAssertions;
+import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 
@@ -29,31 +29,31 @@ public class BigDecimalQuantizerTest {
     public void testWithCompressionFactor_5() throws Exception {
         Quantizer<BigDecimal> quantizer = BigDecimalQuantizer.withCompressionFactor(5);
         // Note: comparing using toString, as double comparison with epsilon would not distinguish 0.0 from -0.0...
-        Assert.assertEquals("0", quantizer.getQuantizedValue(BigDecimal.valueOf(0.0)).toString());
-        Assert.assertEquals("0", quantizer.getQuantizedValue(BigDecimal.valueOf(4.2)).toString());
-        Assert.assertEquals("5", quantizer.getQuantizedValue(BigDecimal.valueOf(5.0)).toString());
-        Assert.assertEquals("5", quantizer.getQuantizedValue(BigDecimal.valueOf(9.9)).toString());
-        Assert.assertEquals("10", quantizer.getQuantizedValue(BigDecimal.valueOf(11.3)).toString());
-        Assert.assertEquals("0", quantizer.getQuantizedValue(BigDecimal.valueOf(-0.0)).toString());
-        Assert.assertEquals("0", quantizer.getQuantizedValue(BigDecimal.valueOf(-4.2)).toString());
-        Assert.assertEquals("-5", quantizer.getQuantizedValue(BigDecimal.valueOf(-5.0)).toString());
-        Assert.assertEquals("-5", quantizer.getQuantizedValue(BigDecimal.valueOf(-9.9)).toString());
-        Assert.assertEquals("-10", quantizer.getQuantizedValue(BigDecimal.valueOf(-11.3)).toString());
+        TestAssertions.assertEquals("0", quantizer.getQuantizedValue(BigDecimal.valueOf(0.0)).toString());
+        TestAssertions.assertEquals("0", quantizer.getQuantizedValue(BigDecimal.valueOf(4.2)).toString());
+        TestAssertions.assertEquals("5", quantizer.getQuantizedValue(BigDecimal.valueOf(5.0)).toString());
+        TestAssertions.assertEquals("5", quantizer.getQuantizedValue(BigDecimal.valueOf(9.9)).toString());
+        TestAssertions.assertEquals("10", quantizer.getQuantizedValue(BigDecimal.valueOf(11.3)).toString());
+        TestAssertions.assertEquals("0", quantizer.getQuantizedValue(BigDecimal.valueOf(-0.0)).toString());
+        TestAssertions.assertEquals("0", quantizer.getQuantizedValue(BigDecimal.valueOf(-4.2)).toString());
+        TestAssertions.assertEquals("-5", quantizer.getQuantizedValue(BigDecimal.valueOf(-5.0)).toString());
+        TestAssertions.assertEquals("-5", quantizer.getQuantizedValue(BigDecimal.valueOf(-9.9)).toString());
+        TestAssertions.assertEquals("-10", quantizer.getQuantizedValue(BigDecimal.valueOf(-11.3)).toString());
     }
 
     @Test
     public void testWithCompressionFactor_1() throws Exception {
         Quantizer<BigDecimal> quantizer = BigDecimalQuantizer.withCompressionFactor(1);
         // Note: comparing using toString, as double comparison with epsilon would not distinguish 0.0 from -0.0...
-        Assert.assertEquals("0", quantizer.getQuantizedValue(BigDecimal.valueOf(0.0)).toString());
-        Assert.assertEquals("4", quantizer.getQuantizedValue(BigDecimal.valueOf(4.2)).toString());
-        Assert.assertEquals("5", quantizer.getQuantizedValue(BigDecimal.valueOf(5.0)).toString());
-        Assert.assertEquals("9", quantizer.getQuantizedValue(BigDecimal.valueOf(9.9)).toString());
-        Assert.assertEquals("11", quantizer.getQuantizedValue(BigDecimal.valueOf(11.3)).toString());
-        Assert.assertEquals("0", quantizer.getQuantizedValue(BigDecimal.valueOf(-0.0)).toString());
-        Assert.assertEquals("-4", quantizer.getQuantizedValue(BigDecimal.valueOf(-4.2)).toString());
-        Assert.assertEquals("-5", quantizer.getQuantizedValue(BigDecimal.valueOf(-5.0)).toString());
-        Assert.assertEquals("-9", quantizer.getQuantizedValue(BigDecimal.valueOf(-9.9)).toString());
-        Assert.assertEquals("-11", quantizer.getQuantizedValue(BigDecimal.valueOf(-11.3)).toString());
+        TestAssertions.assertEquals("0", quantizer.getQuantizedValue(BigDecimal.valueOf(0.0)).toString());
+        TestAssertions.assertEquals("4", quantizer.getQuantizedValue(BigDecimal.valueOf(4.2)).toString());
+        TestAssertions.assertEquals("5", quantizer.getQuantizedValue(BigDecimal.valueOf(5.0)).toString());
+        TestAssertions.assertEquals("9", quantizer.getQuantizedValue(BigDecimal.valueOf(9.9)).toString());
+        TestAssertions.assertEquals("11", quantizer.getQuantizedValue(BigDecimal.valueOf(11.3)).toString());
+        TestAssertions.assertEquals("0", quantizer.getQuantizedValue(BigDecimal.valueOf(-0.0)).toString());
+        TestAssertions.assertEquals("-4", quantizer.getQuantizedValue(BigDecimal.valueOf(-4.2)).toString());
+        TestAssertions.assertEquals("-5", quantizer.getQuantizedValue(BigDecimal.valueOf(-5.0)).toString());
+        TestAssertions.assertEquals("-9", quantizer.getQuantizedValue(BigDecimal.valueOf(-9.9)).toString());
+        TestAssertions.assertEquals("-11", quantizer.getQuantizedValue(BigDecimal.valueOf(-11.3)).toString());
     }
 }

@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +25,7 @@ import com.googlecode.cqengine.index.navigable.NavigableIndex;
 import com.googlecode.cqengine.index.suffix.SuffixTreeIndex;
 import com.googlecode.cqengine.query.Query;
 import com.googlecode.cqengine.query.option.QueryOptions;
+import com.googlecode.cqengine.resultset.ResultSet;
 
 import static com.googlecode.cqengine.query.QueryFactory.*;
 
@@ -60,8 +62,10 @@ public class InheritanceExample {
                 equal(Car.FEATURES, "nitro boost"),
                 has(SportsCar.HORSEPOWER)
         );
-        for (Car car : cars.retrieve(carsWithNitroBoostOrAHorsepowerAttribute)) {
-            System.out.println(car); // prints mazda 6, mazda mx-5, porsche 911
+        try (ResultSet<Car> results = cars.retrieve(carsWithNitroBoostOrAHorsepowerAttribute)) {
+            for (Car car : results) {
+                System.out.println(car); // prints mazda 6, mazda mx-5, porsche 911
+            }
         }
 
         System.out.println();
@@ -70,8 +74,10 @@ public class InheritanceExample {
                 equal(CAR_TYPE, SportsCar.class),
                 not(contains(Car.NAME, "mazda"))
         );
-        for (Car car : cars.retrieve(sportsCarsButNotMazda)) {
-            System.out.println(car); // prints porsche 911
+        try (ResultSet<Car> results = cars.retrieve(sportsCarsButNotMazda)) {
+            for (Car car : results) {
+                System.out.println(car); // prints porsche 911
+            }
         }
 
         System.out.println();
@@ -80,8 +86,10 @@ public class InheritanceExample {
                 contains(Car.NAME, "honda"),
                 greaterThan(SportsCar.HORSEPOWER, 9000)
         );
-        for (Car car : cars.retrieve(hondaOrHorsepowerAbove9000)) {
-            System.out.println(car); // prints honda civic, porsche 911
+        try (ResultSet<Car> results = cars.retrieve(hondaOrHorsepowerAbove9000)) {
+            for (Car car : results) {
+                System.out.println(car); // prints honda civic, porsche 911
+            }
         }
     }
 }

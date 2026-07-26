@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,23 +16,26 @@
  */
 package com.googlecode.cqengine.index.sqlite;
 
-import com.google.common.collect.*;
+import com.googlecode.cqengine.testutil.ExpectedException;
+
 import com.googlecode.cqengine.attribute.SimpleAttribute;
 import com.googlecode.cqengine.index.sqlite.support.DBQueries;
+import com.googlecode.cqengine.index.sqlite.support.DBUtils;
 import com.googlecode.cqengine.index.support.CloseableIterable;
 import com.googlecode.cqengine.index.support.KeyStatistics;
 import com.googlecode.cqengine.index.support.KeyValue;
 import com.googlecode.cqengine.persistence.support.ConcurrentOnHeapObjectStore;
 import com.googlecode.cqengine.persistence.support.ObjectSet;
 import com.googlecode.cqengine.persistence.support.ObjectStore;
+import com.googlecode.cqengine.query.Query;
 import com.googlecode.cqengine.query.option.QueryOptions;
 import com.googlecode.cqengine.query.simple.FilterQuery;
 import com.googlecode.cqengine.resultset.ResultSet;
 import com.googlecode.cqengine.testutil.Car;
 import com.googlecode.cqengine.testutil.CarFactory;
-import org.junit.Assert;
-import org.junit.Rule;
-import org.junit.Test;
+import com.googlecode.cqengine.testutil.TestAssertions;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
@@ -46,7 +50,7 @@ import java.util.*;
 import static com.googlecode.cqengine.query.QueryFactory.equal;
 import static com.googlecode.cqengine.query.QueryFactory.noQueryOptions;
 import static com.googlecode.cqengine.testutil.TestUtil.setOf;
-import static org.junit.Assert.*;
+import static com.googlecode.cqengine.testutil.TestAssertions.*;
 import static org.mockito.Mockito.*;
 
 /**
@@ -56,8 +60,11 @@ import static org.mockito.Mockito.*;
  */
 public class SQLiteIndexTest {
 
-    private static final String TABLE_NAME = "cqtbl_features";
-    private static final String INDEX_NAME = "cqidx_features_value";
+    private static final String FEATURES_TABLE_COMPONENT =
+            DBUtils.createSQLiteIndexTableNameV2(Car.FEATURES.getAttributeName(), "");
+    private static final String FEATURES_TABLE_NAME_VALUE = "cqtbl_" + FEATURES_TABLE_COMPONENT;
+    private static final String TABLE_NAME = "\"" + FEATURES_TABLE_NAME_VALUE + "\"";
+    private static final String INDEX_NAME = "\"cqidx_" + FEATURES_TABLE_COMPONENT + "_value\"";
 
     public static final SimpleAttribute<Car, Integer> OBJECT_TO_ID = Car.CAR_ID;
 
@@ -73,7 +80,7 @@ public class SQLiteIndexTest {
             new Car(5, "Fiat", "Punto", Car.Color.BLUE, 5, 5600.00, Arrays.asList("gps"), Collections.emptyList())
     );
 
-    @Rule
+    @RegisterExtension
     public TemporaryDatabase.TemporaryInMemoryDatabase temporaryInMemoryDatabase = new TemporaryDatabase.TemporaryInMemoryDatabase();
 
     @Test
@@ -99,7 +106,97 @@ public class SQLiteIndexTest {
         );
 
         assertNotNull(carFeaturesOffHeapIndex);
-        assertEquals("features_tableSuffix", carFeaturesOffHeapIndex.tableName);
+        assertEquals(
+                DBUtils.createSQLiteIndexTableNameV2("features", "_tableSuffix"),
+                carFeaturesOffHeapIndex.tableName);
+        assertEquals("features_tableSuffix", carFeaturesOffHeapIndex.legacyTableName);
+    }
+
+    @Test
+    public void emptyTableNameSuffixRetainsTheLegacyMigrationCandidate() {
+        SQLiteIndex<String, Car, Integer> index = new SQLiteIndex<String, Car, Integer>(
+                Car.FEATURES,
+                OBJECT_TO_ID,
+                ID_TO_OBJECT,
+                "");
+
+        assertEquals(DBUtils.createSQLiteIndexTableNameV2("features", ""), index.tableName);
+        assertEquals("features", index.legacyTableName);
+    }
+
+    @Test
+    public void rejectsNullTableNameSuffix() {
+        TestAssertions.assertThrows(
+                NullPointerException.class,
+                () -> new SQLiteIndex<String, Car, Integer>(Car.FEATURES, OBJECT_TO_ID, ID_TO_OBJECT, null));
+    }
+
+    @Test
+    public void rejectsLongTableNameSuffix() {
+        String suffix = "a".repeat(DBUtils.MAX_SQLITE_IDENTIFIER_COMPONENT_LENGTH + 1);
+
+        TestAssertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> new SQLiteIndex<String, Car, Integer>(Car.FEATURES, OBJECT_TO_ID, ID_TO_OBJECT, suffix));
+    }
+
+    @Test
+    public void enforcesCombinedAttributeAndSuffixLength() {
+        String attributeName = "a".repeat(DBUtils.MAX_SQLITE_IDENTIFIER_COMPONENT_LENGTH - 5);
+        SimpleAttribute<Car, String> attribute = new SimpleAttribute<Car, String>(
+                Car.class, String.class, attributeName) {
+            @Override
+            public String getValue(Car car, QueryOptions queryOptions) {
+                return car.getModel();
+            }
+        };
+
+        SQLiteIndex<String, Car, Integer> maximumLengthIndex = new SQLiteIndex<String, Car, Integer>(
+                attribute, OBJECT_TO_ID, ID_TO_OBJECT, "bbbbb");
+        TestAssertions.assertEquals(67, maximumLengthIndex.tableName.length());
+        TestAssertions.assertEquals(
+                DBUtils.MAX_SQLITE_IDENTIFIER_COMPONENT_LENGTH, maximumLengthIndex.legacyTableName.length());
+        TestAssertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> new SQLiteIndex<String, Car, Integer>(
+                        attribute, OBJECT_TO_ID, ID_TO_OBJECT, "bbbbbb"));
+    }
+
+    @Test
+    public void rejectsTableNameSuffixInsteadOfSanitizingIt() {
+        String[] rejected = {"_cars;DROP_TABLE", "_cars\"quoted", "_cars'quoted", "_café", "_车辆"};
+
+        for (String suffix : rejected) {
+            TestAssertions.assertThrows(
+                    "Expected suffix to be rejected",
+                    IllegalArgumentException.class,
+                    () -> new SQLiteIndex<String, Car, Integer>(
+                            Car.FEATURES, OBJECT_TO_ID, ID_TO_OBJECT, suffix));
+        }
+    }
+
+    @Test
+    public void separatesAttributeNamesWhichCollidedUnderTheLegacySanitizer() {
+        SimpleAttribute<Car, String> punctuated = namedModelAttribute("a-b");
+        SimpleAttribute<Car, String> plain = namedModelAttribute("ab");
+
+        SQLiteIndex<String, Car, Integer> punctuatedIndex =
+                new SQLiteIndex<String, Car, Integer>(punctuated, OBJECT_TO_ID, ID_TO_OBJECT, "");
+        SQLiteIndex<String, Car, Integer> plainIndex =
+                new SQLiteIndex<String, Car, Integer>(plain, OBJECT_TO_ID, ID_TO_OBJECT, "");
+
+        TestAssertions.assertEquals("ab", punctuatedIndex.legacyTableName);
+        TestAssertions.assertEquals("ab", plainIndex.legacyTableName);
+        TestAssertions.assertNotEquals(punctuatedIndex.tableName, plainIndex.tableName);
+    }
+
+    private static SimpleAttribute<Car, String> namedModelAttribute(String name) {
+        return new SimpleAttribute<Car, String>(Car.class, String.class, name) {
+            @Override
+            public String getValue(Car car, QueryOptions queryOptions) {
+                return car.getModel();
+            }
+        };
     }
 
     @Test
@@ -276,9 +373,9 @@ public class SQLiteIndexTest {
         verify(statement, times(1)).executeQuery("PRAGMA synchronous;");
         verify(statement, times(2)).close();
 
-        Assert.assertEquals(carFeaturesOffHeapIndex.pragmaSynchronous, SQLiteConfig.SynchronousMode.FULL);
-        Assert.assertEquals(carFeaturesOffHeapIndex.pragmaJournalMode, SQLiteConfig.JournalMode.DELETE);
-        Assert.assertTrue(carFeaturesOffHeapIndex.canModifySyncAndJournaling);
+        TestAssertions.assertEquals(carFeaturesOffHeapIndex.pragmaSynchronous, SQLiteConfig.SynchronousMode.FULL);
+        TestAssertions.assertEquals(carFeaturesOffHeapIndex.pragmaJournalMode, SQLiteConfig.JournalMode.DELETE);
+        TestAssertions.assertTrue(carFeaturesOffHeapIndex.canModifySyncAndJournaling);
 
     }
 
@@ -292,22 +389,33 @@ public class SQLiteIndexTest {
         Connection connection = mock(Connection.class);
         Statement statement = mock(Statement.class);
         PreparedStatement preparedStatement = mock(PreparedStatement.class);
+        PreparedStatement migrationMetadataCheck = mock(PreparedStatement.class);
 
-        java.sql.ResultSet tableCheckRs = mock(java.sql.ResultSet.class);
+        java.sql.ResultSet legacyTableCheckRs = mock(java.sql.ResultSet.class);
+        java.sql.ResultSet currentTableCheckRs = mock(java.sql.ResultSet.class);
+        java.sql.ResultSet migrationMetadataCheckRs = mock(java.sql.ResultSet.class);
         java.sql.ResultSet journalModeRs = mock(java.sql.ResultSet.class);
         java.sql.ResultSet synchronousRs = mock(java.sql.ResultSet.class);
-        when(tableCheckRs.next()).thenReturn(true); // <- simulates a preexisting table
+        when(legacyTableCheckRs.next()).thenReturn(false);
+        when(currentTableCheckRs.next()).thenReturn(true).thenReturn(true);
+        when(migrationMetadataCheckRs.next()).thenReturn(false);
         when(journalModeRs.next()).thenReturn(true).thenReturn(false);
         when(synchronousRs.next()).thenReturn(true).thenReturn(false);
 
         when(journalModeRs.getString(1)).thenReturn("DELETE");
         when(synchronousRs.getInt(1)).thenReturn(2);
 
-        when(statement.executeQuery("SELECT 1 FROM sqlite_master WHERE type='table' AND name='cqtbl_features';")).thenReturn(tableCheckRs);
+        when(statement.executeQuery("SELECT 1 FROM sqlite_master WHERE type='table' AND name='cqtbl_features';"))
+                .thenReturn(legacyTableCheckRs);
+        when(statement.executeQuery("SELECT 1 FROM sqlite_master WHERE type='table' AND name='"
+                + FEATURES_TABLE_NAME_VALUE + "';")).thenReturn(currentTableCheckRs);
         when(statement.executeQuery("PRAGMA journal_mode;")).thenReturn(journalModeRs);
         when(statement.executeQuery("PRAGMA synchronous;")).thenReturn(synchronousRs);
 
         when(connection.prepareStatement("INSERT OR IGNORE INTO " + TABLE_NAME + " values(?, ?);")).thenReturn(preparedStatement);
+        when(connection.prepareStatement("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?;"))
+                .thenReturn(migrationMetadataCheck);
+        when(migrationMetadataCheck.executeQuery()).thenReturn(migrationMetadataCheckRs);
         when(connectionManager.getConnection(any(SQLiteIndex.class), anyQueryOptions())).thenReturn(connection);
         when(connectionManager.isApplyUpdateForIndexEnabled(any(SQLiteIndex.class))).thenReturn(true);
         when(connection.createStatement()).thenReturn(statement);
@@ -345,25 +453,35 @@ public class SQLiteIndexTest {
         Connection connection = mock(Connection.class);
         Statement statement = mock(Statement.class);
         PreparedStatement preparedStatement = mock(PreparedStatement.class);
+        PreparedStatement migrationMetadataCheck = mock(PreparedStatement.class);
 
         java.sql.ResultSet tableCheckRs = mock(java.sql.ResultSet.class);
+        java.sql.ResultSet migrationMetadataCheckRs = mock(java.sql.ResultSet.class);
         java.sql.ResultSet journalModeRs = mock(java.sql.ResultSet.class);
         java.sql.ResultSet synchronousRs = mock(java.sql.ResultSet.class);
         when(tableCheckRs.next()).thenReturn(false); // <- simulates table does not already exist
+        when(migrationMetadataCheckRs.next()).thenReturn(false);
         when(journalModeRs.next()).thenReturn(true).thenReturn(false);
         when(synchronousRs.next()).thenReturn(true).thenReturn(false);
 
         when(journalModeRs.getString(1)).thenReturn("DELETE");
         when(synchronousRs.getInt(1)).thenReturn(2);
 
-        when(statement.executeQuery("SELECT 1 FROM sqlite_master WHERE type='table' AND name='cqtbl_features';")).thenReturn(tableCheckRs);
+        when(statement.executeQuery("SELECT 1 FROM sqlite_master WHERE type='table' AND name='cqtbl_features';"))
+                .thenReturn(tableCheckRs);
+        when(statement.executeQuery("SELECT 1 FROM sqlite_master WHERE type='table' AND name='"
+                + FEATURES_TABLE_NAME_VALUE + "';")).thenReturn(tableCheckRs);
         when(statement.executeQuery("PRAGMA journal_mode;")).thenReturn(journalModeRs);
         when(statement.executeQuery("PRAGMA synchronous;")).thenReturn(synchronousRs);
 
         when(connection.prepareStatement("INSERT OR IGNORE INTO " + TABLE_NAME + " values(?, ?);")).thenReturn(preparedStatement);
+        when(connection.prepareStatement("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?;"))
+                .thenReturn(migrationMetadataCheck);
+        when(migrationMetadataCheck.executeQuery()).thenReturn(migrationMetadataCheckRs);
         when(connectionManager.getConnection(any(SQLiteIndex.class), anyQueryOptions())).thenReturn(connection);
         when(connectionManager.isApplyUpdateForIndexEnabled(any(SQLiteIndex.class))).thenReturn(true);
         when(connection.createStatement()).thenReturn(statement);
+        when(connection.getAutoCommit()).thenReturn(true);
         when(preparedStatement.executeBatch()).thenReturn(new int[] {2});
 
         // The objects to add
@@ -385,7 +503,7 @@ public class SQLiteIndexTest {
         verify(statement, times(1)).executeQuery("PRAGMA synchronous;");
         verify(statement, times(1)).executeUpdate("CREATE TABLE IF NOT EXISTS " + TABLE_NAME + " (objectKey INTEGER, value TEXT, PRIMARY KEY (objectKey, value)) WITHOUT ROWID;");
         verify(statement, times(1)).executeUpdate("CREATE INDEX IF NOT EXISTS " + INDEX_NAME + " ON " + TABLE_NAME + " (value);");
-        verify(statement, times(6)).close();
+        verify(statement, times(8)).close();
 
         verify(preparedStatement, times(2)).setObject(1, 1);
         verify(preparedStatement, times(1)).setObject(1, 2);
@@ -398,9 +516,9 @@ public class SQLiteIndexTest {
 
         verify(connection, times(0)).close();
 
-        Assert.assertEquals(carFeaturesOffHeapIndex.pragmaSynchronous, SQLiteConfig.SynchronousMode.FULL);
-        Assert.assertEquals(carFeaturesOffHeapIndex.pragmaJournalMode, SQLiteConfig.JournalMode.DELETE);
-        Assert.assertTrue(carFeaturesOffHeapIndex.canModifySyncAndJournaling);
+        TestAssertions.assertEquals(carFeaturesOffHeapIndex.pragmaSynchronous, SQLiteConfig.SynchronousMode.FULL);
+        TestAssertions.assertEquals(carFeaturesOffHeapIndex.pragmaJournalMode, SQLiteConfig.JournalMode.DELETE);
+        TestAssertions.assertTrue(carFeaturesOffHeapIndex.canModifySyncAndJournaling);
     }
 
     @Test
@@ -454,6 +572,21 @@ public class SQLiteIndexTest {
 
         assertEquals(SQLiteIndex.INDEX_RETRIEVAL_COST, carsWithAbs.getRetrievalCost());
 
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void eagerCountForKeyClosesResults() {
+        SQLiteIndex<String, Car, Integer> index = spy(new SQLiteIndex<String, Car, Integer>(
+                Car.FEATURES, OBJECT_TO_ID, ID_TO_OBJECT, ""));
+        ResultSet<Car> results = mock(ResultSet.class);
+        QueryOptions queryOptions = new QueryOptions();
+        when(results.size()).thenReturn(2);
+        doReturn(results).when(index).retrieve(any(Query.class), same(queryOptions));
+
+        assertEquals(Integer.valueOf(2), index.getCountForKey("abs", queryOptions));
+
+        verify(results, times(1)).close();
     }
 
     @Test
@@ -532,7 +665,8 @@ public class SQLiteIndexTest {
 
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
+    @ExpectedException(IllegalStateException.class)
     public void testNewResultSet_Iterator_Exception_Close() throws Exception{
 
         // Mocks
@@ -608,7 +742,7 @@ public class SQLiteIndexTest {
 
 
         assertNotNull(carsWithAbs);
-        Iterator carsWithAbsIterator = carsWithAbs.iterator();
+        Iterator<Car> carsWithAbsIterator = carsWithAbs.iterator();
 
         assertTrue(carsWithAbsIterator.hasNext());
         assertNotNull(carsWithAbsIterator.next());
@@ -655,7 +789,7 @@ public class SQLiteIndexTest {
                 .retrieve(equal(Car.FEATURES, "abs"), createQueryOptions(connectionManager));
 
         assertNotNull(carsWithAbs);
-        Iterator carsWithAbsIterator = carsWithAbs.iterator();
+        Iterator<Car> carsWithAbsIterator = carsWithAbs.iterator();
         assertTrue(carsWithAbsIterator.hasNext());
         assertNotNull(carsWithAbsIterator.next());
         // Do not continue with the iteration, but close
@@ -697,15 +831,15 @@ public class SQLiteIndexTest {
         Iterator<Integer> objectKeysIterator = objectKeys.iterator();
         assertNotNull(objectKeysIterator);
         assertTrue(objectKeysIterator.hasNext());
-        assertEquals(new Integer(1), objectKeysIterator.next());
+        assertEquals(Integer.valueOf(1), objectKeysIterator.next());
         assertTrue(objectKeysIterator.hasNext());
-        assertEquals(new Integer(2), objectKeysIterator.next());
+        assertEquals(Integer.valueOf(2), objectKeysIterator.next());
         assertTrue(objectKeysIterator.hasNext());
-        assertEquals(new Integer(3), objectKeysIterator.next());
+        assertEquals(Integer.valueOf(3), objectKeysIterator.next());
         assertTrue(objectKeysIterator.hasNext());
-        assertEquals(new Integer(4), objectKeysIterator.next());
+        assertEquals(Integer.valueOf(4), objectKeysIterator.next());
         assertTrue(objectKeysIterator.hasNext());
-        assertEquals(new Integer(5), objectKeysIterator.next());
+        assertEquals(Integer.valueOf(5), objectKeysIterator.next());
         assertFalse(objectKeysIterator.hasNext());
     }
 
@@ -725,7 +859,7 @@ public class SQLiteIndexTest {
         offHeapIndex.addAll(createObjectSetOfCars(10), createQueryOptions(connectionManager));
 
         List<String> expected = Arrays.asList("Accord", "Avensis", "Civic", "Focus", "Fusion", "Hilux", "Insight", "M6", "Prius", "Taurus");
-        List<String> actual = Lists.newArrayList(offHeapIndex.getDistinctKeys(createQueryOptions(connectionManager)));
+        List<String> actual = toList(offHeapIndex.getDistinctKeys(createQueryOptions(connectionManager)));
         assertEquals(expected, actual);
     }
 
@@ -745,7 +879,7 @@ public class SQLiteIndexTest {
         offHeapIndex.addAll(createObjectSetOfCars(10), createQueryOptions(connectionManager));
 
         List<String> expected = Arrays.asList("Taurus", "Prius", "M6", "Insight", "Hilux", "Fusion", "Focus", "Civic", "Avensis", "Accord");
-        List<String> actual = Lists.newArrayList(offHeapIndex.getDistinctKeysDescending(createQueryOptions(connectionManager)));
+        List<String> actual = toList(offHeapIndex.getDistinctKeysDescending(createQueryOptions(connectionManager)));
         assertEquals(expected, actual);
     }
 
@@ -766,15 +900,15 @@ public class SQLiteIndexTest {
         List<String> expected, actual;
 
         expected = Arrays.asList("Accord", "Avensis", "Civic", "Focus", "Fusion", "Hilux", "Insight", "M6", "Prius", "Taurus");
-        actual = Lists.newArrayList(offHeapIndex.getDistinctKeys("", false, null, true, createQueryOptions(connectionManager)));
+        actual = toList(offHeapIndex.getDistinctKeys("", false, null, true, createQueryOptions(connectionManager)));
         assertEquals(expected, actual);
 
         expected = Arrays.asList("Accord", "Avensis", "Civic", "Focus", "Fusion", "Hilux", "Insight", "M6", "Prius", "Taurus");
-        actual = Lists.newArrayList(offHeapIndex.getDistinctKeys("A", false, null, true, createQueryOptions(connectionManager)));
+        actual = toList(offHeapIndex.getDistinctKeys("A", false, null, true, createQueryOptions(connectionManager)));
         assertEquals(expected, actual);
 
         expected = Arrays.asList("Avensis", "Civic", "Focus", "Fusion", "Hilux", "Insight", "M6", "Prius", "Taurus");
-        actual = Lists.newArrayList(offHeapIndex.getDistinctKeys("Accord", false, null, true, createQueryOptions(connectionManager)));
+        actual = toList(offHeapIndex.getDistinctKeys("Accord", false, null, true, createQueryOptions(connectionManager)));
         assertEquals(expected, actual);
     }
 
@@ -795,7 +929,7 @@ public class SQLiteIndexTest {
         List<String> expected, actual;
 
         expected = Arrays.asList("Accord", "Avensis", "Civic", "Focus", "Fusion", "Hilux", "Insight", "M6", "Prius", "Taurus");
-        actual = Lists.newArrayList(offHeapIndex.getDistinctKeys("Accord", true, null, true, createQueryOptions(connectionManager)));
+        actual = toList(offHeapIndex.getDistinctKeys("Accord", true, null, true, createQueryOptions(connectionManager)));
         assertEquals(expected, actual);
     }
 
@@ -816,15 +950,15 @@ public class SQLiteIndexTest {
         List<String> expected, actual;
 
         expected = Arrays.asList();
-        actual = Lists.newArrayList(offHeapIndex.getDistinctKeys(null, true, "", false, createQueryOptions(connectionManager)));
+        actual = toList(offHeapIndex.getDistinctKeys(null, true, "", false, createQueryOptions(connectionManager)));
         assertEquals(expected, actual);
 
         expected = Arrays.asList("Accord", "Avensis", "Civic", "Focus", "Fusion", "Hilux", "Insight", "M6", "Prius", "Taurus");
-        actual = Lists.newArrayList(offHeapIndex.getDistinctKeys(null, true, "Z", false, createQueryOptions(connectionManager)));
+        actual = toList(offHeapIndex.getDistinctKeys(null, true, "Z", false, createQueryOptions(connectionManager)));
         assertEquals(expected, actual);
 
         expected = Arrays.asList("Accord", "Avensis", "Civic", "Focus", "Fusion", "Hilux", "Insight", "M6");
-        actual = Lists.newArrayList(offHeapIndex.getDistinctKeys(null, true, "Prius", false, createQueryOptions(connectionManager)));
+        actual = toList(offHeapIndex.getDistinctKeys(null, true, "Prius", false, createQueryOptions(connectionManager)));
         assertEquals(expected, actual);
     }
 
@@ -845,7 +979,7 @@ public class SQLiteIndexTest {
         List<String> expected, actual;
 
         expected = Arrays.asList("Accord", "Avensis", "Civic", "Focus", "Fusion", "Hilux", "Insight", "M6", "Prius");
-        actual = Lists.newArrayList(offHeapIndex.getDistinctKeys(null, true, "Prius", true, createQueryOptions(connectionManager)));
+        actual = toList(offHeapIndex.getDistinctKeys(null, true, "Prius", true, createQueryOptions(connectionManager)));
         assertEquals(expected, actual);
     }
 
@@ -866,7 +1000,7 @@ public class SQLiteIndexTest {
         List<String> expected, actual;
 
         expected = Arrays.asList("Focus", "Fusion", "Hilux");
-        actual = Lists.newArrayList(offHeapIndex.getDistinctKeys("Civic", false, "Insight", false, createQueryOptions(connectionManager)));
+        actual = toList(offHeapIndex.getDistinctKeys("Civic", false, "Insight", false, createQueryOptions(connectionManager)));
         assertEquals(expected, actual);
     }
 
@@ -887,7 +1021,7 @@ public class SQLiteIndexTest {
         List<String> expected, actual;
 
         expected = Arrays.asList("Civic", "Focus", "Fusion", "Hilux", "Insight");
-        actual = Lists.newArrayList(offHeapIndex.getDistinctKeys("Civic", true, "Insight", true, createQueryOptions(connectionManager)));
+        actual = toList(offHeapIndex.getDistinctKeys("Civic", true, "Insight", true, createQueryOptions(connectionManager)));
         assertEquals(expected, actual);
     }
 
@@ -908,7 +1042,7 @@ public class SQLiteIndexTest {
         List<String> expected, actual;
 
         expected = Arrays.asList("Insight", "Hilux", "Fusion", "Focus", "Civic");
-        actual = Lists.newArrayList(offHeapIndex.getDistinctKeysDescending("Civic", true, "Insight", true, createQueryOptions(connectionManager)));
+        actual = toList(offHeapIndex.getDistinctKeysDescending("Civic", true, "Insight", true, createQueryOptions(connectionManager)));
         assertEquals(expected, actual);
     }
 
@@ -927,31 +1061,30 @@ public class SQLiteIndexTest {
         );
         offHeapIndex.addAll(createObjectSetOfCars(10), createQueryOptions(connectionManager));
 
-        Multimap<String, Car> expected = MultimapBuilder.SetMultimapBuilder.linkedHashKeys().hashSetValues().build();
-        expected.put("BMW", CarFactory.createCar(9));
-        expected.put("Ford", CarFactory.createCar(0));
-        expected.put("Ford", CarFactory.createCar(1));
-        expected.put("Ford", CarFactory.createCar(2));
-        expected.put("Honda", CarFactory.createCar(3));
-        expected.put("Honda", CarFactory.createCar(4));
-        expected.put("Honda", CarFactory.createCar(5));
-        expected.put("Toyota", CarFactory.createCar(6));
-        expected.put("Toyota", CarFactory.createCar(7));
-        expected.put("Toyota", CarFactory.createCar(8));
+        Map<String, Set<Car>> expected = new LinkedHashMap<>();
+        putValue(expected, "BMW", CarFactory.createCar(9));
+        putValue(expected, "Ford", CarFactory.createCar(0));
+        putValue(expected, "Ford", CarFactory.createCar(1));
+        putValue(expected, "Ford", CarFactory.createCar(2));
+        putValue(expected, "Honda", CarFactory.createCar(3));
+        putValue(expected, "Honda", CarFactory.createCar(4));
+        putValue(expected, "Honda", CarFactory.createCar(5));
+        putValue(expected, "Toyota", CarFactory.createCar(6));
+        putValue(expected, "Toyota", CarFactory.createCar(7));
+        putValue(expected, "Toyota", CarFactory.createCar(8));
 
-
-        Multimap<String, Car> actual = MultimapBuilder.SetMultimapBuilder.linkedHashKeys().hashSetValues().build();
+        Map<String, Set<Car>> actual = new LinkedHashMap<>();
 
         CloseableIterable<KeyValue<String, Car>> keysAndValues = offHeapIndex.getKeysAndValues(createQueryOptions(connectionManager));
 
         for (KeyValue<String, Car> keyValue : keysAndValues) {
-            actual.put(keyValue.getKey(), keyValue.getValue());
+            putValue(actual, keyValue.getKey(), keyValue.getValue());
         }
 
         assertEquals("keys and values", expected, actual);
 
-        List<String> expectedKeysOrder = Lists.newArrayList(expected.keySet());
-        List<String> actualKeysOrder = Lists.newArrayList(actual.keySet());
+        List<String> expectedKeysOrder = toList(expected.keySet());
+        List<String> actualKeysOrder = toList(actual.keySet());
         assertEquals("key order", expectedKeysOrder, actualKeysOrder);
     }
 
@@ -970,30 +1103,30 @@ public class SQLiteIndexTest {
         );
         offHeapIndex.addAll(createObjectSetOfCars(10), createQueryOptions(connectionManager));
 
-        Multimap<String, Car> expected = MultimapBuilder.SetMultimapBuilder.linkedHashKeys().hashSetValues().build();
-        expected.put("Toyota", CarFactory.createCar(6));
-        expected.put("Toyota", CarFactory.createCar(7));
-        expected.put("Toyota", CarFactory.createCar(8));
-        expected.put("Honda", CarFactory.createCar(3));
-        expected.put("Honda", CarFactory.createCar(4));
-        expected.put("Honda", CarFactory.createCar(5));
-        expected.put("Ford", CarFactory.createCar(0));
-        expected.put("Ford", CarFactory.createCar(1));
-        expected.put("Ford", CarFactory.createCar(2));
-        expected.put("BMW", CarFactory.createCar(9));
+        Map<String, Set<Car>> expected = new LinkedHashMap<>();
+        putValue(expected, "Toyota", CarFactory.createCar(6));
+        putValue(expected, "Toyota", CarFactory.createCar(7));
+        putValue(expected, "Toyota", CarFactory.createCar(8));
+        putValue(expected, "Honda", CarFactory.createCar(3));
+        putValue(expected, "Honda", CarFactory.createCar(4));
+        putValue(expected, "Honda", CarFactory.createCar(5));
+        putValue(expected, "Ford", CarFactory.createCar(0));
+        putValue(expected, "Ford", CarFactory.createCar(1));
+        putValue(expected, "Ford", CarFactory.createCar(2));
+        putValue(expected, "BMW", CarFactory.createCar(9));
 
-        Multimap<String, Car> actual = MultimapBuilder.SetMultimapBuilder.linkedHashKeys().hashSetValues().build();
+        Map<String, Set<Car>> actual = new LinkedHashMap<>();
 
         CloseableIterable<KeyValue<String, Car>> keysAndValues = offHeapIndex.getKeysAndValuesDescending(createQueryOptions(connectionManager));
 
         for (KeyValue<String, Car> keyValue : keysAndValues) {
-            actual.put(keyValue.getKey(), keyValue.getValue());
+            putValue(actual, keyValue.getKey(), keyValue.getValue());
         }
 
         assertEquals("keys and values", expected, actual);
 
-        List<String> expectedKeysOrder = Lists.newArrayList(expected.keySet());
-        List<String> actualKeysOrder = Lists.newArrayList(actual.keySet());
+        List<String> expectedKeysOrder = toList(expected.keySet());
+        List<String> actualKeysOrder = toList(actual.keySet());
         assertEquals("key order", expectedKeysOrder, actualKeysOrder);
     }
 
@@ -1012,7 +1145,7 @@ public class SQLiteIndexTest {
         );
         offHeapIndex.addAll(createObjectSetOfCars(20), createQueryOptions(connectionManager));
 
-        Assert.assertEquals(Integer.valueOf(4), offHeapIndex.getCountOfDistinctKeys(createQueryOptions(connectionManager)));
+        TestAssertions.assertEquals(Integer.valueOf(4), offHeapIndex.getCountOfDistinctKeys(createQueryOptions(connectionManager)));
     }
 
     @Test
@@ -1031,7 +1164,7 @@ public class SQLiteIndexTest {
         offHeapIndex.addAll(createObjectSetOfCars(20), createQueryOptions(connectionManager));
 
         Set<KeyStatistics<String>> keyStatistics = setOf(offHeapIndex.getStatisticsForDistinctKeys(createQueryOptions(connectionManager)));
-        Assert.assertEquals(setOf(
+        TestAssertions.assertEquals(setOf(
                         new KeyStatistics<String>("Ford", 6),
                         new KeyStatistics<String>("Honda", 6),
                         new KeyStatistics<String>("Toyota", 6),
@@ -1057,7 +1190,7 @@ public class SQLiteIndexTest {
         offHeapIndex.addAll(createObjectSetOfCars(20), createQueryOptions(connectionManager));
 
         Set<KeyStatistics<String>> keyStatistics = setOf(offHeapIndex.getStatisticsForDistinctKeysDescending(createQueryOptions(connectionManager)));
-        Assert.assertEquals(setOf(
+        TestAssertions.assertEquals(setOf(
                         new KeyStatistics<String>("Toyota", 6),
                         new KeyStatistics<String>("Honda", 6),
                         new KeyStatistics<String>("Ford", 6),
@@ -1067,7 +1200,8 @@ public class SQLiteIndexTest {
                 keyStatistics);
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
+    @ExpectedException(IllegalStateException.class)
     public void testNewResultSet_FilterQuery_Iterator_Exception_Close() throws Exception{
 
         // Mocks
@@ -1146,7 +1280,7 @@ public class SQLiteIndexTest {
 
 
         assertNotNull(carsWithAbs);
-        Iterator carsWithAbsIterator = carsWithAbs.iterator();
+        Iterator<Car> carsWithAbsIterator = carsWithAbs.iterator();
 
         assertTrue(carsWithAbsIterator.hasNext());
         assertNotNull(carsWithAbsIterator.next());
@@ -1200,7 +1334,7 @@ public class SQLiteIndexTest {
                 .retrieve(filterQuery, createQueryOptions(connectionManager));
 
         assertNotNull(carsWithAbs);
-        Iterator carsWithAbsIterator = carsWithAbs.iterator();
+        Iterator<Car> carsWithAbsIterator = carsWithAbs.iterator();
         assertTrue(carsWithAbsIterator.hasNext());
         assertNotNull(carsWithAbsIterator.next());
         // Do not continue with the iteration, but close
@@ -1405,6 +1539,18 @@ public class SQLiteIndexTest {
 
     static ObjectSet<Car> objectSet(Collection<Car> collection) {
         return ObjectSet.fromCollection(collection);
+    }
+
+    static <K, V> void putValue(Map<K, Set<V>> valuesByKey, K key, V value) {
+        valuesByKey.computeIfAbsent(key, ignored -> new HashSet<V>()).add(value);
+    }
+
+    static <T> List<T> toList(Iterable<? extends T> values) {
+        List<T> result = new ArrayList<T>();
+        for (T value : values) {
+            result.add(value);
+        }
+        return result;
     }
 
 }

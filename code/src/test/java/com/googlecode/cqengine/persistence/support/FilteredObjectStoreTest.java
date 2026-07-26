@@ -15,11 +15,13 @@
  */
 package com.googlecode.cqengine.persistence.support;
 
+import com.googlecode.cqengine.testutil.ExpectedException;
+
 import com.googlecode.cqengine.index.support.CloseableIterator;
 import com.googlecode.cqengine.query.option.QueryOptions;
 import com.googlecode.cqengine.testutil.Car;
 import com.googlecode.cqengine.testutil.CarFactory;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
 import java.util.Collection;
@@ -30,7 +32,7 @@ import java.util.Set;
 import static com.googlecode.cqengine.query.QueryFactory.between;
 import static com.googlecode.cqengine.query.QueryFactory.noQueryOptions;
 import static java.util.Arrays.asList;
-import static org.junit.Assert.assertEquals;
+import static com.googlecode.cqengine.testutil.TestAssertions.assertEquals;
 import static org.mockito.Mockito.*;
 
 /**
@@ -75,52 +77,62 @@ public class FilteredObjectStoreTest {
 
     }
 
-    @Test(expected = UnsupportedOperationException.class)
+    @Test
+    @ExpectedException(UnsupportedOperationException.class)
     public void testAddAll() {
         filteredObjectStore.addAll(Collections.<Car>emptySet(), noQueryOptions());
     }
 
-    @Test(expected = UnsupportedOperationException.class)
+    @Test
+    @ExpectedException(UnsupportedOperationException.class)
     public void testClear() {
         filteredObjectStore.clear(noQueryOptions());
     }
 
-    @Test(expected = UnsupportedOperationException.class)
+    @Test
+    @ExpectedException(UnsupportedOperationException.class)
     public void testContains() {
         filteredObjectStore.contains(dummyCar, noQueryOptions());
     }
 
-    @Test(expected = UnsupportedOperationException.class)
+    @Test
+    @ExpectedException(UnsupportedOperationException.class)
     public void testRemove() {
         filteredObjectStore.remove(dummyCar, noQueryOptions());
     }
 
-    @Test(expected = UnsupportedOperationException.class)
+    @Test
+    @ExpectedException(UnsupportedOperationException.class)
     public void testAdd() {
         filteredObjectStore.add(dummyCar, noQueryOptions());
     }
 
-    @Test(expected = UnsupportedOperationException.class)
+    @Test
+    @ExpectedException(UnsupportedOperationException.class)
     public void testSize() {
         filteredObjectStore.size(noQueryOptions());
     }
 
-    @Test(expected = UnsupportedOperationException.class)
+    @Test
+    @ExpectedException(UnsupportedOperationException.class)
     public void testContainsAll() {
         filteredObjectStore.containsAll(Collections.singleton(dummyCar), noQueryOptions());
     }
 
-    @Test(expected = UnsupportedOperationException.class)
+    @Test
+    @ExpectedException(UnsupportedOperationException.class)
     public void testIsEmpty() {
         filteredObjectStore.isEmpty(noQueryOptions());
     }
 
-    @Test(expected = UnsupportedOperationException.class)
+    @Test
+    @ExpectedException(UnsupportedOperationException.class)
     public void testRetainAll() {
         filteredObjectStore.retainAll(Collections.singleton(dummyCar), noQueryOptions());
     }
 
-    @Test(expected = UnsupportedOperationException.class)
+    @Test
+    @ExpectedException(UnsupportedOperationException.class)
     public void testRemoveAll() {
         filteredObjectStore.removeAll(Collections.singleton(dummyCar), noQueryOptions());
     }

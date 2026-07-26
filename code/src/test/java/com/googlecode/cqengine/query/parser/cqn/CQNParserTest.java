@@ -15,6 +15,8 @@
  */
 package com.googlecode.cqengine.query.parser.cqn;
 
+import com.googlecode.cqengine.testutil.ExpectedException;
+
 import com.googlecode.cqengine.ConcurrentIndexedCollection;
 import com.googlecode.cqengine.IndexedCollection;
 import com.googlecode.cqengine.query.Query;
@@ -25,8 +27,8 @@ import com.googlecode.cqengine.testutil.Car;
 import com.googlecode.cqengine.testutil.CarFactory;
 import com.googlecode.cqengine.testutil.MobileTerminating;
 
-import org.junit.Assert;
-import org.junit.Test;
+import com.googlecode.cqengine.testutil.TestAssertions;
+import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -114,42 +116,50 @@ public class CQNParserTest {
         );
     }
 
-    @Test(expected = InvalidQueryException.class)
+    @Test
+    @ExpectedException(InvalidQueryException.class)
     public void testInvalidQuery_DuplicateQueries() {
         parser.query("all(Car.class)all(Car.class)");
     }
 
-    @Test(expected = InvalidQueryException.class)
+    @Test
+    @ExpectedException(InvalidQueryException.class)
     public void testInvalidQuery_TrailingGibberish() {
         parser.query("all(Car.class)abc");
     }
 
-    @Test(expected = InvalidQueryException.class)
+    @Test
+    @ExpectedException(InvalidQueryException.class)
     public void testInvalidQuery_LeadingGibberish() {
         parser.query("abc all(Car.class)");
     }
 
-    @Test(expected = InvalidQueryException.class)
+    @Test
+    @ExpectedException(InvalidQueryException.class)
     public void testInvalidQuery_UnclosedQuery() {
         parser.query("all(Car.class");
     }
 
-    @Test(expected = InvalidQueryException.class)
+    @Test
+    @ExpectedException(InvalidQueryException.class)
     public void testInvalidQuery_InvalidParameters1() {
         parser.query("equal(\"manufacturer\", x, \"Ford\")");
     }
 
-    @Test(expected = InvalidQueryException.class)
+    @Test
+    @ExpectedException(InvalidQueryException.class)
     public void testInvalidQuery_InvalidParameters2() {
         parser.query("equal(\"manufacturer\", 1, \"Ford\")");
     }
 
-    @Test(expected = InvalidQueryException.class)
+    @Test
+    @ExpectedException(InvalidQueryException.class)
     public void testInvalidQuery_InvalidParameterType() {
         parser.query("equal(\"doors\", \"foo\")");
     }
 
-    @Test(expected = InvalidQueryException.class)
+    @Test
+    @ExpectedException(InvalidQueryException.class)
     public void testInvalidQuery_NullQuery() {
         parser.query(null);
     }
@@ -158,26 +168,26 @@ public class CQNParserTest {
     public void testOrderBy_NoOrdering() {
         ParseResult<Car> parseResult = parser.parse("equal(\"manufacturer\", \"Ford\")");
         assertQueriesEquals(equal(Car.MANUFACTURER, "Ford"), parseResult.getQuery());
-        Assert.assertEquals(noQueryOptions(), parseResult.getQueryOptions());
+        TestAssertions.assertEquals(noQueryOptions(), parseResult.getQueryOptions());
     }
 
     @Test
     public void testOrderBy_SimpleOrdering() {
         ParseResult<Car> parseResult = parser.parse("equal(\"manufacturer\", \"Ford\"), queryOptions(orderBy(ascending(\"manufacturer\")))");
         assertQueriesEquals(equal(Car.MANUFACTURER, "Ford"), parseResult.getQuery());
-        Assert.assertEquals(queryOptions(orderBy(ascending(Car.MANUFACTURER))), parseResult.getQueryOptions());
+        TestAssertions.assertEquals(queryOptions(orderBy(ascending(Car.MANUFACTURER))), parseResult.getQueryOptions());
     }
 
     @Test
     public void testOrderBy_ComplexOrdering() {
         ParseResult<Car> parseResult = parser.parse("equal(\"manufacturer\", \"Ford\"), queryOptions(orderBy(ascending(\"manufacturer\"), descending(\"carId\")))");
         assertQueriesEquals(equal(Car.MANUFACTURER, "Ford"), parseResult.getQuery());
-        Assert.assertEquals(queryOptions(orderBy(ascending(Car.MANUFACTURER), descending(Car.CAR_ID))), parseResult.getQueryOptions());
+        TestAssertions.assertEquals(queryOptions(orderBy(ascending(Car.MANUFACTURER), descending(Car.CAR_ID))), parseResult.getQueryOptions());
     }
 
     static <T> void assertQueriesEquals(Query<T> expected, Query<T> actual) {
-        Assert.assertEquals(expected, actual);
-        Assert.assertEquals(expected.toString(), actual.toString());
+        TestAssertions.assertEquals(expected, actual);
+        TestAssertions.assertEquals(expected.toString(), actual.toString());
     }
     
     
@@ -189,7 +199,7 @@ public class CQNParserTest {
         cars.addAll(CarFactory.createCollectionOfCars(10));
 
         ResultSet<Car> results = parser.retrieve(cars, "and(equal(\"manufacturer\", \"Honda\"), not(equal(\"color\", \"WHITE\")))");
-        Assert.assertEquals(2, results.size());
-        Assert.assertEquals(asSet(5, 4), extractCarIds(results, new HashSet<Integer>()));
+        TestAssertions.assertEquals(2, results.size());
+        TestAssertions.assertEquals(asSet(5, 4), extractCarIds(results, new HashSet<Integer>()));
     }
 }

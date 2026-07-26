@@ -25,8 +25,8 @@ import com.googlecode.cqengine.query.Query;
 import com.googlecode.cqengine.resultset.ResultSet;
 import com.googlecode.cqengine.testutil.Car;
 import com.googlecode.cqengine.testutil.CarFactory;
-import org.junit.Assert;
-import org.junit.Test;
+import com.googlecode.cqengine.testutil.TestAssertions;
+import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -35,7 +35,7 @@ import java.util.Set;
 import static com.googlecode.cqengine.query.QueryFactory.*;
 import static com.googlecode.cqengine.testutil.TestUtil.setOf;
 import static java.util.Arrays.asList;
-import static org.junit.Assert.assertEquals;
+import static com.googlecode.cqengine.testutil.TestAssertions.assertEquals;
 
 public class NavigableIndexTest {
 
@@ -65,7 +65,7 @@ public class NavigableIndexTest {
 
         collection.addAll(CarFactory.createCollectionOfCars(20));
 
-        Assert.assertEquals(Integer.valueOf(4), MANUFACTURER_INDEX.getCountOfDistinctKeys(noQueryOptions()));
+        TestAssertions.assertEquals(Integer.valueOf(4), MANUFACTURER_INDEX.getCountOfDistinctKeys(noQueryOptions()));
     }
 
     @Test
@@ -77,7 +77,7 @@ public class NavigableIndexTest {
         collection.addAll(CarFactory.createCollectionOfCars(20));
 
         Set<KeyStatistics<String>> keyStatistics = setOf(MANUFACTURER_INDEX.getStatisticsForDistinctKeys(noQueryOptions()));
-        Assert.assertEquals(setOf(
+        TestAssertions.assertEquals(setOf(
                         new KeyStatistics<String>("Ford", 6),
                         new KeyStatistics<String>("Honda", 6),
                         new KeyStatistics<String>("Toyota", 6),
@@ -96,7 +96,7 @@ public class NavigableIndexTest {
         collection.addAll(CarFactory.createCollectionOfCars(20));
 
         Set<KeyStatistics<String>> keyStatistics = setOf(MANUFACTURER_INDEX.getStatisticsForDistinctKeysDescending(noQueryOptions()));
-        Assert.assertEquals(setOf(
+        TestAssertions.assertEquals(setOf(
                         new KeyStatistics<String>("Toyota", 6),
                         new KeyStatistics<String>("Honda", 6),
                         new KeyStatistics<String>("Ford", 6),

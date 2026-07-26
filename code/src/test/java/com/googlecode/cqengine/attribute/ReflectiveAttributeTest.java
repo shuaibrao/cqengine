@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +16,8 @@
  */
 package com.googlecode.cqengine.attribute;
 
+import com.googlecode.cqengine.testutil.ExpectedException;
+
 import com.googlecode.cqengine.ConcurrentIndexedCollection;
 import com.googlecode.cqengine.IndexedCollection;
 import com.googlecode.cqengine.examples.introduction.Car;
@@ -22,8 +25,8 @@ import com.googlecode.cqengine.index.hash.HashIndex;
 import com.googlecode.cqengine.query.QueryFactory;
 import nl.jqno.equalsverifier.EqualsVerifier;
 import nl.jqno.equalsverifier.Warning;
-import org.junit.Assert;
-import org.junit.Test;
+import com.googlecode.cqengine.testutil.TestAssertions;
+import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
 import java.util.Arrays;
@@ -49,13 +52,13 @@ public class ReflectiveAttributeTest {
         cars.add(new Car(2, "ford taurus", "dirty and unreliable, flat tyre", Arrays.asList("spare tyre", "radio")));
         cars.add(new Car(3, "honda civic", "has a flat tyre and high mileage", Arrays.asList("radio")));
 
-        Assert.assertEquals(cars.retrieve(equal(NAME, "honda civic")).size(), 1);
+        TestAssertions.assertEquals(cars.retrieve(equal(NAME, "honda civic")).size(), 1);
     }
 
     @Test
     public void testGetInheritedField() throws NoSuchFieldException {
-        Assert.assertEquals("foo", ReflectiveAttribute.getField(Bar.class, "foo").getName());
-        Assert.assertEquals("bar", ReflectiveAttribute.getField(Bar.class, "bar").getName());
+        TestAssertions.assertEquals("foo", ReflectiveAttribute.getField(Bar.class, "foo").getName());
+        TestAssertions.assertEquals("bar", ReflectiveAttribute.getField(Bar.class, "bar").getName());
         NoSuchFieldException expected = null;
         try {
             ReflectiveAttribute.getField(Bar.class, "baz");
@@ -63,33 +66,59 @@ public class ReflectiveAttributeTest {
         catch (NoSuchFieldException nsfe) {
             expected = nsfe;
         }
-        Assert.assertNotNull(expected);
+        TestAssertions.assertNotNull(expected);
     }
 
     @Test
     public void testEqualsAndHashCode() throws NoSuchFieldException {
+        ReflectiveAttribute<Foo, Integer> first =
+                ReflectiveAttribute.forField(Foo.class, int.class, "foo");
+        ReflectiveAttribute<Foo, Integer> second =
+                ReflectiveAttribute.forField(Foo.class, int.class, "foo");
+        ReflectiveAttribute<Bar, Integer> different =
+                ReflectiveAttribute.forField(Bar.class, int.class, "bar");
+        TestAssertions.assertEquals(first, second);
+        TestAssertions.assertEquals(first.hashCode(), second.hashCode());
+        TestAssertions.assertNotEquals(first, different);
+
         EqualsVerifier.forClass(ReflectiveAttribute.class)
                 .withRedefinedSuperclass()
                 .withPrefabValues(Field.class, Foo.class.getDeclaredField("foo"), Bar.class.getDeclaredField("bar"))
                 .withCachedHashCode("cachedHashCode", "calcHashCode", null)
-                .suppress(Warning.NULL_FIELDS, Warning.STRICT_INHERITANCE, Warning.NO_EXAMPLE_FOR_CACHED_HASHCODE)
+                .suppress(Warning.NULL_FIELDS, Warning.STRICT_INHERITANCE,
+                        Warning.NO_EXAMPLE_FOR_CACHED_HASHCODE, Warning.REFERENCE_EQUALITY)
                 .verify();
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
+    @ExpectedException(IllegalStateException.class)
     public void testInvalidField() {
         ReflectiveAttribute.forField(Foo.class, int.class, "baz");
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
+    @ExpectedException(IllegalStateException.class)
     public void testInvalidFieldType() {
         ReflectiveAttribute.forField(Foo.class, double.class, "foo");
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
+    public void testInaccessibleJdkFieldRejectedWithoutModuleOpening() {
+        IllegalStateException failure = TestAssertions.assertThrows(
+                IllegalStateException.class,
+                () -> ReflectiveAttribute.forField(String.class, byte[].class, "value"));
+
+        TestAssertions.assertTrue(failure.getMessage().contains("cannot be made accessible"));
+        TestAssertions.assertNull(failure.getCause());
+    }
+
+    @Test
+    @ExpectedException(IllegalStateException.class)
     @SuppressWarnings("unchecked")
     public void testGetValueInvalidObject() {
-        ReflectiveAttribute reflectiveAttribute = ReflectiveAttribute.forField(Foo.class, int.class, "foo");
+        ReflectiveAttribute<Object, Integer> reflectiveAttribute =
+                (ReflectiveAttribute<Object, Integer>) (ReflectiveAttribute<?, ?>)
+                        ReflectiveAttribute.forField(Foo.class, int.class, "foo");
         reflectiveAttribute.getValue("", QueryFactory.noQueryOptions());
     }
 

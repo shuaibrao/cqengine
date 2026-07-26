@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +16,8 @@
  */
 package com.googlecode.cqengine.query;
 
+import com.googlecode.cqengine.testutil.ExpectedException;
+
 import com.googlecode.cqengine.attribute.support.MultiValueFunction;
 import com.googlecode.cqengine.attribute.support.SimpleFunction;
 import com.googlecode.cqengine.query.logical.And;
@@ -23,8 +26,7 @@ import com.googlecode.cqengine.query.option.*;
 import com.googlecode.cqengine.testutil.Car;
 import com.googlecode.cqengine.testutil.CarFactory;
 
-import net.jodah.typetools.TypeResolver;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.function.Predicate;
@@ -32,10 +34,10 @@ import java.util.regex.Pattern;
 
 import static com.googlecode.cqengine.query.QueryFactory.*;
 import static java.util.Arrays.asList;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
+import static com.googlecode.cqengine.testutil.TestAssertions.assertEquals;
+import static com.googlecode.cqengine.testutil.TestAssertions.assertFalse;
+import static com.googlecode.cqengine.testutil.TestAssertions.assertNotNull;
+import static com.googlecode.cqengine.testutil.TestAssertions.assertTrue;
 
 /**
  * Tests for methods in {@link QueryFactory} which are not covered by the functional test.
@@ -57,7 +59,7 @@ public class QueryFactoryTest {
         assertEquals(orderBy(o1, o2, o3), orderBy(asList(o1, o2, o3)));
         assertEquals(orderBy(o1, o2, o3, o4), orderBy(asList(o1, o2, o3, o4)));
         assertEquals(orderBy(o1, o2, o3, o4, o5), orderBy(asList(o1, o2, o3, o4, o5)));
-        assertEquals(orderBy(o1, o2, o3, o4, o5), orderBy(new AttributeOrder[]{o1, o2, o3, o4, o5}));
+        assertEquals(orderBy(o1, o2, o3, o4, o5), orderBy(attributeOrders(o1, o2, o3, o4, o5)));
     }
 
     @Test
@@ -72,7 +74,7 @@ public class QueryFactoryTest {
         assertEquals(and(q1, q2, q3), new And<Car>(asList(q1, q2, q3)));
         assertEquals(and(q1, q2, q3, q4), new And<Car>(asList(q1, q2, q3, q4)));
         assertEquals(and(q1, q2, q3, q4, q5), new And<Car>(asList(q1, q2, q3, q4, q5)));
-        assertEquals(and(q1, q2, q3, q4, q5), and(q1, q2, new Query[]{q3, q4, q5}));
+        assertEquals(and(q1, q2, q3, q4, q5), and(q1, q2, queries(q3, q4, q5)));
     }
 
     @Test
@@ -87,7 +89,22 @@ public class QueryFactoryTest {
         assertEquals(or(q1, q2, q3), new Or<Car>(asList(q1, q2, q3)));
         assertEquals(or(q1, q2, q3, q4), new Or<Car>(asList(q1, q2, q3, q4)));
         assertEquals(or(q1, q2, q3, q4, q5), new Or<Car>(asList(q1, q2, q3, q4, q5)));
-        assertEquals(or(q1, q2, q3, q4, q5), or(q1, q2, new Query[]{q3, q4, q5}));
+        assertEquals(or(q1, q2, q3, q4, q5), or(q1, q2, queries(q3, q4, q5)));
+    }
+
+    @SuppressWarnings("unchecked") // Java cannot directly create arrays of parameterized component types.
+    private static <O> AttributeOrder<O>[] attributeOrders(
+            AttributeOrder<O> o1,
+            AttributeOrder<O> o2,
+            AttributeOrder<O> o3,
+            AttributeOrder<O> o4,
+            AttributeOrder<O> o5) {
+        return (AttributeOrder<O>[]) new AttributeOrder<?>[] {o1, o2, o3, o4, o5};
+    }
+
+    @SuppressWarnings("unchecked") // Java cannot directly create arrays of parameterized component types.
+    private static <O> Query<O>[] queries(Query<O> q1, Query<O> q2, Query<O> q3) {
+        return (Query<O>[]) new Query<?>[] {q1, q2, q3};
     }
 
     @Test
@@ -127,26 +144,30 @@ public class QueryFactoryTest {
         validateSimpleFunctionGenericTypes(typeArgs, SimpleFunction.class);
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
+    @ExpectedException(IllegalStateException.class)
     public void testValidateSimpleFunctionGenericTypes_NullTypeArgs() {
         validateSimpleFunctionGenericTypes(null, SimpleFunction.class);
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
+    @ExpectedException(IllegalStateException.class)
     public void testValidateSimpleFunctionGenericTypes_IncorrectNumberOfTypeArgs() {
         Class<?>[] typeArgs = new Class<?>[] {Car.class, Integer.class, Integer.class};
         validateSimpleFunctionGenericTypes(typeArgs, SimpleFunction.class);
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
+    @ExpectedException(IllegalStateException.class)
     public void testValidateSimpleFunctionGenericTypes_InvalidTypeArgs1() {
-        Class<?>[] typeArgs = new Class<?>[] {TypeResolver.Unknown.class, Integer.class};
+        Class<?>[] typeArgs = new Class<?>[] {null, Integer.class};
         validateSimpleFunctionGenericTypes(typeArgs, SimpleFunction.class);
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
+    @ExpectedException(IllegalStateException.class)
     public void testValidateSimpleFunctionGenericTypes_InvalidTypeArgs2() {
-        Class<?>[] typeArgs = new Class<?>[] {Car.class, TypeResolver.Unknown.class};
+        Class<?>[] typeArgs = new Class<?>[] {Car.class, null};
         validateSimpleFunctionGenericTypes(typeArgs, SimpleFunction.class);
     }
 
@@ -158,20 +179,23 @@ public class QueryFactoryTest {
         validateMultiValueFunctionGenericTypes(typeArgs, MultiValueFunction.class);
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
+    @ExpectedException(IllegalStateException.class)
     public void testValidateMultiValueFunctionGenericTypes_NullTypeArgs() {
         validateMultiValueFunctionGenericTypes(null, MultiValueFunction.class);
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
+    @ExpectedException(IllegalStateException.class)
     public void testValidateMultiValueFunctionGenericTypes_IncorrectNumberOfTypeArgs() {
         Class<?>[] typeArgs = new Class<?>[] {Car.class, Integer.class};
         validateMultiValueFunctionGenericTypes(typeArgs, MultiValueFunction.class);
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
+    @ExpectedException(IllegalStateException.class)
     public void testValidateMultiValueFunctionGenericTypes_InvalidTypeArgs() {
-        Class<?>[] typeArgs = new Class<?>[] {TypeResolver.Unknown.class, Integer.class, List.class};
+        Class<?>[] typeArgs = new Class<?>[] {null, Integer.class, List.class};
         validateMultiValueFunctionGenericTypes(typeArgs, MultiValueFunction.class);
     }
 }

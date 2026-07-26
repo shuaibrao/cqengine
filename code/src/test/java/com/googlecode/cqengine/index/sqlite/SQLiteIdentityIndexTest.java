@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,17 +18,28 @@ package com.googlecode.cqengine.index.sqlite;
 
 import com.googlecode.cqengine.attribute.SimpleAttribute;
 import com.googlecode.cqengine.index.sqlite.TemporaryDatabase.TemporaryInMemoryDatabase;
+import com.googlecode.cqengine.query.Query;
+import com.googlecode.cqengine.query.option.QueryOptions;
+import com.googlecode.cqengine.resultset.ResultSet;
 import com.googlecode.cqengine.testutil.Car;
 import com.googlecode.cqengine.testutil.CarFactory;
-import org.junit.Assert;
-import org.junit.Rule;
-import org.junit.Test;
+import com.googlecode.cqengine.testutil.TestAssertions;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.jupiter.api.Test;
+
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.googlecode.cqengine.query.QueryFactory.*;
+import static com.googlecode.cqengine.testutil.TestAssertions.assertEquals;
+import static com.googlecode.cqengine.testutil.TestAssertions.assertSame;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 public class SQLiteIdentityIndexTest {
 
-    @Rule
+    @RegisterExtension
     public TemporaryInMemoryDatabase temporaryDatabase = new TemporaryInMemoryDatabase();
 
     @Test
@@ -43,8 +55,60 @@ public class SQLiteIdentityIndexTest {
         byte[] s1 = serializingAttribute.getValue(c1, noQueryOptions());
         Car c2 = deserializingAttribute.getValue(s1, noQueryOptions());
         byte[] s2 = serializingAttribute.getValue(c2, noQueryOptions());
-        Assert.assertEquals(c1, c2);
-        Assert.assertArrayEquals(s1, s2);
+        TestAssertions.assertEquals(c1, c2);
+        TestAssertions.assertArrayEquals(s1, s2);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void foreignKeyLookupUsesCallerOptionsAndClosesResults() {
+        ResultSet<Car> results = mock(ResultSet.class);
+        QueryOptions queryOptions = new QueryOptions();
+        AtomicInteger retrieveCalls = new AtomicInteger();
+        SQLiteIdentityIndex<Integer, Car> index = new SQLiteIdentityIndex<Integer, Car>(Car.CAR_ID) {
+            @Override
+            public ResultSet<Car> retrieve(Query<Car> query, QueryOptions actualQueryOptions) {
+                assertSame(queryOptions, actualQueryOptions);
+                retrieveCalls.incrementAndGet();
+                return results;
+            }
+        };
+        Car expected = CarFactory.createCar(1);
+        when(results.uniqueResult()).thenReturn(expected);
+
+        Car actual = index.getForeignKeyAttribute().getValue(1, queryOptions);
+
+        assertSame(expected, actual);
+        assertEquals(1, retrieveCalls.get());
+        verify(results, times(1)).close();
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void foreignKeyLookupClosesResultsWhenUniqueResultFails() {
+        ResultSet<Car> results = mock(ResultSet.class);
+        QueryOptions queryOptions = new QueryOptions();
+        SQLiteIdentityIndex<Integer, Car> index = new SQLiteIdentityIndex<Integer, Car>(Car.CAR_ID) {
+            @Override
+            public ResultSet<Car> retrieve(Query<Car> query, QueryOptions actualQueryOptions) {
+                assertSame(queryOptions, actualQueryOptions);
+                return results;
+            }
+        };
+        RuntimeException lookupFailure = new RuntimeException("non-unique");
+        when(results.uniqueResult()).thenThrow(lookupFailure);
+
+        RuntimeException actual;
+        try {
+            index.getForeignKeyAttribute().getValue(1, queryOptions);
+            throw new AssertionError("Expected lookup to fail");
+        }
+        catch (RuntimeException failure) {
+            actual = failure;
+        }
+
+        assertSame(lookupFailure, actual);
+        verify(results, times(1)).close();
     }
 
 }

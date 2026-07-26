@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,9 +19,9 @@ package com.googlecode.cqengine.index.sqlite.support;
 import com.googlecode.cqengine.index.sqlite.ConnectionManager;
 import com.googlecode.cqengine.query.simple.*;
 import com.googlecode.cqengine.testutil.Car;
-import org.junit.Assert;
-import org.junit.Rule;
-import org.junit.Test;
+import com.googlecode.cqengine.testutil.TestAssertions;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.jupiter.api.Test;
 import org.sqlite.SQLiteConfig;
 
 import java.sql.*;
@@ -29,7 +30,7 @@ import java.util.*;
 import static com.googlecode.cqengine.index.sqlite.TemporaryDatabase.TemporaryFileDatabase;
 import static com.googlecode.cqengine.query.QueryFactory.*;
 import static com.googlecode.cqengine.query.QueryFactory.startsWith;
-import static org.junit.Assert.*;
+import static com.googlecode.cqengine.testutil.TestAssertions.*;
 import static org.mockito.Mockito.*;
 
 /**
@@ -43,7 +44,7 @@ public class DBQueriesTest {
     private static final String TABLE_NAME = "cqtbl_" + NAME;
     private static final String INDEX_NAME = "cqidx_" + NAME + "_value";
 
-    @Rule
+    @RegisterExtension
     public TemporaryFileDatabase temporaryFileDatabase = new TemporaryFileDatabase();
 
     @Test
@@ -213,6 +214,41 @@ public class DBQueriesTest {
     }
 
     @Test
+    public void bulkRemoveDoesNotCompleteCallerTransaction() throws SQLException {
+        Connection connection = mock(Connection.class);
+        PreparedStatement statement = mock(PreparedStatement.class);
+        when(connection.prepareStatement("DELETE FROM \"cqtbl_features\" WHERE objectKey = ?;"))
+                .thenReturn(statement);
+        when(statement.executeBatch()).thenReturn(new int[] {1});
+
+        TestAssertions.assertEquals(1, DBQueries.bulkRemove(Collections.singletonList(1), NAME, connection));
+
+        verify(connection, never()).setAutoCommit(anyBoolean());
+        verify(connection, never()).commit();
+        verify(connection, never()).rollback();
+    }
+
+    @Test
+    public void bulkAddFailureDoesNotRollbackCallerTransaction() throws SQLException {
+        Connection connection = mock(Connection.class);
+        PreparedStatement statement = mock(PreparedStatement.class);
+        when(connection.prepareStatement("INSERT OR IGNORE INTO \"cqtbl_features\" values(?, ?);"))
+                .thenReturn(statement);
+        when(statement.executeBatch()).thenThrow(new SQLException("batch failed"));
+
+        try {
+            DBQueries.bulkAdd(Collections.singletonList(new DBQueries.Row<Integer, String>(1, "abs")), NAME, connection);
+            TestAssertions.fail("Expected bulk add to fail");
+        }
+        catch (IllegalStateException expected) {
+            TestAssertions.assertTrue(expected.getMessage().contains("bulk add"));
+        }
+
+        verify(connection, never()).commit();
+        verify(connection, never()).rollback();
+    }
+
+    @Test
     public void testGetAllIndexEntries() throws SQLException {
 
         Connection connection = null;
@@ -270,7 +306,7 @@ public class DBQueriesTest {
 
             connection = connectionManager.getConnection(null, noQueryOptions());
             int count = DBQueries.count(equal, NAME, connection);
-            Assert.assertEquals(2, count);
+            TestAssertions.assertEquals(2, count);
 
         }finally {
             DBUtils.closeQuietly(connection);
@@ -407,8 +443,8 @@ public class DBQueriesTest {
             Equal<Car, String> equal = equal(Car.FEATURES, "abs");
 
             connection = connectionManager.getConnection(null, noQueryOptions());
-            Assert.assertTrue(DBQueries.contains(1, equal, NAME, connection));
-            Assert.assertFalse(DBQueries.contains(4, equal, NAME, connection));
+            TestAssertions.assertTrue(DBQueries.contains(1, equal, NAME, connection));
+            TestAssertions.assertFalse(DBQueries.contains(4, equal, NAME, connection));
 
         }finally {
             DBUtils.closeQuietly(connection);
@@ -455,9 +491,9 @@ public class DBQueriesTest {
 
             Map<String, Integer> resultSetToMap = resultSetToMap(resultSet);
             assertEquals(3, resultSetToMap.size());
-            assertEquals(new Integer(2), resultSetToMap.get("abs"));
-            assertEquals(new Integer(1), resultSetToMap.get("airbags"));
-            assertEquals(new Integer(1), resultSetToMap.get("gps"));
+            assertEquals(Integer.valueOf(2), resultSetToMap.get("abs"));
+            assertEquals(Integer.valueOf(1), resultSetToMap.get("airbags"));
+            assertEquals(Integer.valueOf(1), resultSetToMap.get("gps"));
 
         }finally {
             DBUtils.closeQuietly(resultSet);
@@ -483,17 +519,17 @@ public class DBQueriesTest {
 
             Iterator<Map.Entry<String, Integer>> entriesIterator = resultSetToMap.entrySet().iterator();
 
-            Map.Entry entry = entriesIterator.next();
+            Map.Entry<String, Integer> entry = entriesIterator.next();
             assertEquals("gps", entry.getKey());
-            assertEquals(1, entry.getValue());
+            assertEquals(Integer.valueOf(1), entry.getValue());
 
             entry = entriesIterator.next();
             assertEquals("airbags", entry.getKey());
-            assertEquals(1, entry.getValue());
+            assertEquals(Integer.valueOf(1), entry.getValue());
 
             entry = entriesIterator.next();
             assertEquals("abs", entry.getKey());
-            assertEquals(2, entry.getValue());
+            assertEquals(Integer.valueOf(2), entry.getValue());
 
         }finally {
             DBUtils.closeQuietly(resultSet);
@@ -520,6 +556,43 @@ public class DBQueriesTest {
     }
 
     @Test
+    public void getCountOfDistinctKeysClosesItsStatement() throws Exception {
+        Connection connection = mock(Connection.class);
+        Statement statement = mock(Statement.class);
+        ResultSet resultSet = mock(ResultSet.class);
+        when(connection.createStatement()).thenReturn(statement);
+        when(statement.executeQuery(anyString())).thenReturn(resultSet);
+        when(resultSet.next()).thenReturn(true);
+        when(resultSet.getInt(1)).thenReturn(3);
+
+        assertEquals(3, DBQueries.getCountOfDistinctKeys(NAME, connection));
+
+        verify(resultSet).close();
+        verify(statement).close();
+    }
+
+    @Test
+    public void journalModeParsingDoesNotDependOnTheDefaultLocale() throws Exception {
+        Connection connection = mock(Connection.class);
+        Statement statement = mock(Statement.class);
+        ResultSet resultSet = mock(ResultSet.class);
+        when(connection.createStatement()).thenReturn(statement);
+        when(statement.executeQuery("PRAGMA journal_mode;")).thenReturn(resultSet);
+        when(resultSet.next()).thenReturn(true);
+        when(resultSet.getString(1)).thenReturn("persist");
+        Locale previousLocale = Locale.getDefault();
+        try {
+            Locale.setDefault(Locale.forLanguageTag("tr-TR"));
+            assertEquals(SQLiteConfig.JournalMode.PERSIST, DBQueries.getPragmaJournalModeOrNull(connection));
+        }
+        finally {
+            Locale.setDefault(previousLocale);
+        }
+        verify(resultSet).close();
+        verify(statement).close();
+    }
+
+    @Test
     public void suspendSyncAndJournaling() throws Exception {
         Connection connection = null;
         try {
@@ -535,20 +608,38 @@ public class DBQueriesTest {
             final SQLiteConfig.JournalMode journalModeDisabled = DBQueries.getPragmaJournalModeOrNull(connection);
             final SQLiteConfig.SynchronousMode synchronousModeDisabled = DBQueries.getPragmaSynchronousOrNull(connection);
 
-            Assert.assertEquals(journalModeDisabled, SQLiteConfig.JournalMode.OFF);
-            Assert.assertEquals(synchronousModeDisabled, SQLiteConfig.SynchronousMode.OFF);
+            TestAssertions.assertEquals(journalModeDisabled, SQLiteConfig.JournalMode.OFF);
+            TestAssertions.assertEquals(synchronousModeDisabled, SQLiteConfig.SynchronousMode.OFF);
 
             DBQueries.setSyncAndJournaling(connection, SQLiteConfig.SynchronousMode.FULL, SQLiteConfig.JournalMode.DELETE);
 
             final SQLiteConfig.JournalMode journalModeReset = DBQueries.getPragmaJournalModeOrNull(connection);
             final SQLiteConfig.SynchronousMode synchronousModeReset = DBQueries.getPragmaSynchronousOrNull(connection);
 
-            Assert.assertEquals(journalModeReset, journalMode);
-            Assert.assertEquals(synchronousModeReset, synchronousMode);
+            TestAssertions.assertEquals(journalModeReset, journalMode);
+            TestAssertions.assertEquals(synchronousModeReset, synchronousMode);
 
         }finally {
             DBUtils.closeQuietly(connection);
         }
+    }
+
+    @Test
+    public void setSyncAndJournalingRejectsActiveTransactionWithoutCommittingIt() throws Exception {
+        Connection connection = mock(Connection.class);
+        when(connection.getAutoCommit()).thenReturn(false);
+
+        try {
+            DBQueries.setSyncAndJournaling(connection, SQLiteConfig.SynchronousMode.FULL, SQLiteConfig.JournalMode.DELETE);
+            TestAssertions.fail("Expected an active transaction to be rejected");
+        }
+        catch (IllegalStateException expected) {
+            TestAssertions.assertTrue(expected.getMessage().contains("active request transaction"));
+        }
+
+        verify(connection, never()).setAutoCommit(anyBoolean());
+        verify(connection, never()).commit();
+        verify(connection, never()).createStatement();
     }
 
     @Test
@@ -570,6 +661,211 @@ public class DBQueriesTest {
         assertEquals("Unable to determine if table exists: foo", expected.getMessage());
         assertNotNull(expected.getCause());
         assertEquals("expected_exception", expected.getCause().getMessage());
+    }
+
+    @Test
+    public void quotesValidatedGeneratedIdentifiers() {
+        TestAssertions.assertEquals("\"cqtbl_features\"", DBQueries.tableIdentifier("features"));
+        TestAssertions.assertEquals("\"cqidx_features_value\"", DBQueries.indexIdentifier("features"));
+        TestAssertions.assertEquals("cqtbl_features", DBQueries.tableNameValue("features"));
+    }
+
+    @Test
+    public void rejectsInvalidTableNamesBeforeCallingJdbc() {
+        Connection connection = mock(Connection.class);
+        String[] rejected = {
+                "",
+                "features;DROP_TABLE",
+                "features\"quoted",
+                "features'quoted",
+                "café",
+                "车辆",
+                "a".repeat(DBUtils.MAX_SQLITE_IDENTIFIER_COMPONENT_LENGTH + 1)
+        };
+
+        TestAssertions.assertThrows(
+                NullPointerException.class, () -> DBQueries.indexTableExists(null, connection));
+        for (String tableName : rejected) {
+            TestAssertions.assertThrows(
+                    "Expected table name to be rejected",
+                    IllegalArgumentException.class,
+                    () -> DBQueries.indexTableExists(tableName, connection));
+            TestAssertions.assertThrows(
+                    "Expected table name to be rejected",
+                    IllegalArgumentException.class,
+                    () -> DBQueries.bulkAdd(Collections.emptyList(), tableName, connection));
+            TestAssertions.assertThrows(
+                    "Expected table name to be rejected",
+                    IllegalArgumentException.class,
+                    () -> DBQueries.getAllIndexEntries(tableName, connection));
+        }
+        verifyNoInteractions(connection);
+    }
+
+    @Test
+    public void quotedQueriesReopenLegacyUnquotedTableNames() throws SQLException {
+        ConnectionManager connectionManager = temporaryFileDatabase.getConnectionManager(true);
+        Connection originalConnection = connectionManager.getConnection(null, noQueryOptions());
+        try (Statement statement = originalConnection.createStatement()) {
+            statement.executeUpdate(
+                    "CREATE TABLE cqtbl_legacy_name "
+                            + "(objectKey INTEGER, value TEXT, PRIMARY KEY (objectKey, value)) WITHOUT ROWID;");
+            statement.executeUpdate("INSERT INTO cqtbl_legacy_name VALUES (1, 'abs');");
+        }
+        finally {
+            DBUtils.closeQuietly(originalConnection);
+        }
+
+        Connection reopenedConnection = connectionManager.getConnection(null, noQueryOptions());
+        java.sql.ResultSet entries = null;
+        try {
+            TestAssertions.assertTrue(DBQueries.indexTableExists("legacy_name", reopenedConnection));
+            DBQueries.createIndexOnTable("legacy_name", reopenedConnection);
+            entries = DBQueries.getAllIndexEntries("legacy_name", reopenedConnection);
+            TestAssertions.assertTrue(entries.next());
+            TestAssertions.assertEquals(1, entries.getInt(1));
+            TestAssertions.assertEquals("abs", entries.getString(2));
+            TestAssertions.assertFalse(entries.next());
+        }
+        finally {
+            DBUtils.closeQuietly(entries);
+            DBUtils.closeQuietly(reopenedConnection);
+        }
+    }
+
+    @Test
+    public void atomicallyMigratesLegacyTableDataAndIndexToVersionTwoName() throws SQLException {
+        ConnectionManager connectionManager = temporaryFileDatabase.getConnectionManager(true);
+        Connection connection = connectionManager.getConnection(null, noQueryOptions());
+        String versionTwoName = DBUtils.createSQLiteIndexTableNameV2("legacy-name", "");
+        try {
+            DBQueries.createIndexTable("legacyname", Integer.class, String.class, connection);
+            DBQueries.createIndexOnTable("legacyname", connection);
+            DBQueries.bulkAdd(
+                    Collections.singletonList(new DBQueries.Row<Integer, String>(1, "abs")),
+                    "legacyname",
+                    connection);
+
+            TestAssertions.assertTrue(
+                    DBQueries.migrateLegacyIndexTableIfNeeded("legacyname", versionTwoName, connection));
+            TestAssertions.assertFalse(DBQueries.indexTableExists("legacyname", connection));
+            TestAssertions.assertTrue(DBQueries.indexTableExists(versionTwoName, connection));
+            TestAssertions.assertFalse(
+                    DBQueries.migrateLegacyIndexTableIfNeeded("legacyname", versionTwoName, connection));
+
+            try (java.sql.ResultSet entries = DBQueries.getAllIndexEntries(versionTwoName, connection)) {
+                TestAssertions.assertTrue(entries.next());
+                TestAssertions.assertEquals(1, entries.getInt(1));
+                TestAssertions.assertEquals("abs", entries.getString(2));
+                TestAssertions.assertFalse(entries.next());
+            }
+            assertObjectExistenceInSQLIteMasterTable(
+                    "cqidx_" + versionTwoName + "_value", "index", true, connectionManager);
+            assertObjectExistenceInSQLIteMasterTable(
+                    "cqidx_legacyname_value", "index", false, connectionManager);
+        }
+        finally {
+            DBUtils.closeQuietly(connection);
+        }
+    }
+
+    @Test
+    public void legacyMigrationMappingKeepsCollidingVersionTwoTablesIndependent() throws SQLException {
+        ConnectionManager connectionManager = temporaryFileDatabase.getConnectionManager(true);
+        Connection connection = connectionManager.getConnection(null, noQueryOptions());
+        String punctuatedName = DBUtils.createSQLiteIndexTableNameV2("a-b", "");
+        String plainName = DBUtils.createSQLiteIndexTableNameV2("ab", "");
+        try {
+            DBQueries.createIndexTable("ab", Integer.class, String.class, connection);
+            DBQueries.bulkAdd(
+                    Collections.singletonList(new DBQueries.Row<Integer, String>(1, "legacy")),
+                    "ab",
+                    connection);
+
+            TestAssertions.assertTrue(DBQueries.migrateLegacyIndexTableIfNeeded("ab", punctuatedName, connection));
+            TestAssertions.assertFalse(DBQueries.migrateLegacyIndexTableIfNeeded("ab", plainName, connection));
+            DBQueries.createIndexTable(plainName, Integer.class, String.class, connection);
+            DBQueries.bulkAdd(
+                    Collections.singletonList(new DBQueries.Row<Integer, String>(2, "current")),
+                    plainName,
+                    connection);
+
+            TestAssertions.assertEquals(1, DBQueries.count(has(Car.FEATURES), punctuatedName, connection));
+            TestAssertions.assertEquals(1, DBQueries.count(has(Car.FEATURES), plainName, connection));
+            try (java.sql.ResultSet entries = DBQueries.getAllIndexEntries(punctuatedName, connection)) {
+                TestAssertions.assertTrue(entries.next());
+                TestAssertions.assertEquals(1, entries.getInt(1));
+                TestAssertions.assertEquals("legacy", entries.getString(2));
+                TestAssertions.assertFalse(entries.next());
+            }
+            try (java.sql.ResultSet entries = DBQueries.getAllIndexEntries(plainName, connection)) {
+                TestAssertions.assertTrue(entries.next());
+                TestAssertions.assertEquals(2, entries.getInt(1));
+                TestAssertions.assertEquals("current", entries.getString(2));
+                TestAssertions.assertFalse(entries.next());
+            }
+
+            DBQueries.dropIndexTable(punctuatedName, connection);
+            TestAssertions.assertFalse(DBQueries.migrateLegacyIndexTableIfNeeded("ab", punctuatedName, connection));
+            DBQueries.createIndexTable(punctuatedName, Integer.class, String.class, connection);
+            TestAssertions.assertTrue(DBQueries.indexTableExists(punctuatedName, connection));
+        }
+        finally {
+            DBUtils.closeQuietly(connection);
+        }
+    }
+
+    @Test
+    public void rejectsAmbiguousDualLegacyAndVersionTwoSchemasWithoutChangingEither() throws SQLException {
+        ConnectionManager connectionManager = temporaryFileDatabase.getConnectionManager(true);
+        Connection connection = connectionManager.getConnection(null, noQueryOptions());
+        String versionTwoName = DBUtils.createSQLiteIndexTableNameV2("a-b", "");
+        try {
+            DBQueries.createIndexTable("ab", Integer.class, String.class, connection);
+            DBQueries.createIndexTable(versionTwoName, Integer.class, String.class, connection);
+
+            TestAssertions.assertThrows(
+                    IllegalStateException.class,
+                    () -> DBQueries.migrateLegacyIndexTableIfNeeded("ab", versionTwoName, connection));
+            TestAssertions.assertTrue(DBQueries.indexTableExists("ab", connection));
+            TestAssertions.assertTrue(DBQueries.indexTableExists(versionTwoName, connection));
+        }
+        finally {
+            DBUtils.closeQuietly(connection);
+        }
+    }
+
+    @Test
+    public void rollsBackTheWholeMigrationWhenRecordingTheAssignmentFails() throws SQLException {
+        ConnectionManager connectionManager = temporaryFileDatabase.getConnectionManager(true);
+        Connection connection = connectionManager.getConnection(null, noQueryOptions());
+        String versionTwoName = DBUtils.createSQLiteIndexTableNameV2("legacy-name", "");
+        try {
+            DBQueries.createIndexTable("legacyname", Integer.class, String.class, connection);
+            DBQueries.createIndexOnTable("legacyname", connection);
+            try (Statement statement = connection.createStatement()) {
+                statement.executeUpdate(
+                        "CREATE TABLE cqengine_sqlite_identifier_migrations_v2 ("
+                                + "legacy_component TEXT PRIMARY KEY NOT NULL, "
+                                + "v2_component TEXT UNIQUE NOT NULL CHECK (v2_component = 'rejected'));"
+                );
+            }
+
+            TestAssertions.assertThrows(
+                    IllegalStateException.class,
+                    () -> DBQueries.migrateLegacyIndexTableIfNeeded("legacyname", versionTwoName, connection));
+
+            TestAssertions.assertTrue(connection.getAutoCommit());
+            TestAssertions.assertTrue(DBQueries.indexTableExists("legacyname", connection));
+            TestAssertions.assertFalse(DBQueries.indexTableExists(versionTwoName, connection));
+            assertObjectExistenceInSQLIteMasterTable(
+                    "cqidx_legacyname_value", "index", true, connectionManager);
+            assertObjectExistenceInSQLIteMasterTable(
+                    "cqidx_" + versionTwoName + "_value", "index", false, connectionManager);
+        }
+        finally {
+            DBUtils.closeQuietly(connection);
+        }
     }
 
     void createSchema(final ConnectionManager connectionManager){
@@ -631,9 +927,9 @@ public class DBQueriesTest {
             }
 
             if (exists)
-                Assert.assertTrue("Object '" + name + "' must exists in 'sqlite_master' but it doesn't. found: " + found + ". Objects found: " + objectsFound, found);
+                TestAssertions.assertTrue("Object '" + name + "' must exists in 'sqlite_master' but it doesn't. found: " + found + ". Objects found: " + objectsFound, found);
             else
-                Assert.assertFalse("Object '" + name + "' must NOT exists in 'sqlite_master' but it does. found: " + found + " Objects found: " + objectsFound, found);
+                TestAssertions.assertFalse("Object '" + name + "' must NOT exists in 'sqlite_master' but it does. found: " + found + " Objects found: " + objectsFound, found);
 
         }catch(Exception e){
             throw new IllegalStateException("Unable to verify existence of the object '" + name + "' in the 'sqlite_master' table", e);
@@ -674,7 +970,7 @@ public class DBQueriesTest {
             Collections.sort(actual);
             Collections.sort(objectKeys);
 
-            Assert.assertEquals(objectKeys, actual);
+            TestAssertions.assertEquals(objectKeys, actual);
 
         }catch(Exception e){
             throw new IllegalStateException("Unable to verify resultSet", e);
@@ -703,7 +999,7 @@ public class DBQueriesTest {
             Collections.sort(actual, comparator);
             Collections.sort(rows, comparator);
 
-            Assert.assertEquals(rows, actual);
+            TestAssertions.assertEquals(rows, actual);
         }catch(Exception e){
             throw new IllegalStateException("Unable to verify resultSet", e);
         }

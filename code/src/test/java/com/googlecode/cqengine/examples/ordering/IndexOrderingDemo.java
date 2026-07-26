@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,15 +40,16 @@ public class IndexOrderingDemo {
         cars.addIndex(NavigableIndex.onAttribute(forObjectsMissing(Car.FEATURES)));
         cars.addAll(CarFactory.createCollectionOfCars(100));
 
-        ResultSet<Car> results = cars.retrieve(
+        try (ResultSet<Car> results = cars.retrieve(
                 between(Car.CAR_ID, 40, 50),
                 queryOptions(
                         orderBy(ascending(missingLast(Car.FEATURES))),
                         applyThresholds(threshold(INDEX_ORDERING_SELECTIVITY, 1.0))
                 )
-        );
-        for (Car car : results) {
-            System.out.println(car); // prints cars 40 -> 50, using the index on Car.FEATURES to accelerate ordering
+        )) {
+            for (Car car : results) {
+                System.out.println(car); // prints cars 40 -> 50, using the index on Car.FEATURES to accelerate ordering
+            }
         }
     }
 }

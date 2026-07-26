@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,13 +40,13 @@ public class CQNQueryDemo {
         IndexedCollection<Car> cars = new ConcurrentIndexedCollection<Car>();
         cars.addAll(CarFactory.createCollectionOfCars(10));
 
-        ResultSet<Car> results = parser.retrieve(cars,
-                                        "and(" +
-                                            "or(equal(\"manufacturer\", \"Ford\"), equal(\"manufacturer\", \"Honda\")), " +
-                                            "lessThanOrEqualTo(\"price\", 5000.0), " +
-                                            "not(in(\"color\", GREEN, WHITE))" +
-                                        ")");
-
-        results.forEach(System.out::println); // Prints: Ford Focus, Ford Fusion, Honda Accord
+        try (ResultSet<Car> results = parser.retrieve(cars,
+                "and(" +
+                    "or(equal(\"manufacturer\", \"Ford\"), equal(\"manufacturer\", \"Honda\")), " +
+                    "lessThanOrEqualTo(\"price\", 5000.0), " +
+                    "not(in(\"color\", GREEN, WHITE))" +
+                ")")) {
+            results.forEach(System.out::println); // Prints: Ford Focus, Ford Fusion, Honda Accord
+        }
     }
 }

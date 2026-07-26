@@ -20,8 +20,8 @@ import com.googlecode.cqengine.IndexedCollection;
 import com.googlecode.cqengine.examples.introduction.Car;
 import com.googlecode.cqengine.examples.join.Garage;
 import com.googlecode.cqengine.query.Query;
-import org.junit.Assert;
-import org.junit.Test;
+import com.googlecode.cqengine.testutil.TestAssertions;
+import org.junit.jupiter.api.Test;
 
 import static com.googlecode.cqengine.query.QueryFactory.equal;
 import static com.googlecode.cqengine.query.QueryFactory.existsIn;
@@ -33,7 +33,7 @@ public class ExistsInTest {
         IndexedCollection<Garage> garages = new ConcurrentIndexedCollection<Garage>();
 
         Query<Car> existsIn = existsIn(garages, Car.NAME, Garage.BRANDS_SERVICED);
-        Assert.assertEquals("existsIn(IndexedCollection<Garage>, \"name\", \"brandsServiced\")", existsIn.toString());
+        TestAssertions.assertEquals("existsIn(IndexedCollection<Garage>, \"name\", \"brandsServiced\")", existsIn.toString());
     }
 
     @Test
@@ -42,6 +42,6 @@ public class ExistsInTest {
         IndexedCollection<Garage> garages = new ConcurrentIndexedCollection<Garage>();
 
         Query<Car> existsIn = existsIn(garages, Car.NAME, Garage.BRANDS_SERVICED, equal(Garage.LOCATION, "Dublin"));
-        Assert.assertEquals("existsIn(IndexedCollection<Garage>, \"name\", \"brandsServiced\", equal(\"location\", \"Dublin\"))", existsIn.toString());
+        TestAssertions.assertEquals("existsIn(IndexedCollection<Garage>, \"name\", \"brandsServiced\", equal(\"location\", \"Dublin\"))", existsIn.toString());
     }
 }

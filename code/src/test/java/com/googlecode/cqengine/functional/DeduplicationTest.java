@@ -23,7 +23,7 @@ import com.googlecode.cqengine.query.option.DeduplicationOption;
 import com.googlecode.cqengine.query.option.DeduplicationStrategy;
 import com.googlecode.cqengine.resultset.ResultSet;
 import com.googlecode.cqengine.testutil.Car;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 
@@ -31,7 +31,7 @@ import static com.googlecode.cqengine.query.QueryFactory.*;
 import static com.googlecode.cqengine.testutil.Car.COLOR;
 import static com.googlecode.cqengine.testutil.Car.Color.BLUE;
 import static com.googlecode.cqengine.testutil.Car.MANUFACTURER;
-import static org.junit.Assert.assertEquals;
+import static com.googlecode.cqengine.testutil.TestAssertions.assertEquals;
 /**
  * @author Niall Gallagher
  */

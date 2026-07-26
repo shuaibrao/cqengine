@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +23,7 @@ import com.googlecode.cqengine.index.navigable.NavigableIndex;
 import com.googlecode.cqengine.index.radixreversed.ReversedRadixTreeIndex;
 import com.googlecode.cqengine.index.suffix.SuffixTreeIndex;
 import com.googlecode.cqengine.query.Query;
+import com.googlecode.cqengine.resultset.ResultSet;
 
 import java.util.Arrays;
 
@@ -51,15 +53,21 @@ public class Introduction {
         // -------------------------- Run some queries --------------------------
         System.out.println("Cars whose name ends with 'vic' or whose id is less than 2:");
         Query<Car> query1 = or(endsWith(Car.NAME, "vic"), lessThan(Car.CAR_ID, 2));
-        cars.retrieve(query1).forEach(System.out::println);
+        try (ResultSet<Car> results = cars.retrieve(query1)) {
+            results.forEach(System.out::println);
+        }
 
         System.out.println("\nCars whose flat tyre can be replaced:");
         Query<Car> query2 = and(contains(Car.DESCRIPTION, "flat tyre"), equal(Car.FEATURES, "spare tyre"));
-        cars.retrieve(query2).forEach(System.out::println);
+        try (ResultSet<Car> results = cars.retrieve(query2)) {
+            results.forEach(System.out::println);
+        }
 
 
         System.out.println("\nCars which have a sunroof or a radio but are not dirty:");
         Query<Car> query3 = and(in(Car.FEATURES, "sunroof", "radio"), not(contains(Car.DESCRIPTION, "dirty")));
-        cars.retrieve(query3).forEach(System.out::println);
+        try (ResultSet<Car> results = cars.retrieve(query3)) {
+            results.forEach(System.out::println);
+        }
     }
 }

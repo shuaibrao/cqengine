@@ -19,8 +19,8 @@ import com.googlecode.cqengine.ConcurrentIndexedCollection;
 import com.googlecode.cqengine.IndexedCollection;
 import com.googlecode.cqengine.query.parser.cqn.support.DateMathParser;
 import com.googlecode.cqengine.resultset.ResultSet;
-import org.junit.Assert;
-import org.junit.Test;
+import com.googlecode.cqengine.testutil.TestAssertions;
+import org.junit.jupiter.api.Test;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -52,9 +52,9 @@ public class CQNDateMathTest {
         ResultSet<Order> results = parser.retrieve(collection, "between(\"shipDate\", \"-3DAYS\", \"-2DAYS\")");
 
         // Assert that the following two orders are returned...
-        Assert.assertTrue(results.contains(createOrder("2015-08-01")));
-        Assert.assertTrue(results.contains(createOrder("2015-08-02")));
-        Assert.assertEquals(2, results.size());
+        TestAssertions.assertTrue(results.contains(createOrder("2015-08-01")));
+        TestAssertions.assertTrue(results.contains(createOrder("2015-08-02")));
+        TestAssertions.assertEquals(2, results.size());
     }
 
     /* The Order POJO */

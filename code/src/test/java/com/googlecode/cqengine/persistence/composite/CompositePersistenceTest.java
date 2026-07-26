@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +15,8 @@
  * limitations under the License.
  */
 package com.googlecode.cqengine.persistence.composite;
+
+import com.googlecode.cqengine.testutil.ExpectedException;
 
 import com.googlecode.cqengine.ConcurrentIndexedCollection;
 import com.googlecode.cqengine.IndexedCollection;
@@ -31,16 +34,17 @@ import com.googlecode.cqengine.persistence.support.ObjectStore;
 import com.googlecode.cqengine.resultset.ResultSet;
 import com.googlecode.cqengine.testutil.Car;
 import com.googlecode.cqengine.testutil.CarFactory;
-import org.junit.Assert;
-import org.junit.Test;
+import com.googlecode.cqengine.testutil.TestAssertions;
+import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
 import static com.googlecode.cqengine.query.QueryFactory.*;
 import static java.util.Collections.singletonList;
-import static org.junit.Assert.*;
+import static com.googlecode.cqengine.testutil.TestAssertions.*;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -79,10 +83,10 @@ public class CompositePersistenceTest {
                             lessThan(Car.PRICE, 6000.0)
                     )
             );
-            Assert.assertEquals(300, results.size());
+            TestAssertions.assertEquals(300, results.size());
 
-            Assert.assertTrue(offHeapPersistence.getBytesUsed() > 4096); // example: 163840
-            Assert.assertTrue(diskPersistence.getBytesUsed() > 4096); // example: 30720
+            TestAssertions.assertTrue(offHeapPersistence.getBytesUsed() > 4096); // example: 163840
+            TestAssertions.assertTrue(diskPersistence.getBytesUsed() > 4096); // example: 30720
         }
         finally {
             CloseableRequestResources.closeQuietly(results);
@@ -101,6 +105,30 @@ public class CompositePersistenceTest {
 
         CompositePersistence<Car, Integer> compositePersistence = new CompositePersistence<Car, Integer>(persistence1, persistence2, noAdditionalPersistences());
         assertEquals(Car.CAR_ID, compositePersistence.getPrimaryKeyAttribute());
+    }
+
+    @Test
+    public void snapshotsAndProtectsAdditionalPersistences() {
+        Persistence<Car, Integer> primary = mockPersistence("primary");
+        Persistence<Car, Integer> secondary = mockPersistence("secondary");
+        Persistence<Car, Integer> additional = mockPersistence("additional");
+        Persistence<Car, Integer> otherAdditional = mockPersistence("otherAdditional");
+        when(primary.getPrimaryKeyAttribute()).thenReturn(Car.CAR_ID);
+        when(secondary.getPrimaryKeyAttribute()).thenReturn(Car.CAR_ID);
+        when(additional.getPrimaryKeyAttribute()).thenReturn(Car.CAR_ID);
+        when(otherAdditional.getPrimaryKeyAttribute()).thenReturn(Car.CAR_ID);
+        List<Persistence<Car, Integer>> source = new ArrayList<Persistence<Car, Integer>>();
+        source.add(additional);
+        source.add(otherAdditional);
+        source.add(additional);
+        List<Persistence<Car, Integer>> expected = new ArrayList<Persistence<Car, Integer>>(source);
+        CompositePersistence<Car, Integer> composite =
+                new CompositePersistence<Car, Integer>(primary, secondary, source);
+
+        source.clear();
+
+        assertEquals(expected, composite.getAdditionalPersistences());
+        assertThrows(UnsupportedOperationException.class, () -> composite.getAdditionalPersistences().clear());
     }
 
 
@@ -136,7 +164,8 @@ public class CompositePersistenceTest {
         assertEquals(objectStore, result);
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
+    @ExpectedException(IllegalStateException.class)
     public void testGetPersistenceForIndex_NoPersistence() throws Exception {
         Index<Car> index = mockIndex("index1");
         Persistence<Car, Integer> persistence1 = mockPersistence("persistence1");
@@ -207,7 +236,8 @@ public class CompositePersistenceTest {
         CompositePersistence.validatePersistenceArguments(persistence1, persistence1, singletonList(persistence1));
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
+    @ExpectedException(IllegalArgumentException.class)
     public void testValidateBackingPersistences_NoPrimaryKey() throws Exception {
         Persistence<Car, Integer> persistence1 = mockPersistence("persistence1");
         Persistence<Car, Integer> persistence2 = mockPersistence("persistence2");
@@ -216,7 +246,8 @@ public class CompositePersistenceTest {
         CompositePersistence.validatePersistenceArguments(persistence1, persistence2, noAdditionalPersistences());
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
+    @ExpectedException(IllegalArgumentException.class)
     public void testValidateBackingPersistences_DifferentPrimaryKeys1() throws Exception {
         Persistence<Car, Integer> persistence1 = mockPersistence("persistence1");
         Persistence<Car, Integer> persistence2 = mockPersistence("persistence2");
@@ -226,7 +257,8 @@ public class CompositePersistenceTest {
         CompositePersistence.validatePersistenceArguments(persistence1, persistence2, noAdditionalPersistences());
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
+    @ExpectedException(IllegalArgumentException.class)
     public void testValidateBackingPersistences_DifferentPrimaryKeys2() throws Exception {
         Persistence<Car, Integer> persistence1 = mockPersistence("persistence1");
         Persistence<Car, Integer> persistence2 = mockPersistence("persistence2");

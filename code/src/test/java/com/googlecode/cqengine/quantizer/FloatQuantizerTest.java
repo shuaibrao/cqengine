@@ -15,39 +15,39 @@
  */
 package com.googlecode.cqengine.quantizer;
 
-import org.junit.Assert;
-import org.junit.Test;
+import com.googlecode.cqengine.testutil.TestAssertions;
+import org.junit.jupiter.api.Test;
 
 /**
  * @author Niall Gallagher
  */
 public class FloatQuantizerTest {
-    
+
     @Test
     public void testWithCompressionFactor_5() throws Exception {
         Quantizer<Float> quantizer = FloatQuantizer.withCompressionFactor(5);
         // Note: comparing using toString, as double comparison with epsilon would not distinguish 0.0 from -0.0...
-        Assert.assertEquals("0.0", quantizer.getQuantizedValue(0.0F).toString());
-        Assert.assertEquals("0.0", quantizer.getQuantizedValue(4.2F).toString());
-        Assert.assertEquals("5.0", quantizer.getQuantizedValue(5.0F).toString());
-        Assert.assertEquals("5.0", quantizer.getQuantizedValue(9.9F).toString());
-        Assert.assertEquals("0.0", quantizer.getQuantizedValue(-0.0F).toString());
-        Assert.assertEquals("0.0", quantizer.getQuantizedValue(-4.2F).toString());
-        Assert.assertEquals("-5.0", quantizer.getQuantizedValue(-5.0F).toString());
-        Assert.assertEquals("-5.0", quantizer.getQuantizedValue(-9.9F).toString());
+        TestAssertions.assertEquals("0.0", quantizer.getQuantizedValue(0.0F).toString());
+        TestAssertions.assertEquals("0.0", quantizer.getQuantizedValue(4.2F).toString());
+        TestAssertions.assertEquals("5.0", quantizer.getQuantizedValue(5.0F).toString());
+        TestAssertions.assertEquals("5.0", quantizer.getQuantizedValue(9.9F).toString());
+        TestAssertions.assertEquals("0.0", quantizer.getQuantizedValue(-0.0F).toString());
+        TestAssertions.assertEquals("0.0", quantizer.getQuantizedValue(-4.2F).toString());
+        TestAssertions.assertEquals("-5.0", quantizer.getQuantizedValue(-5.0F).toString());
+        TestAssertions.assertEquals("-5.0", quantizer.getQuantizedValue(-9.9F).toString());
     }
 
     @Test
     public void testWithCompressionFactor_1() throws Exception {
         Quantizer<Float> quantizer = FloatQuantizer.withCompressionFactor(1);
         // Note: comparing using toString, as double comparison with epsilon would not distinguish 0.0 from -0.0...
-        Assert.assertEquals("0.0", quantizer.getQuantizedValue(0.0F).toString());
-        Assert.assertEquals("4.0", quantizer.getQuantizedValue(4.2F).toString());
-        Assert.assertEquals("5.0", quantizer.getQuantizedValue(5.0F).toString());
-        Assert.assertEquals("9.0", quantizer.getQuantizedValue(9.9F).toString());
-        Assert.assertEquals("0.0", quantizer.getQuantizedValue(-0.0F).toString());
-        Assert.assertEquals("-4.0", quantizer.getQuantizedValue(-4.2F).toString());
-        Assert.assertEquals("-5.0", quantizer.getQuantizedValue(-5.0F).toString());
-        Assert.assertEquals("-9.0", quantizer.getQuantizedValue(-9.9F).toString());
+        TestAssertions.assertEquals("0.0", quantizer.getQuantizedValue(0.0F).toString());
+        TestAssertions.assertEquals("4.0", quantizer.getQuantizedValue(4.2F).toString());
+        TestAssertions.assertEquals("5.0", quantizer.getQuantizedValue(5.0F).toString());
+        TestAssertions.assertEquals("9.0", quantizer.getQuantizedValue(9.9F).toString());
+        TestAssertions.assertEquals("0.0", quantizer.getQuantizedValue(-0.0F).toString());
+        TestAssertions.assertEquals("-4.0", quantizer.getQuantizedValue(-4.2F).toString());
+        TestAssertions.assertEquals("-5.0", quantizer.getQuantizedValue(-5.0F).toString());
+        TestAssertions.assertEquals("-9.0", quantizer.getQuantizedValue(-9.9F).toString());
     }
 }

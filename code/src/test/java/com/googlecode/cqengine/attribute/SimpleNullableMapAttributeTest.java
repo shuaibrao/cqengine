@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +17,8 @@
 package com.googlecode.cqengine.attribute;
 
 import com.googlecode.concurrenttrees.common.Iterables;
-import org.junit.Assert;
-import org.junit.Test;
+import com.googlecode.cqengine.testutil.TestAssertions;
+import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -31,7 +32,7 @@ import static com.googlecode.cqengine.query.QueryFactory.noQueryOptions;
 public class SimpleNullableMapAttributeTest {
 
     @Test
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"rawtypes", "unchecked"}) // Intentionally exercises the legacy raw-Map attribute API.
     public void testSimpleNullableMapAttribute() {
         Map map = new HashMap();
         map.put("foo", 1);
@@ -44,10 +45,10 @@ public class SimpleNullableMapAttributeTest {
         Attribute<Map, String> NON_EXISTENT = mapAttribute("foobar", String.class);
 
 
-        Assert.assertEquals("[1]", Iterables.toString(FOO.getValues(map, noQueryOptions())));
-        Assert.assertEquals("[2.5]", Iterables.toString(BAR.getValues(map, noQueryOptions())));
-        Assert.assertEquals("[baz]", Iterables.toString(ONE_POINT_FIVE.getValues(map, noQueryOptions())));
-        Assert.assertEquals("[]", Iterables.toString(NON_EXISTENT.getValues(map, noQueryOptions())));
+        TestAssertions.assertEquals("[1]", Iterables.toString(FOO.getValues(map, noQueryOptions())));
+        TestAssertions.assertEquals("[2.5]", Iterables.toString(BAR.getValues(map, noQueryOptions())));
+        TestAssertions.assertEquals("[baz]", Iterables.toString(ONE_POINT_FIVE.getValues(map, noQueryOptions())));
+        TestAssertions.assertEquals("[]", Iterables.toString(NON_EXISTENT.getValues(map, noQueryOptions())));
     }
 
 

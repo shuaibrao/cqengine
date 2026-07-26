@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,16 +44,23 @@ public class DynamicIndexer {
      * @param <O> Type of the POJO class
      * @return Attributes for fields in the POJO
      */
-    public static <O> Map<String, Attribute<O, Comparable>> generateAttributesForPojo(Class<O> pojoClass) {
-        Map<String, Attribute<O, Comparable>> generatedAttributes = new LinkedHashMap<String, Attribute<O, Comparable>>();
+    public static <O> Map<String, Attribute<O, ? extends Comparable<?>>> generateAttributesForPojo(Class<O> pojoClass) {
+        Map<String, Attribute<O, ? extends Comparable<?>>> generatedAttributes =
+                new LinkedHashMap<String, Attribute<O, ? extends Comparable<?>>>();
         for (Field field : pojoClass.getDeclaredFields()) {
             if (Comparable.class.isAssignableFrom(field.getType())) {
-                @SuppressWarnings({"unchecked"})
-                Class<Comparable> fieldType = (Class<Comparable>) field.getType();
-                generatedAttributes.put(field.getName(), ReflectiveAttribute.forField(pojoClass, fieldType, field.getName()));
+                generatedAttributes.put(field.getName(), createComparableAttribute(pojoClass, field));
             }
         }
         return generatedAttributes;
+    }
+
+    @SuppressWarnings("unchecked") // The reflection check above establishes the field's Comparable contract.
+    private static <O, A extends Comparable<A>> Attribute<O, A> createComparableAttribute(
+            Class<O> pojoClass,
+            Field field) {
+        Class<A> fieldType = (Class<A>) field.getType();
+        return ReflectiveAttribute.forField(pojoClass, fieldType, field.getName());
     }
 
     /**
@@ -62,15 +70,20 @@ public class DynamicIndexer {
      * @param <O> Type of objects stored in the collection
      * @return An IndexedCollection configured with indexes on the given attributes.
      */
-    public static <O> IndexedCollection<O> newAutoIndexedCollection(Iterable<Attribute<O, Comparable>> attributes) {
+    public static <O> IndexedCollection<O> newAutoIndexedCollection(
+            Iterable<? extends Attribute<O, ? extends Comparable<?>>> attributes) {
         IndexedCollection<O> autoIndexedCollection = new ConcurrentIndexedCollection<O>();
-        for (Attribute<O, ? extends Comparable> attribute : attributes) {
-            // Add a NavigableIndex...
-            @SuppressWarnings("unchecked")
-            NavigableIndex<? extends Comparable, O> index = NavigableIndex.onAttribute(attribute);
-            autoIndexedCollection.addIndex(index);
+        for (Attribute<O, ? extends Comparable<?>> attribute : attributes) {
+            addNavigableIndex(autoIndexedCollection, attribute);
         }
         return autoIndexedCollection;
+    }
+
+    @SuppressWarnings("unchecked") // Each generated attribute retains its field's runtime Comparable type.
+    private static <O, A extends Comparable<A>> void addNavigableIndex(
+            IndexedCollection<O> collection,
+            Attribute<O, ?> attribute) {
+        collection.addIndex(NavigableIndex.onAttribute((Attribute<O, A>) attribute));
     }
 
     /**

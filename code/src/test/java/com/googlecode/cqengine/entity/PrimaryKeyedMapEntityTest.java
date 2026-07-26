@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +17,10 @@
 package com.googlecode.cqengine.entity;
 
 import com.googlecode.cqengine.testutil.Car;
+import com.googlecode.cqengine.testutil.TestAssertions;
+import org.junit.jupiter.api.Test;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -30,11 +34,38 @@ import static com.googlecode.cqengine.query.QueryFactory.primaryKeyedMapEntity;
  */
 public class PrimaryKeyedMapEntityTest extends MapEntityTest {
 
+    @Test
+    public void equalityIsSymmetricWithRegularMapEntities() {
+        Map<Object, Object> map = new HashMap<Object, Object>();
+        map.put("", 7);
+        MapEntity regular = new MapEntity(map);
+        PrimaryKeyedMapEntity primaryKeyed = new PrimaryKeyedMapEntity(map, "");
+
+        TestAssertions.assertFalse(regular.equals(primaryKeyed));
+        TestAssertions.assertFalse(primaryKeyed.equals(regular));
+    }
+
+    @Test
+    public void equalityRequiresTheSamePrimaryKeyDefinition() {
+        Map<Object, Object> firstMap = new HashMap<Object, Object>();
+        firstMap.put("id", 7);
+        firstMap.put("alternateId", 8);
+        Map<Object, Object> secondMap = new HashMap<Object, Object>();
+        secondMap.put("id", 7);
+        secondMap.put("alternateId", 7);
+        PrimaryKeyedMapEntity first = new PrimaryKeyedMapEntity(firstMap, "id");
+        PrimaryKeyedMapEntity second = new PrimaryKeyedMapEntity(secondMap, "alternateId");
+
+        TestAssertions.assertFalse(first.equals(second));
+        TestAssertions.assertFalse(second.equals(first));
+    }
+
     @Override
     public void testMapFunctionality() {
         super.testMapFunctionality();
     }
 
+    @SuppressWarnings("rawtypes") // Overrides the legacy raw-Map test fixture contract.
     protected Map buildNewCar(int carId, String manufacturer, String model, Car.Color color, int doors, double price, List<String> features) {
         return primaryKeyedMapEntity(createMap(carId, manufacturer, model, color, doors, price, features), "CAR_ID");
     }

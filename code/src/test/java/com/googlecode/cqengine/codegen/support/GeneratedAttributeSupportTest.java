@@ -15,14 +15,14 @@
  */
 package com.googlecode.cqengine.codegen.support;
 
-import org.junit.Assert;
-import org.junit.Test;
+import com.googlecode.cqengine.testutil.TestAssertions;
+import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
 
 import static java.util.Arrays.asList;
-import static org.junit.Assert.*;
+import static com.googlecode.cqengine.testutil.TestAssertions.*;
 
 @SuppressWarnings("deprecation")
 public class GeneratedAttributeSupportTest {
@@ -31,28 +31,28 @@ public class GeneratedAttributeSupportTest {
     public void testAsList_PrimitiveArray() throws Exception {
         int[] input = new int[] {1, 2, 3, 4, 5};
         List<Integer> list = GeneratedAttributeSupport.valueOf(input);
-        Assert.assertEquals(5, list.size());
+        TestAssertions.assertEquals(5, list.size());
         for (int i = 0; i < 5; i++) {
-            Assert.assertEquals(Integer.valueOf(input[i]), list.get(i));
+            TestAssertions.assertEquals(Integer.valueOf(input[i]), list.get(i));
         }
 
         list.set(2, 7);
-        Assert.assertEquals(Integer.valueOf(7), list.get(2));
-        Assert.assertEquals(7, input[2]);
+        TestAssertions.assertEquals(Integer.valueOf(7), list.get(2));
+        TestAssertions.assertEquals(7, input[2]);
     }
 
     @Test
     public void testAsList_ObjectArray() throws Exception {
         Integer[] input = new Integer[] {1, 2, 3, 4, 5};
         List<Integer> list = GeneratedAttributeSupport.valueOf(input);
-        Assert.assertEquals(5, list.size());
+        TestAssertions.assertEquals(5, list.size());
         for (int i = 0; i < 5; i++) {
-            Assert.assertEquals(input[i], list.get(i));
+            TestAssertions.assertEquals(input[i], list.get(i));
         }
 
         list.set(2, 7);
-        Assert.assertEquals(Integer.valueOf(7), list.get(2));
-        Assert.assertEquals(Integer.valueOf(7), input[2]);
+        TestAssertions.assertEquals(Integer.valueOf(7), list.get(2));
+        TestAssertions.assertEquals(Integer.valueOf(7), input[2]);
     }
 
     @Test

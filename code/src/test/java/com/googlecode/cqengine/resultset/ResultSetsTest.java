@@ -19,13 +19,13 @@ import com.googlecode.cqengine.ConcurrentIndexedCollection;
 import com.googlecode.cqengine.IndexedCollection;
 import com.googlecode.cqengine.resultset.common.ResultSets;
 import com.googlecode.cqengine.resultset.iterator.IteratorUtil;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.Collection;
 
 import static com.googlecode.cqengine.query.QueryFactory.all;
 import static java.util.Arrays.asList;
-import static org.junit.Assert.*;
+import static com.googlecode.cqengine.testutil.TestAssertions.*;
 
 public class ResultSetsTest {
 
