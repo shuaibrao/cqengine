@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +21,7 @@ import com.googlecode.cqengine.index.Index;
 import com.googlecode.cqengine.index.sqlite.ConnectionManager;
 import com.googlecode.cqengine.index.sqlite.RequestScopeConnectionManager;
 import com.googlecode.cqengine.persistence.Persistence;
+import com.googlecode.cqengine.persistence.RequestScopeTransactionOutcome;
 import com.googlecode.cqengine.persistence.support.ObjectStore;
 import com.googlecode.cqengine.query.option.QueryOptions;
 
@@ -29,7 +31,7 @@ import java.util.concurrent.ConcurrentMap;
 
 /**
  * A Persistence object which wraps two or more backing Persistence objects.
- * <p/>
+ * <p>
  * The collection itself will be persisted to the primary persistence object supplied to the constructor.
  *
  * @author niall.gallagher
@@ -55,10 +57,12 @@ public class CompositePersistence<O, A extends Comparable<A>> implements Persist
      * @throws IllegalArgumentException If any of the Persistence objects are not on the same primary key.
      */
     public CompositePersistence(Persistence<O, A> primaryPersistence, Persistence<O, A> secondaryPersistence, List<? extends Persistence<O, A>> additionalPersistences) {
-        validatePersistenceArguments(primaryPersistence, secondaryPersistence, additionalPersistences);
+        List<Persistence<O, A>> additionalPersistenceSnapshot =
+                new ArrayList<Persistence<O, A>>(additionalPersistences);
+        validatePersistenceArguments(primaryPersistence, secondaryPersistence, additionalPersistenceSnapshot);
         this.primaryPersistence = primaryPersistence;
         this.secondaryPersistence = secondaryPersistence;
-        this.additionalPersistences = additionalPersistences;
+        this.additionalPersistences = Collections.unmodifiableList(additionalPersistenceSnapshot);
     }
 
     @Override
@@ -186,10 +190,29 @@ public class CompositePersistence<O, A extends Comparable<A>> implements Persist
      */
     @Override
     public void closeRequestScopeResources(QueryOptions queryOptions) {
+        closeRequestScopeResources(queryOptions, RequestScopeTransactionOutcome.COMMIT);
+    }
+
+    @Override
+    public void closeRequestScopeResources(QueryOptions queryOptions, RequestScopeTransactionOutcome outcome) {
         ConnectionManager connectionManager = queryOptions.get(ConnectionManager.class);
         if (connectionManager instanceof RequestScopeConnectionManager) {
-            ((RequestScopeConnectionManager) connectionManager).close();
-            queryOptions.remove(ConnectionManager.class);
+            try {
+                ((RequestScopeConnectionManager) connectionManager).close(outcome);
+            }
+            finally {
+                if (queryOptions.get(ConnectionManager.class) == connectionManager) {
+                    queryOptions.remove(ConnectionManager.class);
+                }
+            }
+        }
+    }
+
+    @Override
+    public void commitRequestScopeTransaction(QueryOptions queryOptions) {
+        ConnectionManager connectionManager = queryOptions.get(ConnectionManager.class);
+        if (connectionManager instanceof RequestScopeConnectionManager) {
+            ((RequestScopeConnectionManager) connectionManager).commitOpenTransactions();
         }
     }
 

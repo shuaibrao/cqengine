@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,12 +35,11 @@ import com.googlecode.cqengine.resultset.ResultSet;
 import java.lang.reflect.Constructor;
 
 import static com.googlecode.cqengine.query.QueryFactory.equal;
-import static com.googlecode.cqengine.query.QueryFactory.noQueryOptions;
 
 /**
  * An index which allows objects to be persisted directly in the index in serialized form, and to be accessed using a
  * primary key attribute (as obtained from a foreign key held elsewhere).
- * <p/>
+ * <p>
  * This index actually wraps an {@link SQLiteIndex}, but configures the value that it stores for each primary key, to
  * be the actual serialized bytes of the object which has that key.
  *
@@ -203,7 +203,7 @@ public class SQLiteIdentityIndex<A extends Comparable<A>, O> implements Identity
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
 
-        SQLiteIdentityIndex that = (SQLiteIdentityIndex) o;
+        SQLiteIdentityIndex<?, ?> that = (SQLiteIdentityIndex<?, ?>) o;
 
         if (!primaryKeyAttribute.equals(that.primaryKeyAttribute)) return false;
 
@@ -219,18 +219,19 @@ public class SQLiteIdentityIndex<A extends Comparable<A>, O> implements Identity
 
     @SuppressWarnings("unchecked")
     static <O> PojoSerializer<O> createSerializer(Class<O> objectType) {
-        Class<? extends PojoSerializer> serializerClass = null;
+        Class<? extends PojoSerializer<?>> serializerClass = null;
         try {
             // Read the configured serializer from the @PersistenceConfig annotation...
             PersistenceConfig persistenceConfig = objectType.getAnnotation(PersistenceConfig.class);
             if (persistenceConfig == null) {
                 persistenceConfig = PersistenceConfig.DEFAULT_CONFIG;
             }
-            serializerClass = persistenceConfig.serializer();
+            serializerClass = (Class<? extends PojoSerializer<?>>) (Class<?>) persistenceConfig.serializer();
 
             // Instantiate the serializer, supplying the parameters to its (objectType, persistenceConfig) constructor...
-            Constructor constructor = serializerClass.getConstructor(Class.class, PersistenceConfig.class);
-            Object serializerInstance = constructor.newInstance(objectType, persistenceConfig);
+            Constructor<? extends PojoSerializer<?>> constructor =
+                    serializerClass.getConstructor(Class.class, PersistenceConfig.class);
+            PojoSerializer<?> serializerInstance = constructor.newInstance(objectType, persistenceConfig);
             return (PojoSerializer<O>) serializerInstance;
         }
         catch (Exception e) {
@@ -282,7 +283,10 @@ public class SQLiteIdentityIndex<A extends Comparable<A>, O> implements Identity
 
         @Override
         public O getValue(A foreignKey, QueryOptions queryOptions) {
-            return SQLiteIdentityIndex.this.retrieve(equal(primaryKeyAttribute, foreignKey), noQueryOptions()).uniqueResult();
+            try (ResultSet<O> results = SQLiteIdentityIndex.this.retrieve(
+                    equal(primaryKeyAttribute, foreignKey), queryOptions)) {
+                return results.uniqueResult();
+            }
         }
     }
 

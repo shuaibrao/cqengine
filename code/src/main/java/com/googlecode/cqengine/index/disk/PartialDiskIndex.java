@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +25,7 @@ import com.googlecode.cqengine.index.support.indextype.DiskTypeIndex;
 import com.googlecode.cqengine.persistence.disk.DiskPersistence;
 import com.googlecode.cqengine.query.Query;
 
+import static com.googlecode.cqengine.index.sqlite.support.DBUtils.createPartialIndexTableNameSuffixV2;
 import static com.googlecode.cqengine.index.sqlite.support.DBUtils.sanitizeForTableName;
 
 /**
@@ -34,6 +36,7 @@ import static com.googlecode.cqengine.index.sqlite.support.DBUtils.sanitizeForTa
 public class PartialDiskIndex<A extends Comparable<A>, O> extends PartialSortedKeyStatisticsAttributeIndex<A, O> implements DiskTypeIndex {
 
     final String tableNameSuffix;
+    final String legacyTableNameSuffix;
 
     /**
      * Protected constructor, called by subclasses.
@@ -42,15 +45,17 @@ public class PartialDiskIndex<A extends Comparable<A>, O> extends PartialSortedK
      */
     protected PartialDiskIndex(Attribute<O, A> attribute, Query<O> filterQuery) {
         super(attribute, filterQuery);
-        this.tableNameSuffix = "_partial_" + sanitizeForTableName(filterQuery.toString());
+        String filterDescription = filterQuery.toString();
+        this.tableNameSuffix = createPartialIndexTableNameSuffixV2(filterDescription);
+        this.legacyTableNameSuffix = "_partial_" + sanitizeForTableName(filterDescription);
     }
 
     @Override
-    @SuppressWarnings("unchecked") // unchecked, because type K will be provided later via the init() method
+    @SuppressWarnings({"rawtypes", "unchecked"}) // K is supplied later by the legacy init contract.
     protected SortedKeyStatisticsAttributeIndex<A, O> createBackingIndex() {
-        return new DiskIndex(DiskPersistence.class, attribute, tableNameSuffix) {
+        return new DiskIndex(DiskPersistence.class, attribute, tableNameSuffix, legacyTableNameSuffix) {
             @Override
-            public Index getEffectiveIndex() {
+            public Index<O> getEffectiveIndex() {
                 return PartialDiskIndex.this.getEffectiveIndex();
             }
         };

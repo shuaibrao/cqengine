@@ -28,7 +28,7 @@ public class SQLiteIndexFlags {
     /**
      * A flag which if enabled causes the SQLiteIndex to temporarily drop the index on a table prior to adding objects,
      * then to restore the index after objects have been added.
-     * <p/>
+     * <p>
      * This should not be used if other concurrent operations might also be ongoing on the collection. It is intended
      * for use when the collection is first being populated or similar, such as at application startup.
      */

@@ -17,13 +17,14 @@ package com.googlecode.cqengine.index.sqlite;
 
 import com.googlecode.cqengine.attribute.SimpleAttribute;
 import com.googlecode.cqengine.index.AttributeIndex;
+import com.googlecode.cqengine.index.support.indextype.PersistenceIdentityIndex;
 
 /**
  * Implemented by indexes which persist serialized objects directly in the index instead of persisting foreign keys.
  *
  * @author niall.gallagher
  */
-public interface IdentityAttributeIndex<A, O> extends AttributeIndex<A, O> {
+public interface IdentityAttributeIndex<A, O> extends AttributeIndex<A, O>, PersistenceIdentityIndex {
 
     /**
      * Returns an attribute which given a primary key of a stored object can read (deserialize) the corresponding

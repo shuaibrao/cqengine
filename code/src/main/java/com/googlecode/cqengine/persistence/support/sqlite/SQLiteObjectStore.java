@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +20,7 @@ import com.googlecode.cqengine.attribute.SimpleAttribute;
 import com.googlecode.cqengine.index.sqlite.SQLiteIdentityIndex;
 import com.googlecode.cqengine.index.sqlite.SQLitePersistence;
 import com.googlecode.cqengine.index.support.CloseableIterator;
+import com.googlecode.cqengine.index.support.CloseableRequestResources;
 import com.googlecode.cqengine.persistence.support.ObjectSet;
 import com.googlecode.cqengine.persistence.support.ObjectStore;
 import com.googlecode.cqengine.query.option.QueryOptions;
@@ -55,13 +57,16 @@ public class SQLiteObjectStore<O, A extends Comparable<A>> implements ObjectStor
         return persistence;
     }
 
+    @Override
     public SQLiteIdentityIndex<A, O> getBackingIndex() {
         return backingIndex;
     }
 
     @Override
     public int size(QueryOptions queryOptions) {
-        return backingIndex.retrieve(has(primaryKeyAttribute), queryOptions).size();
+        try (ResultSet<O> results = backingIndex.retrieve(has(primaryKeyAttribute), queryOptions)) {
+            return results.size();
+        }
     }
 
     @Override
@@ -69,13 +74,22 @@ public class SQLiteObjectStore<O, A extends Comparable<A>> implements ObjectStor
         @SuppressWarnings("unchecked")
         O object = (O) o;
         A objectId = primaryKeyAttribute.getValue(object, queryOptions);
-        return backingIndex.retrieve(equal(primaryKeyAttribute, objectId), queryOptions).size() > 0;
+        try (ResultSet<O> results = backingIndex.retrieve(equal(primaryKeyAttribute, objectId), queryOptions)) {
+            return results.size() > 0;
+        }
     }
 
     @Override
     public CloseableIterator<O> iterator(QueryOptions queryOptions) {
         final ResultSet<O> rs = backingIndex.retrieve(has(primaryKeyAttribute), queryOptions);
-        final Iterator<O> i = rs.iterator();
+        final Iterator<O> i;
+        try {
+            i = rs.iterator();
+        }
+        catch (RuntimeException | Error failure) {
+            CloseableRequestResources.closeAndAddSuppressed(rs, failure);
+            throw failure;
+        }
         class CloseableIteratorImpl extends UnmodifiableIterator<O> implements CloseableIterator<O> {
 
             @Override

@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +25,7 @@ import com.googlecode.cqengine.index.sqlite.SQLitePersistence;
 import com.googlecode.cqengine.index.sqlite.support.DBQueries;
 import com.googlecode.cqengine.index.sqlite.support.DBUtils;
 import com.googlecode.cqengine.index.support.indextype.OffHeapTypeIndex;
+import com.googlecode.cqengine.persistence.RequestScopeTransactionOutcome;
 import com.googlecode.cqengine.persistence.disk.DiskPersistence;
 import com.googlecode.cqengine.persistence.support.sqlite.LockReleasingConnection;
 import com.googlecode.cqengine.persistence.support.sqlite.SQLiteObjectStore;
@@ -48,41 +50,32 @@ import static com.googlecode.cqengine.query.option.FlagsEnabled.isFlagEnabled;
 /**
  * Specifies that a collection or indexes should be persisted in native memory, within the JVM process but outside the
  * Java heap.
- * <p/>
+ * <p>
  * Each instance of this object specifies persistence to a different area of memory. So for example, to have an
  * {@link com.googlecode.cqengine.IndexedCollection} and multiple indexes all persist to the same area of memory,
  * configure them all to persist via the same instance of this object.
- * <p/>
- * <b>Garbage collection</b><br/>
- * The memory allocated off-heap will be freed automatically when this object is garbage collected. So using off-heap
- * memory does not require any special handling per-se. This object will be garbage collected when any
- * {@link com.googlecode.cqengine.IndexedCollection} or indexes using this object for persistence (which hold a
- * reference to this object internally) are garbage collected, and the application also releases any direct reference to
- * this object which it might be holding.
- * <p/>
- * <b>Garbage collection - implementation details</b><br/>
- * Internally this persistence strategy will open a connection to an in-memory SQLite database, and it will hold open
- * a connection to that database until either this object is garbage collected, or the {@link  #close()} method is
- * called explicitly. (The {@link  #finalize()} method of this object calls {@link #close()} automatically.)
- * <p/>
+ * <p>
+ * <b>Lifecycle</b><br/>
+ * This persistence strategy owns an in-memory SQLite database and holds a connection open to keep that database
+ * alive between requests. The application must call {@link #close()} when it no longer needs the persistence so that
+ * the connection and native memory are released deterministically. Finalization is not used.
+ * <p>
  * This object provides additional connections to the database on-demand; which the {@link IndexedCollection}
  * and indexes will request on-the-fly as necessary whenever the collection or indexes need to be read or updated.
  * SQLite automatically frees the memory used by an in-memory database when the last connection to the
  * database is closed. So by holding open a connection, this object keeps the in-memory database alive between requests.
- * <p/>
- * In terms of memory usage, the application can treat this as a very large object. The memory will be freed when this
- * object is garbage collected, but the application can also free memory sooner by calling {@link #close()}, but
- * this is optional.
- * <p/>
+ * <p>
+ * In terms of memory usage, the application should treat this as a very large closeable object.
+ * <p>
  * <b>Note on Concurrency</b><br/>
  * Note that this persistence implementation (backed by an off-heap in-memory SQLite database) has more restrictive
  * support for concurrency than other persistence implementations. This is because the concurrency support in SQLite is
  * more limited in its in-memory mode than in its disk-based mode.
- * <p/>
+ * <p>
  * Concurrent reads are supported when there are no ongoing writes, but writes are performed sequentially and they
  * block all concurrent reads. Essentially the concurrency support is equivalent to that afforded by a
  * {@link ReadWriteLock}.
- * <p/>
+ * <p>
  * As a workaround, any applications requiring more concurrency with an in-memory persistence, for example concurrent
  * reads and concurrent writes which don't block each other, could consider using {@link DiskPersistence} instead with
  * the persistence file located on a ram disk.
@@ -100,8 +93,7 @@ public class OffHeapPersistence<O, A extends Comparable<A>> implements SQLitePer
     // Note we don't configure a default busy_wait property, because SQLite's in-memory database does not support it.
     static final Properties DEFAULT_PROPERTIES = new Properties();
 
-    // A connection which we keep open to prevent SQLite from freeing the in-memory database
-    // until this object is garbage-collected, or close() is called explicitly on this object...
+    // This connection keeps the in-memory database alive until close() is called.
     volatile Connection persistentConnection;
     volatile boolean closed = false;
 
@@ -116,7 +108,7 @@ public class OffHeapPersistence<O, A extends Comparable<A>> implements SQLitePer
         this.primaryKeyAttribute = primaryKeyAttribute;
         this.instanceName = instanceName;
         this.sqLiteDataSource = sqLiteDataSource;
-        this.persistentConnection = getConnectionInternal(null, noQueryOptions());
+        this.persistentConnection = openConnection(sqLiteDataSource, instanceName);
     }
 
     @Override
@@ -153,11 +145,16 @@ public class OffHeapPersistence<O, A extends Comparable<A>> implements SQLitePer
         if (closed) {
             throw new IllegalStateException("OffHeapPersistence has been closed: " + this.toString());
         }
+        return openConnection(sqLiteDataSource, instanceName);
+    }
+
+    private static Connection openConnection(SQLiteDataSource sqLiteDataSource, String instanceName) {
         try {
             return sqLiteDataSource.getConnection();
         }
         catch (SQLException e) {
-            throw new IllegalStateException("Failed to open SQLite connection for memory instance: " + instanceName, e);
+            throw DBUtils.wrapAsRuntimeException(
+                    "Failed to open SQLite connection for memory instance: " + instanceName, e);
         }
     }
 
@@ -211,12 +208,6 @@ public class OffHeapPersistence<O, A extends Comparable<A>> implements SQLitePer
         finally {
             DBUtils.closeQuietly(connection);
         }
-    }
-
-    @Override
-    protected void finalize() throws Throwable {
-        super.finalize();
-        close();
     }
 
     @Override
@@ -279,10 +270,29 @@ public class OffHeapPersistence<O, A extends Comparable<A>> implements SQLitePer
      */
     @Override
     public void closeRequestScopeResources(QueryOptions queryOptions) {
+        closeRequestScopeResources(queryOptions, RequestScopeTransactionOutcome.COMMIT);
+    }
+
+    @Override
+    public void closeRequestScopeResources(QueryOptions queryOptions, RequestScopeTransactionOutcome outcome) {
         ConnectionManager connectionManager = queryOptions.get(ConnectionManager.class);
         if (connectionManager instanceof RequestScopeConnectionManager) {
-            ((RequestScopeConnectionManager) connectionManager).close();
-            queryOptions.remove(ConnectionManager.class);
+            try {
+                ((RequestScopeConnectionManager) connectionManager).close(outcome);
+            }
+            finally {
+                if (queryOptions.get(ConnectionManager.class) == connectionManager) {
+                    queryOptions.remove(ConnectionManager.class);
+                }
+            }
+        }
+    }
+
+    @Override
+    public void commitRequestScopeTransaction(QueryOptions queryOptions) {
+        ConnectionManager connectionManager = queryOptions.get(ConnectionManager.class);
+        if (connectionManager instanceof RequestScopeConnectionManager) {
+            ((RequestScopeConnectionManager) connectionManager).commitOpenTransactions();
         }
     }
 

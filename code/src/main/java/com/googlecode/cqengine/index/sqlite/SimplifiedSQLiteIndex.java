@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,22 +34,32 @@ import com.googlecode.cqengine.resultset.ResultSet;
 /**
  * An abstract class which wraps a {@link SQLiteIndex}, and simplifies some of its configuration options to make it
  * easier to use with IndexedCollections which themselves are persistent.
- * <p/>
+ * <p>
  * The primary key to be used, and the database to connect to, is obtained from the IndexedCollection.
  *
  * @author niall.gallagher
  */
 public abstract class SimplifiedSQLiteIndex<A extends Comparable<A>, O, K extends Comparable<K>> implements SortedKeyStatisticsAttributeIndex<A, O>, NonHeapTypeIndex {
 
-    final Class<? extends SQLitePersistence> persistenceType;
+    final Class<? extends SQLitePersistence<?, ?>> persistenceType;
     final Attribute<O, A> attribute;
     final String tableNameSuffix;
+    final String legacyTableNameSuffix;
     volatile SQLiteIndex<A, O, K> backingIndex;
 
     protected SimplifiedSQLiteIndex(Class<? extends SQLitePersistence<O, A>> persistenceType, Attribute<O, A> attribute, String tableNameSuffix) {
+        this(persistenceType, attribute, tableNameSuffix, tableNameSuffix);
+    }
+
+    protected SimplifiedSQLiteIndex(
+            Class<? extends SQLitePersistence<O, A>> persistenceType,
+            Attribute<O, A> attribute,
+            String tableNameSuffix,
+            String legacyTableNameSuffix) {
         this.persistenceType = persistenceType;
         this.attribute = attribute;
         this.tableNameSuffix = tableNameSuffix;
+        this.legacyTableNameSuffix = legacyTableNameSuffix;
     }
 
     @Override
@@ -58,13 +69,13 @@ public abstract class SimplifiedSQLiteIndex<A extends Comparable<A>, O, K extend
 
         final SimpleAttribute<O, K> primaryKeyAttribute = getPrimaryKeyFromPersistence(persistence);
         final AttributeIndex<K, O> primaryKeyIndex = getPrimaryKeyIndexFromQueryEngine(primaryKeyAttribute, queryEngine, queryOptions);
-        final SimpleAttribute<K, O> foreignKeyAttribute = new SimpleAttribute<K, O>(primaryKeyAttribute.getAttributeType(), primaryKeyAttribute.getObjectType()) {
-            @Override
-            public O getValue(K primaryKeyValue, QueryOptions queryOptions) {
-                return primaryKeyIndex.retrieve(QueryFactory.equal(primaryKeyAttribute, primaryKeyValue), queryOptions).uniqueResult();
-            }
-        };
-        backingIndex = new SQLiteIndex<A, O, K>(this.attribute, primaryKeyAttribute, foreignKeyAttribute, tableNameSuffix) {
+        final SimpleAttribute<K, O> foreignKeyAttribute = createForeignKeyAttribute(primaryKeyAttribute, primaryKeyIndex);
+        backingIndex = new SQLiteIndex<A, O, K>(
+                this.attribute,
+                primaryKeyAttribute,
+                foreignKeyAttribute,
+                tableNameSuffix,
+                legacyTableNameSuffix) {
             // Override getEffectiveIndex() in the backing index to return a reference to this index...
             @Override
             public Index<O> getEffectiveIndex() {
@@ -72,6 +83,20 @@ public abstract class SimplifiedSQLiteIndex<A extends Comparable<A>, O, K extend
             }
         };
         backingIndex.init(objectStore, queryOptions);
+    }
+
+    static <K extends Comparable<K>, O> SimpleAttribute<K, O> createForeignKeyAttribute(
+            final SimpleAttribute<O, K> primaryKeyAttribute, final AttributeIndex<K, O> primaryKeyIndex) {
+        return new SimpleAttribute<K, O>(
+                primaryKeyAttribute.getAttributeType(), primaryKeyAttribute.getObjectType()) {
+            @Override
+            public O getValue(K primaryKeyValue, QueryOptions queryOptions) {
+                try (ResultSet<O> results = primaryKeyIndex.retrieve(
+                        QueryFactory.equal(primaryKeyAttribute, primaryKeyValue), queryOptions)) {
+                    return results.uniqueResult();
+                }
+            }
+        };
     }
 
     /**
@@ -243,7 +268,7 @@ public abstract class SimplifiedSQLiteIndex<A extends Comparable<A>, O, K extend
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
 
-        SimplifiedSQLiteIndex that = (SimplifiedSQLiteIndex) o;
+        SimplifiedSQLiteIndex<?, ?, ?> that = (SimplifiedSQLiteIndex<?, ?, ?>) o;
 
         if (!attribute.equals(that.attribute)) return false;
 

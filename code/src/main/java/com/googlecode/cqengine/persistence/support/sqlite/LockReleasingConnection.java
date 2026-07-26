@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2019 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +17,7 @@
 package com.googlecode.cqengine.persistence.support.sqlite;
 
 import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.sql.Connection;
@@ -24,13 +26,13 @@ import java.util.concurrent.locks.Lock;
 /**
  * Wraps a {@link Connection} in a proxy object which delegates all method calls to it, and which additionally
  * unlocks the given lock whenever the {@link Connection#close()} method is closed.
- * <p/>
+ * <p>
  * Unlocks the lock at most once, ignoring subsequent calls.
  */
 public class LockReleasingConnection implements InvocationHandler {
     final Connection targetConnection;
     final Lock lockToUnlock;
-    boolean unlockedAlready = false;
+    boolean closed = false;
 
     LockReleasingConnection(Connection targetConnection, Lock lockToUnlock) {
         this.targetConnection = targetConnection;
@@ -38,12 +40,55 @@ public class LockReleasingConnection implements InvocationHandler {
     }
 
     public Object invoke(Object proxy, Method m, Object[] args) throws Throwable {
-        Object result = m.invoke(targetConnection, args);
-        if(m.getName().equals("close") && !unlockedAlready){
-            lockToUnlock.unlock();
-            unlockedAlready = true;
+        if (m.getName().equals("close") && m.getParameterTypes().length == 0) {
+            return close(m, args);
+        }
+        return invokeTarget(m, args);
+    }
+
+    synchronized Object close(Method closeMethod, Object[] args) throws Throwable {
+        if (closed) {
+            return null;
+        }
+        closed = true;
+
+        Throwable failure = null;
+        Object result = null;
+        try {
+            try {
+                result = invokeTarget(closeMethod, args);
+            }
+            catch (Throwable closeFailure) {
+                failure = closeFailure;
+            }
+        }
+        finally {
+            try {
+                lockToUnlock.unlock();
+            }
+            catch (Throwable unlockFailure) {
+                if (failure == null) {
+                    failure = unlockFailure;
+                }
+                else if (failure != unlockFailure) {
+                    failure.addSuppressed(unlockFailure);
+                }
+            }
+        }
+
+        if (failure != null) {
+            throw failure;
         }
         return result;
+    }
+
+    Object invokeTarget(Method method, Object[] args) throws Throwable {
+        try {
+            return method.invoke(targetConnection, args);
+        }
+        catch (InvocationTargetException e) {
+            throw e.getCause();
+        }
     }
 
     public static Connection wrap(Connection targetConnection, Lock lockToUnlock) {

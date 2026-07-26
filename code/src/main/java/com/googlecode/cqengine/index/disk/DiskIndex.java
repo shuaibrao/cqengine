@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,10 +27,10 @@ import com.googlecode.cqengine.resultset.common.WrappedResultSet;
 
 /**
  * An index persisted in a file on disk.
- * <p/>
+ * <p>
  * This index is similar to the on-heap {@link com.googlecode.cqengine.index.navigable.NavigableIndex} and supports
  * the same types of queries.
- * <p/>
+ * <p>
  * The current implementation of this index is based on {@link com.googlecode.cqengine.index.sqlite.SQLiteIndex}.
  *
  * @author niall.gallagher
@@ -42,6 +43,14 @@ public class DiskIndex<A extends Comparable<A>, O, K extends Comparable<K>> exte
 
     DiskIndex(Class<? extends DiskPersistence<O, A>> persistenceType, Attribute<O, A> attribute, String tableNameSuffix) {
         super(persistenceType, attribute, tableNameSuffix);
+    }
+
+    DiskIndex(
+            Class<? extends DiskPersistence<O, A>> persistenceType,
+            Attribute<O, A> attribute,
+            String tableNameSuffix,
+            String legacyTableNameSuffix) {
+        super(persistenceType, attribute, tableNameSuffix, legacyTableNameSuffix);
     }
 
     @Override
@@ -66,7 +75,7 @@ public class DiskIndex<A extends Comparable<A>, O, K extends Comparable<K>> exte
      * @param <O> The type of the object containing the attribute.
      * @return A {@link DiskIndex} on the given attribute.
      */
-    @SuppressWarnings("unchecked") // unchecked, because type K will be provided later via the init() method
+    @SuppressWarnings({"rawtypes", "unchecked"}) // K is supplied later by the legacy init contract.
     public static <A extends Comparable<A>, O> DiskIndex<A, O, ? extends Comparable<?>> onAttribute(final Attribute<O, A> attribute) {
         return new DiskIndex(DiskPersistence.class, attribute, "");
     }

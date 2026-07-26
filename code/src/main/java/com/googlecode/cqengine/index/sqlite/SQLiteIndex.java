@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,7 +47,6 @@ import java.util.HashSet;
 import java.util.Iterator;
 
 import static com.googlecode.cqengine.index.sqlite.support.DBQueries.Row;
-import static com.googlecode.cqengine.index.sqlite.support.DBUtils.sanitizeForTableName;
 import static com.googlecode.cqengine.index.sqlite.support.SQLiteIndexFlags.BulkImportExternallyManged.LAST;
 import static com.googlecode.cqengine.query.QueryFactory.*;
 
@@ -70,9 +70,9 @@ import static com.googlecode.cqengine.query.QueryFactory.*;
  *     <i>In applications where CQEngine manages the SQLite database, users should probably not use this
  *     index directly, but should use one of the simpler indexes mentioned above instead.</i>
  * </p>
- * <h1>
+ * <h2>
  *     Index implementation
- * </h1>
+ * </h2>
  *      This index is persisted in a SQLite table with the following schema:
  * <pre>
  * CREATE TABLE ${table_name} (
@@ -87,8 +87,8 @@ import static com.googlecode.cqengine.query.QueryFactory.*;
  * <ul>
  * <li>
  *     <i>table_name</i> is the name of the table.
- *     The name of the attribute (on which the index will be built) is used to name the table. A "cqtbl_" string
- *     will be prefixed and all the non alpha-numeric chars will be stripped out.
+ *     A versioned SHA-256 identity derived from the attribute name and suffix is prefixed with "cqtbl_". Tables
+ *     created by the historical non-alphanumeric sanitizer are migrated on first initialization.
  * </li>
  * <li>
  *     <i>objectKey</i> stores the value from the {@code primaryKeyAttribute} for each object stored
@@ -120,6 +120,7 @@ public class SQLiteIndex<A extends Comparable<A>, O, K> extends AbstractAttribut
     static final boolean FORCE_REINIT_OF_PREEXISTING_INDEXES = Boolean.getBoolean("cqengine.reinit.preexisting.indexes");
 
     final String tableName;
+    final String legacyTableName;
     final SimpleAttribute<O, K> primaryKeyAttribute;
     final SimpleAttribute<K, O> foreignKeyAttribute;
 
@@ -133,15 +134,25 @@ public class SQLiteIndex<A extends Comparable<A>, O, K> extends AbstractAttribut
      * @param attribute The {@link Attribute} on which the index will be built.
      * @param primaryKeyAttribute The {@link SimpleAttribute} with which the index will retrieve the object key.
      * @param foreignKeyAttribute The {@link SimpleAttribute} to map a query result into the domain object.
-     * @param tableNameSuffix An optional string to append the end of the table name used by this index;
-     *                        This can be an empty string, but cannot be null; If not an empty string, the string
-     *                        should only contain characters suitable for use in a SQLite table name; therefore see
-     *                        {@link DBUtils#sanitizeForTableName(String)}
+     * @param tableNameSuffix An optional string included in the version-two table identity. It can be empty but cannot
+     *                        be null, is bounded by
+     *                        {@link DBUtils#MAX_SQLITE_IDENTIFIER_COMPONENT_LENGTH}, and may contain only ASCII letters,
+     *                        digits, and underscore.
      */
+    @SuppressWarnings("rawtypes") // Supplies query classes to the legacy protected superclass contract.
     public SQLiteIndex(final Attribute<O, A> attribute,
                        final SimpleAttribute<O, K> primaryKeyAttribute,
                        final SimpleAttribute<K, O> foreignKeyAttribute,
                        final String tableNameSuffix) {
+        this(attribute, primaryKeyAttribute, foreignKeyAttribute, tableNameSuffix, tableNameSuffix);
+    }
+
+    @SuppressWarnings("rawtypes") // Supplies query classes to the legacy protected superclass contract.
+    SQLiteIndex(final Attribute<O, A> attribute,
+                final SimpleAttribute<O, K> primaryKeyAttribute,
+                final SimpleAttribute<K, O> foreignKeyAttribute,
+                final String tableNameSuffix,
+                final String legacyTableNameSuffix) {
 
         super(attribute, new HashSet<Class<? extends Query>>() {{
             add(Equal.class);
@@ -153,7 +164,11 @@ public class SQLiteIndex<A extends Comparable<A>, O, K> extends AbstractAttribut
             add(Has.class);
         }});
 
-        this.tableName = sanitizeForTableName(attribute.getAttributeName()) + tableNameSuffix;
+        String validatedSuffix = DBUtils.validateSQLiteIdentifierSuffix(tableNameSuffix);
+        String validatedLegacySuffix = DBUtils.validateSQLiteIdentifierSuffix(legacyTableNameSuffix);
+        this.tableName = DBUtils.createSQLiteIndexTableNameV2(attribute.getAttributeName(), validatedSuffix);
+        this.legacyTableName = DBUtils.validateSQLiteIdentifierComponent(
+                DBUtils.sanitizeForTableName(attribute.getAttributeName()) + validatedLegacySuffix);
         this.primaryKeyAttribute = primaryKeyAttribute;
         this.foreignKeyAttribute = foreignKeyAttribute;
     }
@@ -214,9 +229,11 @@ public class SQLiteIndex<A extends Comparable<A>, O, K> extends AbstractAttribut
                                 }
 
                             } catch (Exception e) {
+                                RuntimeException failure = DBUtils.wrapAsRuntimeException(
+                                        "Unable to retrieve the ResultSet item.", e);
                                 endOfData();
-                                close();
-                                throw new IllegalStateException("Unable to retrieve the ResultSet item.", e);
+                                CloseableRequestResources.closeAndAddSuppressed(closeableResourceGroup, failure);
+                                throw failure;
                             }
                         }
                     };
@@ -317,9 +334,11 @@ public class SQLiteIndex<A extends Comparable<A>, O, K> extends AbstractAttribut
                                         }
 
                                     } catch (Exception e) {
+                                        RuntimeException failure = DBUtils.wrapAsRuntimeException(
+                                                "Unable to retrieve the ResultSet item.", e);
                                         endOfData();
-                                        close();
-                                        throw new IllegalStateException("Unable to retrieve the ResultSet item.", e);
+                                        CloseableRequestResources.closeAndAddSuppressed(closeableResourceGroup, failure);
+                                        throw failure;
                                     }
                                 }
                             };
@@ -351,9 +370,11 @@ public class SQLiteIndex<A extends Comparable<A>, O, K> extends AbstractAttribut
                                 final K objectKey = DBUtils.getValueFromResultSet(1, searchResultSet, primaryKeyAttribute.getAttributeType());
                                 return foreignKeyAttribute.getValue(objectKey, queryOptions);
                             } catch (Exception e) {
+                                RuntimeException failure = DBUtils.wrapAsRuntimeException(
+                                        "Unable to retrieve the ResultSet item.", e);
                                 endOfData();
-                                close();
-                                throw new IllegalStateException("Unable to retrieve the ResultSet item.", e);
+                                CloseableRequestResources.closeAndAddSuppressed(closeableResourceGroup, failure);
+                                throw failure;
                             }
                         }
                     };
@@ -416,7 +437,7 @@ public class SQLiteIndex<A extends Comparable<A>, O, K> extends AbstractAttribut
 
     /**
      * {@inheritDoc}
-     * <p/>
+     * <p>
      * Note objects can be imported into this index rapidly via this method,
      * by setting flag {@link SQLiteIndexFlags#BULK_IMPORT}. See documentation on that flag for details and caveats.
      */
@@ -433,6 +454,9 @@ public class SQLiteIndex<A extends Comparable<A>, O, K> extends AbstractAttribut
             }
 
             final Connection connection = connectionManager.getConnection(this, queryOptions);
+            if (isInit) {
+                DBQueries.migrateLegacyIndexTableIfNeeded(legacyTableName, tableName, connection);
+            }
 
             if (!FORCE_REINIT_OF_PREEXISTING_INDEXES) {
                 if (isInit && DBQueries.indexTableExists(tableName, connection)) {
@@ -456,24 +480,16 @@ public class SQLiteIndex<A extends Comparable<A>, O, K> extends AbstractAttribut
                     if (!canModifySyncAndJournaling) {
                         throw new IllegalStateException("Cannot suspend sync and journaling because it was not possible to read the original 'synchronous' and 'journal_mode' pragmas during the index initialization.");
                     }
-                    DBQueries.suspendSyncAndJournaling(connection);
-                } else if (canModifySyncAndJournaling) {
-                    // Explicitly (re-)set the configured sync and journaling settings,
-                    // because we performed some DDL operations above. Because, it seems performing some
-                    // DDL operations can cause the previous sync and journaling settings settings to be lost.
-                    // For more details see: https://github.com/npgall/cqengine/issues/227
-                    DBQueries.setSyncAndJournaling(connection, pragmaSynchronous, pragmaJournalMode);
+                }
+                if (canModifySyncAndJournaling) {
+                    restoreSyncAndJournalingAfterTransaction(connectionManager, connection);
                 }
 
             } else {
                 // Not a bulk import, create indexes...
                 DBQueries.createIndexOnTable(tableName, connection);
                 if (canModifySyncAndJournaling) {
-                    // Explicitly (re-)set the configured sync and journaling settings,
-                    // because we performed some DDL operations above. Because, it seems performing some
-                    // DDL operations can cause the previous sync and journaling settings settings to be lost.
-                    // For more details see: https://github.com/npgall/cqengine/issues/227
-                    DBQueries.setSyncAndJournaling(connection, pragmaSynchronous, pragmaJournalMode);
+                    restoreSyncAndJournalingAfterTransaction(connectionManager, connection);
                 }
             }
 
@@ -483,9 +499,8 @@ public class SQLiteIndex<A extends Comparable<A>, O, K> extends AbstractAttribut
             if (isBulkImport || LAST.equals(bulkImportExternallyManged)) {
                 // Bulk import finished, recreate the SQLite index...
                 DBQueries.createIndexOnTable(tableName, connection);
-
-                if (isSuspendSyncAndJournaling) {
-                    DBQueries.setSyncAndJournaling(connection, pragmaSynchronous, pragmaJournalMode);
+                if (canModifySyncAndJournaling) {
+                    restoreSyncAndJournalingAfterTransaction(connectionManager, connection);
                 }
 
             }
@@ -579,11 +594,7 @@ public class SQLiteIndex<A extends Comparable<A>, O, K> extends AbstractAttribut
             Iterable<K> objectKeys = objectKeyIterable(objectSet, primaryKeyAttribute, queryOptions);
 
             if (canModifySyncAndJournaling) {
-                // Explicitly (re-)set the configured sync and journaling settings,
-                // because we performed some DDL operations above. Because, it seems performing some
-                // DDL operations can cause the previous sync and journaling settings settings to be lost.
-                // For more details see: https://github.com/npgall/cqengine/issues/227
-                DBQueries.setSyncAndJournaling(connection, pragmaSynchronous, pragmaJournalMode);
+                restoreSyncAndJournalingAfterTransaction(connectionManager, connection);
             }
 
             int rowsModified = DBQueries.bulkRemove(objectKeys, tableName, connection);
@@ -681,6 +692,18 @@ public class SQLiteIndex<A extends Comparable<A>, O, K> extends AbstractAttribut
         DBQueries.createIndexOnTable(tableName, connection);
     }
 
+    void restoreSyncAndJournalingAfterTransaction(ConnectionManager connectionManager, Connection connection) {
+        if (connectionManager instanceof RequestScopeConnectionManager) {
+            ((RequestScopeConnectionManager) connectionManager).restoreSyncAndJournalingOnClose(
+                    connection,
+                    pragmaSynchronous,
+                    pragmaJournalMode);
+        }
+        else {
+            DBQueries.setSyncAndJournaling(connection, pragmaSynchronous, pragmaJournalMode);
+        }
+    }
+
     /**
      * Utility method to extract the {@link ConnectionManager} from QueryOptions.
      *
@@ -759,9 +782,11 @@ public class SQLiteIndex<A extends Comparable<A>, O, K> extends AbstractAttribut
                             return new KeyStatistics<A>(key, count);
                         }
                         catch (Exception e) {
+                            RuntimeException failure = DBUtils.wrapAsRuntimeException(
+                                    "Unable to retrieve the ResultSet item.", e);
                             endOfData();
-                            close();
-                            throw new IllegalStateException("Unable to retrieve the ResultSet item.", e);
+                            CloseableRequestResources.closeAndAddSuppressed(closeableResourceGroup, failure);
+                            throw failure;
                         }
                     }
 
@@ -800,9 +825,11 @@ public class SQLiteIndex<A extends Comparable<A>, O, K> extends AbstractAttribut
                             return DBUtils.getValueFromResultSet(1, searchResultSet, attribute.getAttributeType());
                         }
                         catch (Exception e) {
+                            RuntimeException failure = DBUtils.wrapAsRuntimeException(
+                                    "Unable to retrieve the ResultSet item.", e);
                             endOfData();
-                            close();
-                            throw new IllegalStateException("Unable to retrieve the ResultSet item.", e);
+                            CloseableRequestResources.closeAndAddSuppressed(closeableResourceGroup, failure);
+                            throw failure;
                         }
                     }
 
@@ -863,9 +890,11 @@ public class SQLiteIndex<A extends Comparable<A>, O, K> extends AbstractAttribut
                             return new KeyValueMaterialized<A, O>(objectValue, object);
                         }
                         catch (Exception e) {
+                            RuntimeException failure = DBUtils.wrapAsRuntimeException(
+                                    "Unable to retrieve the ResultSet item.", e);
                             endOfData();
-                            close();
-                            throw new IllegalStateException("Unable to retrieve the ResultSet item.", e);
+                            CloseableRequestResources.closeAndAddSuppressed(closeableResourceGroup, failure);
+                            throw failure;
                         }
                     }
 
@@ -897,7 +926,9 @@ public class SQLiteIndex<A extends Comparable<A>, O, K> extends AbstractAttribut
 
     @Override
     public Integer getCountForKey(A key, QueryOptions queryOptions) {
-        return retrieve(equal(attribute, key), queryOptions).size();
+        try (ResultSet<O> results = retrieve(equal(attribute, key), queryOptions)) {
+            return results.size();
+        }
     }
 
     @Override
@@ -905,7 +936,7 @@ public class SQLiteIndex<A extends Comparable<A>, O, K> extends AbstractAttribut
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
 
-        SQLiteIndex that = (SQLiteIndex) o;
+        SQLiteIndex<?, ?, ?> that = (SQLiteIndex<?, ?, ?>) o;
 
         if (!attribute.equals(that.attribute)) return false;
 
@@ -938,4 +969,3 @@ public class SQLiteIndex<A extends Comparable<A>, O, K> extends AbstractAttribut
         return new SQLiteIndex<A, O, K>(attribute, objectKeyAttribute, foreignKeyAttribute, "");
     }
 }
-

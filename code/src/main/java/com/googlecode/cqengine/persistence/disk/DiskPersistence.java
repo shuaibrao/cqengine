@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +24,7 @@ import com.googlecode.cqengine.index.sqlite.SQLitePersistence;
 import com.googlecode.cqengine.index.sqlite.support.DBQueries;
 import com.googlecode.cqengine.index.sqlite.support.DBUtils;
 import com.googlecode.cqengine.index.support.indextype.DiskTypeIndex;
+import com.googlecode.cqengine.persistence.RequestScopeTransactionOutcome;
 import com.googlecode.cqengine.persistence.support.ObjectStore;
 import com.googlecode.cqengine.persistence.support.sqlite.LockReleasingConnection;
 import com.googlecode.cqengine.persistence.support.sqlite.SQLiteDiskIdentityIndex;
@@ -46,16 +48,21 @@ import static com.googlecode.cqengine.query.option.FlagsEnabled.isFlagEnabled;
 
 /**
  * Specifies that a collection or indexes should be persisted to a particular file on disk.
- * <p/>
+ * <p>
  * <b>Note on Concurrency</b><br/>
  * Note this disk persistence implementation supports fully concurrent reads and writes by default. This is because
  * it enables <i><a href="https://www.sqlite.org/wal.html">Write-Ahead Logging</a></i> ("WAL") journal mode in the
  * underlying SQLite database file by default (see that link for more details).
- * <p/>
+ * <p>
  * Optionally, this class allows the application to override the journal mode or other settings in SQLite by
  * supplying <i>"override properties"</i> to the {@link #onPrimaryKeyInFileWithProperties(SimpleAttribute, File, Properties)}
  * method. As WAL mode is suitable for most applications, most applications should work best with the default settings;
  * the override support is intended for advanced or custom use cases.
+ *
+ * <p>The SQLite {@value #BUSY_TIMEOUT_PROPERTY} setting bounds how long an operation waits for a conflicting
+ * database lock. The default is {@value #DEFAULT_BUSY_TIMEOUT_MILLIS} milliseconds, matching sqlite-jdbc's default.
+ * Callers can override it with zero for immediate failure or with another non-negative integer number of
+ * milliseconds.</p>
  * <p>
  * Two other CQEngine-specific properties are also supported:
  * <ul>
@@ -74,10 +81,8 @@ import static com.googlecode.cqengine.query.option.FlagsEnabled.isFlagEnabled;
  *         because it is a requirement for that feature to work.
  *         This might be beneficial to enable on its own even without {@code shared_cache} in some
  *         applications, but the benefit without {@code shared_cache} could to be quite marginal.<br/>
- *         When {@code persistent_connection} = true, it is recommended (although not mandatory)
- *         to call {@link #close()} when the application is finished using the collection;
- *         in order to close the persistent connection. Otherwise the persistent connection will only
- *         be closed when this object is garbage collected.
+     *         When {@code persistent_connection} = true, the application must call {@link #close()} when it
+     *         is finished using the collection so that the persistent connection is released deterministically.
  *     </li>
  *     <li>
  *         {@code use_read_write_lock} = true|false (default is true)<br/>
@@ -88,23 +93,29 @@ import static com.googlecode.cqengine.query.option.FlagsEnabled.isFlagEnabled;
  *         write concurrently.
  *     </li>
  * </ul>
- * </p>
  *
  * @author niall.gallagher
  */
 public class DiskPersistence<O, A extends Comparable<A>> implements SQLitePersistence<O, A>, Closeable {
 
+    /** SQLite connection property which bounds waits for conflicting database locks. */
+    public static final String BUSY_TIMEOUT_PROPERTY = "busy_timeout";
+
+    /** Explicit library default, matching sqlite-jdbc 3.53.2.0. */
+    public static final int DEFAULT_BUSY_TIMEOUT_MILLIS = 3000;
+
     final SimpleAttribute<O, A> primaryKeyAttribute;
     final File file;
     final SQLiteDataSource sqLiteDataSource;
     final boolean useReadWriteLock;
+    final int busyTimeoutMillis;
 
     // Read-write lock is only used in shared-cache mode...
     final ReadWriteLock readWriteLock = new ReentrantReadWriteLock(true);
 
     static final Properties DEFAULT_PROPERTIES = new Properties();
     static {
-        DEFAULT_PROPERTIES.setProperty("busy_timeout", String.valueOf(Integer.MAX_VALUE)); // Wait indefinitely to acquire locks (technically 68 years)
+        DEFAULT_PROPERTIES.setProperty(BUSY_TIMEOUT_PROPERTY, String.valueOf(DEFAULT_BUSY_TIMEOUT_MILLIS));
         DEFAULT_PROPERTIES.setProperty("journal_mode", "WAL"); // Use Write-Ahead-Logging which supports concurrent reads and writes
         DEFAULT_PROPERTIES.setProperty("synchronous", "NORMAL"); // Setting synchronous to normal is safe and faster when using WAL
 
@@ -112,9 +123,7 @@ public class DiskPersistence<O, A extends Comparable<A>> implements SQLitePersis
         DEFAULT_PROPERTIES.setProperty("persistent_connection", "false"); // Prevents the database file from being closed between transactions
     }
 
-    // If persistent_connection=true, this will be a connection which we keep open to prevent SQLite
-    // from closing the database file until this object is garbage-collected,
-    // or close() is called explicitly on this object...
+    // If persistent_connection=true, this connection keeps the database file open until close() is called.
     volatile Connection persistentConnection;
     volatile boolean closed = false;
 
@@ -122,6 +131,7 @@ public class DiskPersistence<O, A extends Comparable<A>> implements SQLitePersis
         Properties effectiveProperties = new Properties();
         effectiveProperties.putAll(DEFAULT_PROPERTIES);
         effectiveProperties.putAll(overrideProperties);
+        int busyTimeoutMillis = validateBusyTimeout(effectiveProperties);
         SQLiteConfig sqLiteConfig = new SQLiteConfig(effectiveProperties);
         SQLiteDataSource sqLiteDataSource = new SQLiteDataSource(sqLiteConfig);
         sqLiteDataSource.setUrl("jdbc:sqlite:file:" + file);
@@ -129,6 +139,7 @@ public class DiskPersistence<O, A extends Comparable<A>> implements SQLitePersis
         this.primaryKeyAttribute = primaryKeyAttribute;
         this.file = file.getAbsoluteFile();
         this.sqLiteDataSource = sqLiteDataSource;
+        this.busyTimeoutMillis = busyTimeoutMillis;
 
         boolean openPersistentConnection = "true".equals(effectiveProperties.getProperty("persistent_connection")); //default false
         boolean useSharedCache = "true".equals(effectiveProperties.getProperty("shared_cache")); // default false
@@ -146,7 +157,7 @@ public class DiskPersistence<O, A extends Comparable<A>> implements SQLitePersis
         }
         if (useSharedCache || openPersistentConnection) {
             // If shared_cache is enabled, we always open a persistent connection regardless...
-            this.persistentConnection = getConnectionWithoutRWLock(null, noQueryOptions());
+            this.persistentConnection = openConnection(sqLiteDataSource, this.file);
         }
     }
 
@@ -157,6 +168,31 @@ public class DiskPersistence<O, A extends Comparable<A>> implements SQLitePersis
 
     public File getFile() {
         return file;
+    }
+
+    /** Returns the configured maximum lock-conflict wait in milliseconds. */
+    public int getBusyTimeoutMillis() {
+        return busyTimeoutMillis;
+    }
+
+    static int validateBusyTimeout(Properties properties) {
+        String configuredValue = properties.getProperty(BUSY_TIMEOUT_PROPERTY);
+        final int timeoutMillis;
+        try {
+            timeoutMillis = Integer.parseInt(configuredValue);
+        }
+        catch (NumberFormatException e) {
+            throw new IllegalArgumentException(
+                    BUSY_TIMEOUT_PROPERTY + " must be an integer from 0 to " + Integer.MAX_VALUE
+                            + " milliseconds",
+                    e);
+        }
+        if (timeoutMillis < 0) {
+            throw new IllegalArgumentException(
+                    BUSY_TIMEOUT_PROPERTY + " must be an integer from 0 to " + Integer.MAX_VALUE
+                            + " milliseconds");
+        }
+        return timeoutMillis;
     }
 
     @Override
@@ -187,11 +223,15 @@ public class DiskPersistence<O, A extends Comparable<A>> implements SQLitePersis
         if (closed) {
             throw new IllegalStateException("DiskPersistence has been closed: " + this.toString());
         }
+        return openConnection(sqLiteDataSource, file);
+    }
+
+    private static Connection openConnection(SQLiteDataSource sqLiteDataSource, File file) {
         try {
             return sqLiteDataSource.getConnection();
         }
         catch (SQLException e) {
-            throw new IllegalStateException("Failed to open SQLite connection for file: " + file, e);
+            throw DBUtils.wrapAsRuntimeException("Failed to open SQLite connection for file: " + file, e);
         }
     }
 
@@ -214,15 +254,6 @@ public class DiskPersistence<O, A extends Comparable<A>> implements SQLitePersis
         DBUtils.closeQuietly(persistentConnection);
         this.persistentConnection = null;
         this.closed = true;
-    }
-
-    /**
-     * Finalizer which automatically calls {@link #close()} when this object is garbage collected.
-]     */
-    @Override
-    protected void finalize() throws Throwable {
-        super.finalize();
-        close();
     }
 
     @Override
@@ -321,10 +352,29 @@ public class DiskPersistence<O, A extends Comparable<A>> implements SQLitePersis
      */
     @Override
     public void closeRequestScopeResources(QueryOptions queryOptions) {
+        closeRequestScopeResources(queryOptions, RequestScopeTransactionOutcome.COMMIT);
+    }
+
+    @Override
+    public void closeRequestScopeResources(QueryOptions queryOptions, RequestScopeTransactionOutcome outcome) {
         ConnectionManager connectionManager = queryOptions.get(ConnectionManager.class);
         if (connectionManager instanceof RequestScopeConnectionManager) {
-            ((RequestScopeConnectionManager) connectionManager).close();
-            queryOptions.remove(ConnectionManager.class);
+            try {
+                ((RequestScopeConnectionManager) connectionManager).close(outcome);
+            }
+            finally {
+                if (queryOptions.get(ConnectionManager.class) == connectionManager) {
+                    queryOptions.remove(ConnectionManager.class);
+                }
+            }
+        }
+    }
+
+    @Override
+    public void commitRequestScopeTransaction(QueryOptions queryOptions) {
+        ConnectionManager connectionManager = queryOptions.get(ConnectionManager.class);
+        if (connectionManager instanceof RequestScopeConnectionManager) {
+            ((RequestScopeConnectionManager) connectionManager).commitOpenTransactions();
         }
     }
 
@@ -372,8 +422,10 @@ public class DiskPersistence<O, A extends Comparable<A>> implements SQLitePersis
      * @param primaryKeyAttribute An attribute which returns the primary key of objects in the collection
      * @param file The file on disk to which data should be persisted
      * @param overrideProperties Optional properties to override default settings (can be empty to use all default
-     *                           settings, but cannot be null)
+     *                           settings, but cannot be null). {@value #BUSY_TIMEOUT_PROPERTY} must be a
+     *                           non-negative integer number of milliseconds when supplied.
      * @return A {@link DiskPersistence} object which persists to the given file on disk
+     * @throws IllegalArgumentException if {@value #BUSY_TIMEOUT_PROPERTY} is not a non-negative integer
      */
     public static <O, A extends Comparable<A>> DiskPersistence<O, A> onPrimaryKeyInFileWithProperties(SimpleAttribute<O, A> primaryKeyAttribute, File file, Properties overrideProperties) {
         return new DiskPersistence<O, A>(primaryKeyAttribute, file, overrideProperties);

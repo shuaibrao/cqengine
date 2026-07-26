@@ -1,5 +1,6 @@
 /**
  * Copyright 2012-2015 Niall Gallagher
+ * Modified by Shuaib Rao in 2026.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +26,7 @@ import java.sql.*;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 /**
@@ -33,6 +35,191 @@ import java.util.Set;
  * @author Silvano Riz
  */
 public class DBQueries {
+
+    private static final String IDENTIFIER_MIGRATIONS_TABLE = "cqengine_sqlite_identifier_migrations_v2";
+
+    static String tableIdentifier(String tableName) {
+        return quoteGeneratedIdentifier(tableNameValue(tableName));
+    }
+
+    static String indexIdentifier(String tableName) {
+        return quoteGeneratedIdentifier("cqidx_" + DBUtils.validateSQLiteIdentifierComponent(tableName) + "_value");
+    }
+
+    static String tableNameValue(String tableName) {
+        return "cqtbl_" + DBUtils.validateSQLiteIdentifierComponent(tableName);
+    }
+
+    private static String quoteGeneratedIdentifier(String identifier) {
+        return '"' + identifier + '"';
+    }
+
+    /**
+     * Atomically adopts a table created with CQEngine's legacy sanitizer into the version-two identifier scheme.
+     * A durable mapping prevents another logical name with the same legacy sanitizer output from claiming the table
+     * on a later opening.
+     *
+     * @return true if this call renamed a legacy table
+     */
+    public static boolean migrateLegacyIndexTableIfNeeded(
+            String legacyTableName, String versionTwoTableName, Connection connection) {
+        String validatedLegacyName = DBUtils.validateSQLiteIdentifierComponent(legacyTableName);
+        String validatedVersionTwoName = DBUtils.validateSQLiteIdentifierComponent(versionTwoTableName);
+        if (validatedLegacyName.equals(validatedVersionTwoName)) {
+            return false;
+        }
+
+        boolean restoreAutoCommit;
+        try {
+            restoreAutoCommit = connection.getAutoCommit();
+            if (restoreAutoCommit) {
+                connection.setAutoCommit(false);
+            }
+        }
+        catch (SQLException e) {
+            throw DBUtils.wrapAsRuntimeException("Unable to start SQLite identifier migration", e);
+        }
+
+        Savepoint savepoint = null;
+        Throwable failure = null;
+        try {
+            savepoint = connection.setSavepoint("cqengine_identifier_migration_v2");
+            boolean migrated = migrateLegacyIndexTableInTransaction(
+                    validatedLegacyName, validatedVersionTwoName, connection);
+            connection.releaseSavepoint(savepoint);
+            savepoint = null;
+            if (restoreAutoCommit) {
+                connection.commit();
+            }
+            return migrated;
+        }
+        catch (Throwable migrationFailure) {
+            failure = migrationFailure;
+            try {
+                if (savepoint == null) {
+                    connection.rollback();
+                }
+                else {
+                    connection.rollback(savepoint);
+                    connection.releaseSavepoint(savepoint);
+                }
+            }
+            catch (Throwable rollbackFailure) {
+                migrationFailure.addSuppressed(rollbackFailure);
+            }
+            if (migrationFailure instanceof Error) {
+                throw (Error) migrationFailure;
+            }
+            if (migrationFailure instanceof RuntimeException) {
+                throw (RuntimeException) migrationFailure;
+            }
+            throw DBUtils.wrapAsRuntimeException("Unable to migrate SQLite identifier", migrationFailure);
+        }
+        finally {
+            if (restoreAutoCommit) {
+                try {
+                    connection.setAutoCommit(true);
+                }
+                catch (Throwable restoreFailure) {
+                    if (failure != null) {
+                        failure.addSuppressed(restoreFailure);
+                    }
+                    else if (restoreFailure instanceof Error) {
+                        throw (Error) restoreFailure;
+                    }
+                    else {
+                        throw DBUtils.wrapAsRuntimeException(
+                                "Unable to restore auto-commit after SQLite identifier migration", restoreFailure);
+                    }
+                }
+            }
+        }
+    }
+
+    private static boolean migrateLegacyIndexTableInTransaction(
+            String legacyTableName, String versionTwoTableName, Connection connection) throws SQLException {
+        String mappedVersionTwoName = readIdentifierMigration(legacyTableName, connection);
+        boolean legacyTableExists = indexTableExists(legacyTableName, connection);
+        boolean versionTwoTableExists = indexTableExists(versionTwoTableName, connection);
+
+        if (mappedVersionTwoName != null) {
+            if (mappedVersionTwoName.equals(versionTwoTableName)) {
+                if (legacyTableExists) {
+                    throw new IllegalStateException("SQLite identifier migration metadata disagrees with the schema");
+                }
+            }
+            else if (legacyTableExists) {
+                throw new IllegalStateException("A claimed legacy SQLite identifier has reappeared");
+            }
+            return false;
+        }
+        if (!legacyTableExists) {
+            return false;
+        }
+        if (versionTwoTableExists) {
+            throw new IllegalStateException("Both legacy and version-two SQLite index tables exist");
+        }
+
+        createIdentifierMigrationsTable(connection);
+        renameIndexTable(legacyTableName, versionTwoTableName, connection);
+        dropIndexOnTable(legacyTableName, connection);
+        createIndexOnTable(versionTwoTableName, connection);
+        recordIdentifierMigration(legacyTableName, versionTwoTableName, connection);
+        return true;
+    }
+
+    private static String readIdentifierMigration(String legacyTableName, Connection connection) throws SQLException {
+        if (!actualTableExists(IDENTIFIER_MIGRATIONS_TABLE, connection)) {
+            return null;
+        }
+        String sql = "SELECT v2_component FROM \"" + IDENTIFIER_MIGRATIONS_TABLE
+                + "\" WHERE legacy_component = ?;";
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, legacyTableName);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                return resultSet.next() ? resultSet.getString(1) : null;
+            }
+        }
+    }
+
+    private static boolean actualTableExists(String actualTableName, Connection connection) throws SQLException {
+        String sql = "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?;";
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, actualTableName);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                return resultSet.next();
+            }
+        }
+    }
+
+    private static void createIdentifierMigrationsTable(Connection connection) throws SQLException {
+        String sql = "CREATE TABLE IF NOT EXISTS \"" + IDENTIFIER_MIGRATIONS_TABLE + "\" ("
+                + "legacy_component TEXT PRIMARY KEY NOT NULL, "
+                + "v2_component TEXT UNIQUE NOT NULL);";
+        try (Statement statement = connection.createStatement()) {
+            statement.executeUpdate(sql);
+        }
+    }
+
+    private static void renameIndexTable(
+            String legacyTableName, String versionTwoTableName, Connection connection) throws SQLException {
+        String sql = "ALTER TABLE " + tableIdentifier(legacyTableName)
+                + " RENAME TO " + tableIdentifier(versionTwoTableName) + ";";
+        try (Statement statement = connection.createStatement()) {
+            statement.executeUpdate(sql);
+        }
+    }
+
+    private static void recordIdentifierMigration(
+            String legacyTableName, String versionTwoTableName, Connection connection) throws SQLException {
+        String sql = "INSERT INTO \"" + IDENTIFIER_MIGRATIONS_TABLE
+                + "\" (legacy_component, v2_component) VALUES (?, ?);";
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, legacyTableName);
+            statement.setString(2, versionTwoTableName);
+            statement.executeUpdate();
+        }
+    }
 
     /**
      * Represents a table row (objectId, value).
@@ -62,7 +249,7 @@ public class DBQueries {
             if (this == o) return true;
             if (o == null || getClass() != o.getClass()) return false;
 
-            Row row = (Row) o;
+            Row<?, ?> row = (Row<?, ?>) o;
 
             if (!objectKey.equals(row.objectKey)) return false;
             if (!value.equals(row.value)) return false;
@@ -80,12 +267,13 @@ public class DBQueries {
 
     public static <K, A> void createIndexTable(final String tableName, final Class<K> objectKeyClass, final Class<A> valueClass, final Connection connection){
 
+        final String tableIdentifier = tableIdentifier(tableName);
         final String objectKeySQLiteType = DBUtils.getDBTypeForClass(objectKeyClass);
         final String objectValueSQLiteType = DBUtils.getDBTypeForClass(valueClass);
 
         final String sqlCreateTable = String.format(
-                "CREATE TABLE IF NOT EXISTS cqtbl_%s (objectKey %s, value %s, PRIMARY KEY (objectKey, value)) WITHOUT ROWID;",
-                tableName,
+                "CREATE TABLE IF NOT EXISTS %s (objectKey %s, value %s, PRIMARY KEY (objectKey, value)) WITHOUT ROWID;",
+                tableIdentifier,
                 objectKeySQLiteType,
                 objectValueSQLiteType);
 
@@ -95,39 +283,42 @@ public class DBQueries {
             statement = connection.createStatement();
             statement.executeUpdate(sqlCreateTable);
         }catch (SQLException e){
-            throw new IllegalStateException("Unable to create index table: " + tableName, e);
+            throw DBUtils.wrapAsRuntimeException("Unable to create index table: " + tableName, e);
         }finally {
             DBUtils.closeQuietly(statement);
         }
     }
 
     public static boolean indexTableExists(final String tableName, final Connection connection) {
-        final String selectSql = String.format("SELECT 1 FROM sqlite_master WHERE type='table' AND name='cqtbl_%s';", tableName);
+        final String selectSql = String.format(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='%s';", tableNameValue(tableName));
         Statement statement = null;
+        ResultSet resultSet = null;
         try{
             statement = connection.createStatement();
-            java.sql.ResultSet resultSet = statement.executeQuery(selectSql);
+            resultSet = statement.executeQuery(selectSql);
             return resultSet.next();
         }catch(Exception e){
-            throw new IllegalStateException("Unable to determine if table exists: " + tableName, e);
+            throw DBUtils.wrapAsRuntimeException("Unable to determine if table exists: " + tableName, e);
         }
         finally {
+            DBUtils.closeQuietly(resultSet);
             DBUtils.closeQuietly(statement);
         }
     }
 
     public static void createIndexOnTable(final String tableName, final Connection connection){
         final String sqlCreateIndex = String.format(
-                "CREATE INDEX IF NOT EXISTS cqidx_%s_value ON cqtbl_%s (value);",
-                tableName,
-                tableName);
+                "CREATE INDEX IF NOT EXISTS %s ON %s (value);",
+                indexIdentifier(tableName),
+                tableIdentifier(tableName));
         Statement statement = null;
 
         try {
             statement = connection.createStatement();
             statement.executeUpdate(sqlCreateIndex);
         }catch (SQLException e){
-            throw new IllegalStateException("Unable to add index on table: " + tableName, e);
+            throw DBUtils.wrapAsRuntimeException("Unable to add index on table: " + tableName, e);
         }finally {
             DBUtils.closeQuietly(statement);
         }
@@ -140,16 +331,16 @@ public class DBQueries {
     public static void setSyncAndJournaling(final Connection connection, final SQLiteConfig.SynchronousMode pragmaSynchronous, final SQLiteConfig.JournalMode pragmaJournalMode){
         Statement statement = null;
         try {
-            final boolean autoCommit = DBUtils.setAutoCommit(connection, true);
+            if (!connection.getAutoCommit()) {
+                throw new IllegalStateException("Cannot change SQLite sync and journaling inside an active request transaction");
+            }
             statement = connection.createStatement();
             statement.execute("PRAGMA synchronous = " + pragmaSynchronous.getValue());
 
             // This little transaction will also cause a wanted fsync on the OS to flush the data still in the OS cache to disc.
             statement.execute("PRAGMA journal_mode = " + pragmaJournalMode.getValue());
-
-            DBUtils.setAutoCommit(connection, autoCommit);
         }catch (SQLException e){
-            throw new IllegalStateException("Unable to set the 'synchronous' and 'journal_mode' pragmas", e);
+            throw DBUtils.wrapAsRuntimeException("Unable to set the 'synchronous' and 'journal_mode' pragmas", e);
         }finally{
             DBUtils.closeQuietly(statement);
         }
@@ -157,9 +348,10 @@ public class DBQueries {
 
     public static SQLiteConfig.SynchronousMode getPragmaSynchronousOrNull(final Connection connection){
         Statement statement = null;
+        ResultSet resultSet = null;
         try {
             statement = connection.createStatement();
-            ResultSet resultSet = statement.executeQuery("PRAGMA synchronous;");
+            resultSet = statement.executeQuery("PRAGMA synchronous;");
             if (resultSet.next()){
                 final int syncPragmaId = resultSet.getInt(1);
                 if (!resultSet.wasNull()) {
@@ -173,66 +365,73 @@ public class DBQueries {
             }
             return null;
         }catch (Exception e){
+            DBUtils.rethrowIfBusy("Unable to read the 'synchronous' pragma", e);
             return null;
         }finally{
+            DBUtils.closeQuietly(resultSet);
             DBUtils.closeQuietly(statement);
         }
     }
 
     public static SQLiteConfig.JournalMode getPragmaJournalModeOrNull(final Connection connection){
         Statement statement = null;
+        ResultSet resultSet = null;
         try {
             statement = connection.createStatement();
-            ResultSet resultSet = statement.executeQuery("PRAGMA journal_mode;");
+            resultSet = statement.executeQuery("PRAGMA journal_mode;");
             if (resultSet.next()){
                 final String journalMode = resultSet.getString(1);
-                return journalMode != null ? SQLiteConfig.JournalMode.valueOf(journalMode.toUpperCase()) : null;
+                return journalMode != null
+                        ? SQLiteConfig.JournalMode.valueOf(journalMode.toUpperCase(Locale.ROOT))
+                        : null;
             }
             return null;
         }catch (Exception e){
+            DBUtils.rethrowIfBusy("Unable to read the 'journal_mode' pragma", e);
             return null;
         }finally{
+            DBUtils.closeQuietly(resultSet);
             DBUtils.closeQuietly(statement);
         }
     }
 
     public static void dropIndexOnTable(final String tableName, final Connection connection){
-        final String sqlDropIndex = String.format("DROP INDEX IF EXISTS cqidx_%s_value;",tableName);
+        final String sqlDropIndex = String.format("DROP INDEX IF EXISTS %s;", indexIdentifier(tableName));
         Statement statement = null;
 
         try {
             statement = connection.createStatement();
             statement.executeUpdate(sqlDropIndex);
         }catch (SQLException e){
-            throw new IllegalStateException("Unable to drop index on table: " + tableName, e);
+            throw DBUtils.wrapAsRuntimeException("Unable to drop index on table: " + tableName, e);
         }finally {
             DBUtils.closeQuietly(statement);
         }
     }
 
     public static void dropIndexTable(final String tableName, final Connection connection){
-        final String sqlDropIndex = String.format("DROP INDEX IF EXISTS cqidx_%s_value;",tableName);
-        final String sqlDropTable = String.format("DROP TABLE IF EXISTS cqtbl_%s;", tableName);
+        final String sqlDropIndex = String.format("DROP INDEX IF EXISTS %s;", indexIdentifier(tableName));
+        final String sqlDropTable = String.format("DROP TABLE IF EXISTS %s;", tableIdentifier(tableName));
         Statement statement = null;
         try {
             statement = connection.createStatement();
             statement.executeUpdate(sqlDropIndex);
             statement.executeUpdate(sqlDropTable);
         }catch (SQLException e){
-            throw new IllegalStateException("Unable to drop index table: "+ tableName, e);
+            throw DBUtils.wrapAsRuntimeException("Unable to drop index table: "+ tableName, e);
         }finally{
             DBUtils.closeQuietly(statement);
         }
     }
 
     public static void clearIndexTable(final String tableName, final Connection connection){
-        final String clearTable = String.format("DELETE FROM cqtbl_%s;",tableName);
+        final String clearTable = String.format("DELETE FROM %s;", tableIdentifier(tableName));
         Statement statement = null;
         try {
             statement = connection.createStatement();
             statement.executeUpdate(clearTable);
         }catch (SQLException e){
-            throw new IllegalStateException("Unable to clear index table: " + tableName, e);
+            throw DBUtils.wrapAsRuntimeException("Unable to clear index table: " + tableName, e);
         }finally{
             DBUtils.closeQuietly(statement);
         }
@@ -244,7 +443,7 @@ public class DBQueries {
             statement = connection.createStatement();
             statement.execute("VACUUM;");
         }catch (SQLException e){
-            throw new IllegalStateException("Unable to compact database", e);
+            throw DBUtils.wrapAsRuntimeException("Unable to compact database", e);
         }finally{
             DBUtils.closeQuietly(statement);
         }
@@ -259,7 +458,7 @@ public class DBQueries {
             statement.execute("DROP TABLE cq_expansion;");
 
         }catch (SQLException e){
-            throw new IllegalStateException("Unable to expand database by bytes: " + numBytes, e);
+            throw DBUtils.wrapAsRuntimeException("Unable to expand database by bytes: " + numBytes, e);
         }finally{
             DBUtils.closeQuietly(statement);
         }
@@ -273,22 +472,24 @@ public class DBQueries {
 
     static long readPragmaLong(final Connection connection, String query) {
         Statement statement = null;
+        ResultSet resultSet = null;
         try {
             statement = connection.createStatement();
-            java.sql.ResultSet resultSet = statement.executeQuery(query);
+            resultSet = statement.executeQuery(query);
             if (!resultSet.next()){
                 throw new IllegalStateException("Unable to read long from pragma query. The ResultSet returned no row. Query: " + query);
             }
             return resultSet.getLong(1);
         }catch (SQLException e){
-            throw new IllegalStateException("Unable to read long from pragma query", e);
+            throw DBUtils.wrapAsRuntimeException("Unable to read long from pragma query", e);
         }finally{
+            DBUtils.closeQuietly(resultSet);
             DBUtils.closeQuietly(statement);
         }
     }
 
     public static <K,A> int bulkAdd(Iterable<Row<K, A>> rows, final String tableName, final Connection connection){
-        final String sql = String.format("INSERT OR IGNORE INTO cqtbl_%s values(?, ?);", tableName);
+        final String sql = String.format("INSERT OR IGNORE INTO %s values(?, ?);", tableIdentifier(tableName));
         PreparedStatement statement = null;
         int totalRowsModified = 0;
         try {
@@ -310,26 +511,22 @@ public class DBQueries {
             // Note: here we catch a and rethrow NullPointerException,
             // to allow compatibility with Java Collections Framework,
             // which requires NPE to be thrown for null arguments...
-            boolean rolledBack = DBUtils.rollback(connection);
-            NullPointerException npe = new NullPointerException("Unable to bulk add rows containing a null object to the index table: "+ tableName + ". Rolled back: " + rolledBack);
+            NullPointerException npe = new NullPointerException("Unable to bulk add rows containing a null object to the index table: "+ tableName);
             npe.initCause(e);
             throw npe;
         }
         catch (Exception e){
-            boolean rolledBack = DBUtils.rollback(connection);
-            throw new IllegalStateException("Unable to bulk add rows to the index table: "+ tableName + ". Rolled back: " + rolledBack, e);
+            throw DBUtils.wrapAsRuntimeException("Unable to bulk add rows to the index table: "+ tableName, e);
         }finally {
             DBUtils.closeQuietly(statement);
         }
     }
 
     public static <K> int bulkRemove(Iterable<K> objectKeys, final String tableName, final Connection connection){
-        final String sql = String.format("DELETE FROM cqtbl_%s WHERE objectKey = ?;", tableName);
+        final String sql = String.format("DELETE FROM %s WHERE objectKey = ?;", tableIdentifier(tableName));
         PreparedStatement statement = null;
-        Boolean previousAutocommit = null;
         int totalRowsModified = 0;
         try{
-            previousAutocommit = DBUtils.setAutoCommit(connection, false);
             statement = connection.prepareStatement(sql);
             for(K objectKey: objectKeys) {
                 statement.setObject(1, objectKey);
@@ -340,25 +537,20 @@ public class DBQueries {
                 ensureNotNegative(m);
                 totalRowsModified += m;
             }
-            DBUtils.commit(connection);
             return totalRowsModified;
         }
         catch (NullPointerException e) {
             // Note: here we catch a and rethrow NullPointerException,
             // to allow compatibility with Java Collections Framework,
             // which requires NPE to be thrown for null arguments...
-            boolean rolledBack = DBUtils.rollback(connection);
-            NullPointerException npe = new NullPointerException("Unable to bulk remove rows containing a null object from the index table: "+ tableName + ". Rolled back: " + rolledBack);
+            NullPointerException npe = new NullPointerException("Unable to bulk remove rows containing a null object from the index table: "+ tableName);
             npe.initCause(e);
             throw npe;
         }
         catch (Exception e){
-            boolean rolledBack = DBUtils.rollback(connection);
-            throw new IllegalStateException("Unable to remove rows from the index table: " + tableName + ". Rolled back: " + rolledBack, e);
+            throw DBUtils.wrapAsRuntimeException("Unable to remove rows from the index table: " + tableName, e);
         }finally{
             DBUtils.closeQuietly(statement);
-            if (previousAutocommit != null)
-                DBUtils.setAutoCommit(connection, previousAutocommit);
         }
     }
 
@@ -380,7 +572,7 @@ public class DBQueries {
         int bindingIndex = 1;
         StringBuilder stringBuilder = new StringBuilder(selectPrefix).append(' ');
         StringBuilder suffix = new StringBuilder();
-        final Class queryClass = query.getClass();
+        final Class<?> queryClass = query.getClass();
         PreparedStatement statement;
 
         if (queryClass == Has.class){
@@ -503,11 +695,12 @@ public class DBQueries {
 
     public static <O> int count(final Query<O> query, final String tableName, final Connection connection) {
 
-        final String selectSql = String.format("SELECT COUNT(objectKey) FROM cqtbl_%s", tableName);
+        final String selectSql = String.format("SELECT COUNT(objectKey) FROM %s", tableIdentifier(tableName));
         PreparedStatement statement = null;
+        ResultSet resultSet = null;
         try {
             statement = createAndBindSelectPreparedStatement(selectSql, "", Collections.<WhereClause>emptyList(), query, connection);
-            java.sql.ResultSet resultSet = statement.executeQuery();
+            resultSet = statement.executeQuery();
 
             if (!resultSet.next()) {
                 throw new IllegalStateException("Unable to execute count. The ResultSet returned no row. Query: " + query);
@@ -516,9 +709,10 @@ public class DBQueries {
             return resultSet.getInt(1);
         }
         catch (Exception e) {
-            throw new IllegalStateException("Unable to execute count. Query: " + query, e);
+            throw DBUtils.wrapAsRuntimeException("Unable to execute count. Query: " + query, e);
         }
         finally {
+            DBUtils.closeQuietly(resultSet);
             DBUtils.closeQuietly(statement);
         }
     }
@@ -526,11 +720,13 @@ public class DBQueries {
     public static <O> int countDistinct(final Query<O> query, final String tableName, final Connection connection){
 
         // NOTE: Using GROUP BY is much faster than using SELECT DISTINCT in SQLite for deduplication
-        final String selectSql = String.format("SELECT COUNT(1) AS countDistinct FROM (SELECT objectKey FROM cqtbl_%s", tableName);
+        final String selectSql = String.format(
+                "SELECT COUNT(1) AS countDistinct FROM (SELECT objectKey FROM %s", tableIdentifier(tableName));
         PreparedStatement statement = null;
+        ResultSet resultSet = null;
         try{
             statement = createAndBindSelectPreparedStatement(selectSql, " GROUP BY objectKey)", Collections.<WhereClause>emptyList(), query, connection);
-            java.sql.ResultSet resultSet = statement.executeQuery();
+            resultSet = statement.executeQuery();
 
             if (!resultSet.next()){
                 throw new IllegalStateException("Unable to execute count. The ResultSet returned no row. Query: " + query);
@@ -538,29 +734,30 @@ public class DBQueries {
 
             return resultSet.getInt(1);
         }catch(Exception e){
-            throw new IllegalStateException("Unable to execute count. Query: " + query, e);
+            throw DBUtils.wrapAsRuntimeException("Unable to execute count. Query: " + query, e);
         }finally {
+            DBUtils.closeQuietly(resultSet);
             DBUtils.closeQuietly(statement);
         }
 
     }
 
     public static <O> java.sql.ResultSet search(final Query<O> query, final String tableName, final Connection connection){
-        final String selectSql = String.format("SELECT DISTINCT objectKey FROM cqtbl_%s",tableName);
+        final String selectSql = String.format("SELECT DISTINCT objectKey FROM %s", tableIdentifier(tableName));
         PreparedStatement statement = null;
         try{
             statement = createAndBindSelectPreparedStatement(selectSql, "", Collections.<WhereClause>emptyList(), query, connection);
             return statement.executeQuery();
         }catch(Exception e){
             DBUtils.closeQuietly(statement);
-            throw new IllegalStateException("Unable to execute search. Query: " + query, e);
+            throw DBUtils.wrapAsRuntimeException("Unable to execute search. Query: " + query, e);
         }
         // In case of success we leave the statement and result-set open because the iteration of an Index ResultSet is lazy.
 
     }
 
     public static <O> java.sql.ResultSet getDistinctKeys(final Query<O> query, boolean descending, final String tableName, final Connection connection){
-        final String selectSql = String.format("SELECT DISTINCT value FROM cqtbl_%s",tableName);
+        final String selectSql = String.format("SELECT DISTINCT value FROM %s", tableIdentifier(tableName));
         PreparedStatement statement = null;
         try{
             String orderByClause = descending ? " ORDER BY value DESC" : " ORDER BY value ASC";
@@ -568,14 +765,14 @@ public class DBQueries {
             return statement.executeQuery();
         }catch(Exception e){
             DBUtils.closeQuietly(statement);
-            throw new IllegalStateException("Unable to look up keys. Query: " + query, e);
+            throw DBUtils.wrapAsRuntimeException("Unable to look up keys. Query: " + query, e);
         }
         // In case of success we leave the statement and result-set open because the iteration of an Index ResultSet is lazy.
 
     }
 
     public static <O> java.sql.ResultSet getKeysAndValues(final Query<O> query, boolean descending, final String tableName, final Connection connection){
-        final String selectSql = String.format("SELECT objectKey, value FROM cqtbl_%s",tableName);
+        final String selectSql = String.format("SELECT objectKey, value FROM %s", tableIdentifier(tableName));
         PreparedStatement statement = null;
         try{
             String orderByClause = descending ? " ORDER BY value DESC" : " ORDER BY value ASC";
@@ -583,58 +780,66 @@ public class DBQueries {
             return statement.executeQuery();
         }catch(Exception e){
             DBUtils.closeQuietly(statement);
-            throw new IllegalStateException("Unable to look up keys and values. Query: " + query, e);
+            throw DBUtils.wrapAsRuntimeException("Unable to look up keys and values. Query: " + query, e);
         }
         // In case of success we leave the statement and result-set open because the iteration of an Index ResultSet is lazy.
 
     }
 
     public static int getCountOfDistinctKeys(final String tableName, final Connection connection){
-        final String selectSql = String.format("SELECT COUNT(DISTINCT value) FROM cqtbl_%s",tableName);
+        final String selectSql = String.format("SELECT COUNT(DISTINCT value) FROM %s", tableIdentifier(tableName));
         Statement statement = null;
+        ResultSet resultSet = null;
         try{
             statement = connection.createStatement();
-            java.sql.ResultSet resultSet = statement.executeQuery(selectSql);
+            resultSet = statement.executeQuery(selectSql);
             if (!resultSet.next()){
                 throw new IllegalStateException("Unable to execute count. The ResultSet returned no row. Query: " + selectSql);
             }
 
             return resultSet.getInt(1);
         }catch(Exception e){
+            throw DBUtils.wrapAsRuntimeException("Unable to count distinct keys.", e);
+        }finally{
+            DBUtils.closeQuietly(resultSet);
             DBUtils.closeQuietly(statement);
-            throw new IllegalStateException("Unable to count distinct keys.", e);
         }
     }
 
     public static java.sql.ResultSet getDistinctKeysAndCounts(boolean sortByKeyDescending, final String tableName, final Connection connection){
-        final String selectSql = String.format("SELECT DISTINCT value, COUNT(value) AS valueCount FROM cqtbl_%s GROUP BY (value) %s", tableName, sortByKeyDescending ? "ORDER BY value DESC" : "");
+        final String selectSql = String.format(
+                "SELECT DISTINCT value, COUNT(value) AS valueCount FROM %s GROUP BY (value) %s",
+                tableIdentifier(tableName),
+                sortByKeyDescending ? "ORDER BY value DESC" : "");
         Statement statement = null;
         try{
             statement = connection.createStatement();
             return statement.executeQuery(selectSql);
         }catch(Exception e){
             DBUtils.closeQuietly(statement);
-            throw new IllegalStateException("Unable to look up index entries and counts.", e);
+            throw DBUtils.wrapAsRuntimeException("Unable to look up index entries and counts.", e);
         }
         // In case of success we leave the statement and result-set open because the iteration of an Index ResultSet is lazy.
     }
 
     public static java.sql.ResultSet getAllIndexEntries(final String tableName, final Connection connection){
-        final String selectSql = String.format("SELECT objectKey, value FROM cqtbl_%s ORDER BY objectKey;",tableName);
+        final String selectSql = String.format(
+                "SELECT objectKey, value FROM %s ORDER BY objectKey;", tableIdentifier(tableName));
         Statement statement = null;
         try{
             statement = connection.createStatement();
             return statement.executeQuery(selectSql);
         }catch(Exception e){
             DBUtils.closeQuietly(statement);
-            throw new IllegalStateException("Unable to look up index entries.", e);
+            throw DBUtils.wrapAsRuntimeException("Unable to look up index entries.", e);
         }
         // In case of success we leave the statement and result-set open because the iteration of an Index ResultSet is lazy.
 
     }
 
     public static <K> java.sql.ResultSet getIndexEntryByObjectKey(final K key , final String tableName, final Connection connection){
-        final String selectSql = String.format("SELECT objectKey, value FROM cqtbl_%s WHERE objectKey = ?",tableName);
+        final String selectSql = String.format(
+                "SELECT objectKey, value FROM %s WHERE objectKey = ?", tableIdentifier(tableName));
         PreparedStatement statement = null;
         try{
             statement = connection.prepareStatement(selectSql);
@@ -642,23 +847,25 @@ public class DBQueries {
             return statement.executeQuery();
         }catch(Exception e){
             DBUtils.closeQuietly(statement);
-            throw new IllegalStateException("Unable to look up index entries.", e);
+            throw DBUtils.wrapAsRuntimeException("Unable to look up index entries.", e);
         }
         // In case of success we leave the statement and result-set open because the iteration of an Index ResultSet is lazy.
 
     }
 
     public static <K, O> boolean contains(final K objectKey, final Query<O> query, final String tableName, final Connection connection){
-        final String selectSql = String.format("SELECT objectKey FROM cqtbl_%s", tableName);
+        final String selectSql = String.format("SELECT objectKey FROM %s", tableIdentifier(tableName));
         PreparedStatement statement = null;
+        ResultSet resultSet = null;
         try{
             List<WhereClause> additionalWhereClauses = Collections.singletonList(new WhereClause("objectKey = ?", objectKey));
             statement = createAndBindSelectPreparedStatement(selectSql, " LIMIT 1", additionalWhereClauses, query, connection);
-            java.sql.ResultSet resultSet = statement.executeQuery();
+            resultSet = statement.executeQuery();
             return resultSet.next();
         }catch (SQLException e){
-            throw new IllegalStateException("Unable to execute contains. Query: " + query, e);
+            throw DBUtils.wrapAsRuntimeException("Unable to execute contains. Query: " + query, e);
         }finally{
+            DBUtils.closeQuietly(resultSet);
             DBUtils.closeQuietly(statement);
         }
     }
