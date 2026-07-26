@@ -1934,9 +1934,6 @@ abstract class VerifyReleaseVersion : DefaultTask() {
     abstract val expectedVersion: Property<String>
 
     @get:Input
-    abstract val expectedOsgiVersion: Property<String>
-
-    @get:Input
     abstract val configuredGroup: Property<String>
 
     @get:Input
@@ -2009,18 +2006,20 @@ abstract class VerifyReleaseVersion : DefaultTask() {
         )
         verifyProjectProperties(group, version)
 
+        val status = publicationStatus(version)
+        requireValid(
+            status != "integration",
+            "Release verification requires a candidate or final version, not a snapshot: $version",
+        )
+        requireValid(SEMVER.matchEntire(version) != null, "Release version is not valid SemVer 2.0.0: $version")
         val candidate = CANDIDATE_VERSION.matchEntire(version)
-            ?: throw GradleException(
-                "Release candidate version must match <major>.<minor>.<patch>-rc.<candidate>: $version",
-            )
-        requireValid(SEMVER.matchEntire(version) != null, "Release candidate is not valid SemVer 2.0.0: $version")
-        val semverCore = candidate.groupValues.subList(1, 4).joinToString(".")
+        val semverCore = candidate?.groupValues?.subList(1, 4)?.joinToString(".") ?: version
         requireValid(
             publicationStatus("$semverCore-SNAPSHOT") == "integration",
             "Snapshot versions must map to Gradle integration status",
         )
         requireValid(
-            publicationStatus(version) == "milestone",
+            publicationStatus("$semverCore-rc.1") == "milestone",
             "Release candidates must map to Gradle milestone status",
         )
         requireValid(
@@ -2028,10 +2027,6 @@ abstract class VerifyReleaseVersion : DefaultTask() {
             "Final versions must map to Gradle release status",
         )
         val osgiVersion = toOsgiVersion(version)
-        requireValid(
-            osgiVersion == expectedOsgiVersion.get(),
-            "Maven-to-OSGi version mismatch: expected ${expectedOsgiVersion.get()}, found $osgiVersion",
-        )
         requireValid(OSGI_VERSION.matchEntire(osgiVersion) != null, "Invalid OSGi version: $osgiVersion")
 
         val jarEvidence = listOf(
@@ -2045,7 +2040,7 @@ abstract class VerifyReleaseVersion : DefaultTask() {
         val sbomJson = releaseSbomJson.get().asFile
         val sbomXml = releaseSbomXml.get().asFile
         verifyPom(pom, group, artifact, version)
-        verifyModuleMetadata(moduleMetadata, group, artifact, version, jarEvidence)
+        verifyModuleMetadata(moduleMetadata, group, artifact, version, status, jarEvidence)
         verifySbom(sbomJson, sbomXml, group, artifact, version)
 
         report.apply {
@@ -2059,7 +2054,8 @@ abstract class VerifyReleaseVersion : DefaultTask() {
                     appendLine("versionOverrides=none")
                     appendLine("semver=valid")
                     appendLine("semverCore=$semverCore")
-                    appendLine("releaseCandidate=${candidate.groupValues[4]}")
+                    appendLine("releaseCandidate=${candidate?.groupValues?.get(4) ?: "none"}")
+                    appendLine("publicationStatus=$status")
                     appendLine("osgiVersion=$osgiVersion")
                     appendLine("gradleStatus.snapshot=integration")
                     appendLine("gradleStatus.candidate=milestone")
@@ -2076,7 +2072,7 @@ abstract class VerifyReleaseVersion : DefaultTask() {
                     appendLine("pom.coordinate=$coordinate")
                     appendLine("pom.sha256=${digest(pom, "SHA-256")}")
                     appendLine("module.coordinate=$coordinate")
-                    appendLine("module.status=milestone")
+                    appendLine("module.status=$status")
                     appendLine("module.sha256=${digest(moduleMetadata, "SHA-256")}")
                     appendLine("sbom.json.coordinate=$coordinate")
                     appendLine("sbom.json.sha256=${digest(sbomJson, "SHA-256")}")
@@ -2221,6 +2217,7 @@ abstract class VerifyReleaseVersion : DefaultTask() {
         group: String,
         artifact: String,
         version: String,
+        expectedStatus: String,
         jars: List<JarEvidence>,
     ) {
         JsonFactory.builder()
@@ -2236,8 +2233,8 @@ abstract class VerifyReleaseVersion : DefaultTask() {
         requireValid(component["module"] == artifact, "Gradle module metadata has the wrong artifact")
         requireValid(component["version"] == version, "Gradle module metadata has the wrong version")
         requireValid(
-            component["attributes"] == mapOf("org.gradle.status" to "milestone"),
-            "Release-candidate Gradle module metadata must have milestone status",
+            component["attributes"] == mapOf("org.gradle.status" to expectedStatus),
+            "Release Gradle module metadata must have $expectedStatus status",
         )
         val variants = root["variants"] as? List<*>
             ?: throw GradleException("Generated Gradle module metadata has no variants")
@@ -7287,8 +7284,16 @@ val releaseVersionCheck by tasks.registering(VerifyReleaseVersion::class) {
     projectPropertiesFile.set(layout.projectDirectory.file("gradle.properties"))
     expectedGroup.set("io.github.shuaibrao")
     expectedArtifact.set("cqengine")
-    expectedVersion.set("4.0.0-rc.1")
-    expectedOsgiVersion.set("4.0.0.rc_1")
+    expectedVersion.set(
+        providers.fileContents(layout.projectDirectory.file("gradle.properties")).asText.map { text ->
+            text.lineSequence()
+                .map(String::trim)
+                .filter { line -> line.startsWith("version=") }
+                .map { line -> line.removePrefix("version=") }
+                .singleOrNull()
+                ?: throw GradleException("gradle.properties must declare exactly one version assignment")
+        },
+    )
     configuredGroup.set(provider { project.group.toString() })
     configuredArtifact.set(provider { rootProject.name })
     configuredVersion.set(provider { project.version.toString() })
