@@ -1,5 +1,120 @@
 # CQEngine Release Notes #
 
+## Version 4.0.0 — Unreleased ###
+
+CQEngine 4.0 continues from CQEngine 3.6.0 with a supported Java baseline, current dependencies, a reproducible
+Gradle build and additional correctness, resource-safety and security controls. Existing
+`com.googlecode.cqengine` packages and the `cqengine` module and OSGi bundle names are retained.
+
+### Java and build compatibility
+
+  * Java 21 is the minimum runtime and bytecode level. The library and its external-consumer paths are tested on
+    Java 21 and Java 25.
+  * The project builds with the checked-in Gradle Wrapper and Gradle Kotlin DSL. Maven remains a supported consumer
+    format through the published POM, but is no longer the source-build system.
+  * Tests run exclusively on JUnit Jupiter 6.0.3. JUnit 3/4, Vintage, JUnit DataProvider and Guava testlib have been
+    removed; Jupiter-native collection contract matrices replace the generated suites. The 7,654-scenario inventory
+    is structurally verified as exact and gap-free on Java 21 and Java 25; executing every scenario remains part of
+    release qualification. The migration was checked once against all 2,688 inherited generated collection cases;
+    the maintained Jupiter matrices cover 40 mutable-set behavior groups across six collection/persistence
+    combinations and 26 navigable-set behavior groups.
+  * A non-published stress project uses OpenJDK JCStress 0.16 to check concurrent collection/index invariants with
+    fail-closed outcome classification on Java 21 and Java 25. Candidate qualification also runs a fixed 15-minute,
+    deterministic-seed concurrent read/write soak with bounded shutdown and exact post-quiescence checks across the
+    collection, hash index and navigable index.
+  * Deprecated finalizer cleanup, reflective construction and reliance on JDK internals have been removed. CQEngine
+    does not require `--add-opens` on the classpath or module path.
+  * Java 25 applications using disk or off-heap persistence must grant native access to SQLite:
+    `--enable-native-access=ALL-UNNAMED` on the classpath,
+    `--enable-native-access=org.xerial.sqlitejdbc` for the thin JAR on the module path, or
+    `--enable-native-access=cqengine` for the `all` JAR on the module path. Core in-memory use needs no native-access
+    option.
+
+### API and behavior changes
+
+  * Every `ResultSet` is caller-owned and must be closed. Use try-with-resources around all results returned by
+    `retrieve()`, including results from an in-memory collection; this keeps the code correct when an index or
+    persistence implementation owns external resources.
+  * TypeTools has been removed. The existing functional-attribute method descriptors remain available for ordinary
+    class-based implementations, but the JVM does not reliably expose the generic types of synthetic lambdas and
+    method references. Inline lambdas and method references must use the new explicit factories
+    `simpleAttribute`, `simpleNullableAttribute`, `multiValueAttribute` and `multiValueNullableAttribute`, supplying
+    the object type, attribute type and attribute name. Consumers which used TypeTools through CQEngine's transitive
+    dependency must now declare it themselves.
+  * Attribute bytecode generation uses supported Javassist APIs and works on Java 21 and Java 25, including from
+    named consumer modules. A modular application must export its model package and open it selectively to the
+    CQEngine, Javassist and Kryo modules used by its selected artifact form.
+  * Query constructors now snapshot logical children, membership values, ordering attributes, compound attributes
+    and persistence lists. Mutating a caller-owned input after construction no longer changes query equality, hash
+    codes or behavior.
+  * Comparators now provide a deterministic final ordering for unequal objects whose requested attributes all tie.
+    Unique and materialized-deduplication iterators now throw `NoSuchElementException` after exhaustion as required
+    by the `Iterator` contract.
+  * `PrimaryKeyedMapEntity` equality is symmetric with ordinary map entities, while two primary-keyed entities still
+    use primary-key identity. Metadata key statistics compare counts by value, including values outside the boxed
+    integer cache.
+
+### Persistence upgrade notes
+
+  * Kryo is upgraded from 5.0.0-RC1 to 5.6.2. Reference tracking remains enabled explicitly so stores covered by
+    the historical CQEngine format continue to decode with the expected object relationships. CQEngine's serializers
+    for JDK collection wrappers now use public APIs and need no module opens.
+  * Existing databases default to `TRUSTED_STORE_COMPATIBILITY`. In this mode, raw historical Kryo data remains
+    readable, but the database, backups and restore path must be treated as trusted input because stored class names
+    may be resolved from the application classpath.
+  * New deployments can select `REGISTERED_TYPES`, which requires an explicit `allowedTypes` object-graph allowlist
+    and writes a versioned CQEngine envelope with a registration fingerprint. Registered-mode data is deliberately
+    not readable by older CQEngine releases, and registered mode does not fall back to raw data.
+  * To move an existing store to registered mode, read and validate it in compatibility mode, write a new
+    registered-mode store, and retain a database snapshot for rollback. Do not change trust mode or serializer
+    configuration in place without a tested migration.
+  * Both modes enforce configurable finite limits for serialized blobs, graph depth, strings and CQEngine-owned
+    collection wrappers. Registered mode also bounds arrays, default common collections, and the specialized
+    `List.of`, `Set.of` and `Map.of` runtime types before backing-container allocation.
+  * Virtual-thread callers use a bounded reusable Kryo pool instead of retaining one serializer instance per
+    short-lived thread. Platform threads keep the historical per-thread cache and extension behavior.
+  * Disk persistence now waits at most 3,000 milliseconds by default for a conflicting SQLite lock. The value can be
+    overridden through `DiskPersistence.onPrimaryKeyInFileWithProperties(...)`; busy failures expose their base and
+    extended SQLite codes through `SQLiteBusyException`.
+  * SQLite JDBC is upgraded to 3.53.2.0. Collection mutations acquire the writer slot before schema reads so the
+    configured busy timeout also governs deferred-to-write transaction contention.
+  * The `all` JAR's 20 bundled SQLite natives are checked by exact path and SHA-256. External thin and `all`
+    consumers on Java 21 and Java 25 additionally extract and load the native selected for the current OS and
+    architecture, compare its extracted bytes with the resolved artifact, and execute version, integrity and
+    compile-option queries. Qualification evidence distinguishes the one native loaded on the host from the other
+    platform binaries which are checksum-verified only.
+
+### Query parsing and security
+
+  * SQL and CQN use ANTLR 4.13.2 and reject inputs which exceed configurable query-length, token-count or nesting
+    limits. The compatibility defaults are 65,536 UTF-16 code units, 8,192 tokens and 64 nested expressions.
+  * CQN regular expressions preserve their previous Java-regex behavior under the explicitly named
+    `TRUSTED_JAVA_UTIL_REGEX` policy. Use `RegexPolicy.DISABLED`, or an application-approved bounded implementation,
+    when query text can be supplied by an untrusted caller.
+  * SQLite table names now use a versioned SHA-256 identity which separates attributes, suffixes and partial filters
+    that collided under the historical sanitizer. Legacy tables and their value indexes are renamed transactionally,
+    with a durable assignment record which prevents a different colliding name from silently claiming their data.
+  * Generated source, SQL numeric literals and date-math parsing are independent of the process default locale.
+    Boolean parsing accepts the documented literals instead of silently coercing other text.
+  * Transaction, connection, statement, iterator and result-set cleanup is deterministic, idempotent and preserves
+    the primary failure when cleanup also fails. Failed unique-index mutations and persistence transactions restore
+    their prior state rather than leaving partial changes.
+
+### Artifacts and module use
+
+  * The release coordinate is `io.github.shuaibrao:cqengine:4.0.0`.
+  * The canonical artifact is the thin `cqengine-4.0.0.jar`, accompanied by sources and Javadocs. The optional
+    non-executable `cqengine-4.0.0-all.jar` embeds the runtime dependencies and relocates their packages except
+    SQLite, which remains under `org.sqlite`. It has no `Main-Class` and is a library, not an application.
+  * Thin and `all` artifacts must not be present in the same dependency graph. Maven consumers which request the
+    `all` classifier must disable transitive dependencies.
+  * Both runtime JARs have the automatic-module name `cqengine`. The thin JAR is also the canonical OSGi bundle and
+    requires a Java 21 execution environment; the `all` JAR is supported on the classpath and as an automatic JPMS
+    module, but does not claim the OSGi bundle identity.
+  * Release qualification requires reproducible JARs containing Apache-2.0 legal material. Dependency versions are
+    locked and verified, and the release includes sources, Javadocs, Maven and Gradle metadata plus artifact-bound
+    SBOM and licence evidence.
+
 ## Version 3.6.0 - 2021-01-15 ###
   * Performance improvement when ordering results (potentially up to 5-6X), with thanks to @voldyman for the contribution
     * See pull request https://github.com/npgall/cqengine/pull/273 for performance analysis
@@ -135,7 +250,7 @@
       * See [LambdaAttributes](LambdaAttributes.md) for more details.
   * Improved support for Java 8 Streams:
       * A `StreamFactory` class is now provided to convert CQEngine ResultSets to Java 8 Streams.
-        * See [Streams](Streams.md) for more details.
+        * See the historical upstream [Streams guide](https://github.com/npgall/cqengine/blob/643b01812e40dbe6dd1ab4cc2ab7b86de0760ae3/documentation/Streams.md) for more details.
       * Note: despite these Java 8 features, CQEngine remains fully compatible with Java 6 & 7.
   * Support for DateMath queries (via DateMathParser), and support for SQL boolean literals has been added to the SQL query dialect (issue #88).
   * Fixed issue where JOINs to a TransactionalIndexedCollection did not release read locks (issue #89).

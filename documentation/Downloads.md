@@ -1,21 +1,52 @@
-## Download for Maven Projects ##
-CQEngine is in Maven Central, and can be added to a Maven project as follows:
+# Using CQEngine artifacts
+
+CQEngine 4.0 is currently unreleased. A local build stages its Maven-format repository in
+`build/local-repository/`. The same coordinate and artifact names will be published to Maven Central after the
+release is qualified.
+
+Gradle consumers should normally select the canonical thin library:
+
+```kotlin
+repositories {
+    maven { url = uri("/path/to/cqengine/build/local-repository") }
+}
+
+dependencies {
+    implementation("io.github.shuaibrao:cqengine:4.0.0-rc.1")
+}
 ```
+
+The equivalent Maven dependency is:
+
+```xml
 <dependency>
-    <groupId>com.googlecode.cqengine</groupId>
+    <groupId>io.github.shuaibrao</groupId>
     <artifactId>cqengine</artifactId>
-    <version>x.x.x</version>
+    <version>4.0.0-rc.1</version>
 </dependency>
 ```
-See [ReleaseNotes](ReleaseNotes.md) for the latest version number.
 
-## Download for Non-Maven Projects ##
-For non-Maven projects, a version built with [maven-shade-plugin](http://maven.apache.org/plugins/maven-shade-plugin/) is provided, which contains CQEngine and all of its own dependencies packaged in a single jar file (ending "-all").
+The coordinate contains four artifact forms:
 
-It can be downloaded from Maven central as "-all.jar" [here](http://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22com.googlecode.cqengine%22%20AND%20a%3A%22cqengine%22).
+| Artifact | Purpose |
+|---|---|
+| `cqengine-<version>.jar` | Canonical thin library with declared runtime dependencies |
+| `cqengine-<version>-all.jar` | Optional non-executable library with embedded, mostly relocated dependencies |
+| `cqengine-<version>-sources.jar` | Source attachment |
+| `cqengine-<version>-javadoc.jar` | Current API documentation |
 
-## Download statistics, as at December 2014 ##
+Use either the thin artifact or the `all` classifier, never both. Maven consumers selecting `all` must disable
+transitive dependencies so embedded and external copies cannot coexist. The `all` JAR has no `Main-Class`; it is a
+library, not an application. The thin artifact is also the canonical OSGi bundle.
+
+See [Java compatibility](JavaCompatibility.md) for classpath, module-path, OSGi and native-access requirements, and
+[Releasing CQEngine](../RELEASING.md) for producing the verified local repository.
+
+## Historical upstream download statistics
+
+The following December 2014 chart and count are retained as CQEngine project history. They are not download evidence
+for the current coordinate.
 
 ![http://chart.googleapis.com/chart?chxl=0:|07/12|08/12|09/12|10/12|11/12|12/12|01/13|02/13|03/13|04/13|05/13|06/13|07/13|08/13|09/13|10/13|11/13|12/13|01/14|02/14|03/14|04/14|05/14|06/14|07/14|08/14|09/14|10/14|11/14|12/14&chxr=0,0,10|1,0,500&chxs=0,676767,11.5,-0.333,t,676767&chxt=x,y&chs=1000x300&cht=lc&chds=0,500&chd=t:4,10,41,20,108,209,123,143,186,168,187,323,161,259,192,339,159,303,399,486,562,402,408,345,245,235,435,293,483,382&chdl=Downloads+-+Maven+Central+per+month&chdlp=b&chls=0.667&chma=2,0,7|17,28&chm=B,C5D4B5BB,0,0,0&chtt=CQEngine+Maven+Central&dummy=foo.png](http://chart.googleapis.com/chart?chxl=0:|07/12|08/12|09/12|10/12|11/12|12/12|01/13|02/13|03/13|04/13|05/13|06/13|07/13|08/13|09/13|10/13|11/13|12/13|01/14|02/14|03/14|04/14|05/14|06/14|07/14|08/14|09/14|10/14|11/14|12/14&chxr=0,0,10|1,0,500&chxs=0,676767,11.5,-0.333,t,676767&chxt=x,y&chs=1000x300&cht=lc&chds=0,500&chd=t:4,10,41,20,108,209,123,143,186,168,187,323,161,259,192,339,159,303,399,486,562,402,408,345,245,235,435,293,483,382&chdl=Downloads+-+Maven+Central+per+month&chdlp=b&chls=0.667&chma=2,0,7|17,28&chm=B,C5D4B5BB,0,0,0&chtt=CQEngine+Maven+Central&dummy=foo.png)
 
-8516 downloads (7610 Maven, 906 non-Maven).
+The upstream project recorded 8,516 downloads at that time (7,610 Maven and 906 non-Maven).

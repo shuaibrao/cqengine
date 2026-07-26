@@ -1,86 +1,82 @@
-# CQEngine Lambda Attributes #
+# CQEngine Lambda Attributes
 
-Examples of how to create CQEngine attributes from Java 8 lambda expressions and method references.
+CQEngine attributes can be created from lambda expressions and method references through the explicitly typed factory
+methods in `QueryFactory`.
 
-CQEngine attributes can be created from lambda expressions via the static factory methods in [QueryFactory](http://htmlpreview.github.io/?http://raw.githubusercontent.com/npgall/cqengine/master/documentation/javadoc/apidocs/com/googlecode/cqengine/query/QueryFactory.html) which begin with `attribute()` or `nullableAttribute()`. 
-* To use these methods, add import statement to your class: `import static com.googlecode.cqengine.query.QueryFactory.*`
-
-*Recommendations:*
- * Although attributes can be created from lambda expressions on-the-fly, it is recommended to cache them for performance reasons; for example in `static` `final` variables, as is typical in other CQEngine examples.
- * It is not mandatory, but recommended, to provide a name for an attribute created from a lambda expression; because otherwise the JVM-assigned name of the lambda expression will be used, which could change between versions or instances of the application.
- * If your application targets non-server or less mainstream JVMs, it is recommended to specify the generic types of lambda expressions (see below).
- 
-*Limitations of Java 8 type inference*
-  * Some of the methods in `QueryFactory` allow attributes to be created from lambda expressions, without the need to specify the generic types of the attributes. CQEngine attempts to dynamically detect the generic types of these lambda expressions at runtime.
-  * However, note that as of Java 8, there are limitations on the ability to detect the generic types of lambda expressions at runtime in general, and so this might not always work correctly on all platforms. The support is somewhat JVM-specific, although at least OpenJDK and Oracle JDK are supported. CQEngine uses [TypeTools](https://github.com/jhalterman/typetools) to infer generic types; see that library for details.
-  * If generic type information cannot be inferred from lambda expressions on a particular platform at runtime, CQEngine will throw an exception explaining the problem.
-  * As a workaround, additional overloaded variants of the static factory methods in QueryFactory are provided, which allow the application to specify the generic types explicitly. Examples are provided below.
-  * See the JavaDocs of [QueryFactory](http://htmlpreview.github.io/?http://raw.githubusercontent.com/npgall/cqengine/master/documentation/javadoc/apidocs/com/googlecode/cqengine/query/QueryFactory.html#attribute-com.googlecode.cqengine.attribute.support.SimpleFunction-) for more details.
-
-# Regular Attributes #
-
-## SimpleAttribute ##
-
-Create a [SimpleAttribute](http://htmlpreview.github.io/?http://raw.githubusercontent.com/npgall/cqengine/master/documentation/javadoc/apidocs/com/googlecode/cqengine/attribute/SimpleAttribute.html) from a method reference to a POJO's getter method:
-```java
-public static final Attribute<Car, Double> PRICE = attribute(Car::getPrice);
-```
-
-Or with a name:
-```java
-public static final Attribute<Car, Double> PRICE = attribute("price", Car::getPrice);
-```
-
-## SimpleNullableAttribute ##
-Create attributes which read from fields in a POJO by calling getter methods.
-
-Create a [SimpleNullableAttribute](http://htmlpreview.github.io/?http://raw.githubusercontent.com/npgall/cqengine/master/documentation/javadoc/apidocs/com/googlecode/cqengine/attribute/SimpleNullableAttribute.html) from a method reference to a POJO's getter method:
-```java
-public static final Attribute<Car, Double> PRICE = nullableAttribute(Car::getPrice);
-```
-
-Or with a name:
-```java
-public static final Attribute<Car, Double> PRICE = nullableAttribute("price", Car::getPrice);
-```
-
-## MultiValueAttribute ##
-
-Create a [MultiValueAttribute](http://htmlpreview.github.io/?http://raw.githubusercontent.com/npgall/cqengine/master/documentation/javadoc/apidocs/com/googlecode/cqengine/attribute/MultiValueAttribute.html) from a method reference to a POJO's getter method:
-```java
-public static final Attribute<Car, String> FEATURES = attribute(String.class, Car::getFeatures);
-```
-
-Or with a name:
-```java
-public static final Attribute<Car, String> FEATURES = attribute(String.class, "features", Car::getFeatures);
-```
-
-## MultiValueNullableAttribute ##
-
-Create a [MultiValueNullableAttribute](http://htmlpreview.github.io/?http://raw.githubusercontent.com/npgall/cqengine/master/documentation/javadoc/apidocs/com/googlecode/cqengine/attribute/MultiValueNullableAttribute.html) from a method reference to a POJO's getter method:
-```java
-public static final Attribute<Car, String> FEATURES = nullableAttribute(String.class, Car::getFeatures);
-```
-
-Or with a name:
-```java
-public static final Attribute<Car, String> FEATURES = nullableAttribute(String.class, "features", Car::getFeatures);
-```
-
-# Specifying Generic Types Explicitly #
-
-The following example shows how to specify the generic types of an attribute (a `SimpleAttribute` in this case) explicitly.
-This attribute therefore will work on all platforms.
+Import those methods with:
 
 ```java
-public static final Attribute<Car, Double> PRICE = attribute(Car.class, Double.class, "price", Car::getPrice);
+import static com.googlecode.cqengine.query.QueryFactory.*;
 ```
 
-# Virtual Attributes #
-Create attributes which apply functions over values read from a POJO or other data sources.
+## Always specify lambda types
+
+Use `simpleAttribute`, `simpleNullableAttribute`, `multiValueAttribute` and `multiValueNullableAttribute`. These
+factories accept `objectType`, `attributeType`, `attributeName` and the function. Java's supported reflection API does
+not expose the erased generic arguments of synthetic lambda or method-reference classes. The explicit factories are
+deterministic on every supported JVM and do not require module opens or JDK-internal access.
+
+It is also useful to give each attribute a stable name. Cache attributes in `static final` fields instead of creating
+them repeatedly.
+
+### SimpleAttribute
 
 ```java
-Attribute<Car, Boolean> IS_CHEAP = attribute(car -> car.getPrice() < 4000);
-
+public static final Attribute<Car, Double> PRICE =
+        simpleAttribute(Car.class, Double.class, "price", Car::getPrice);
 ```
+
+### SimpleNullableAttribute
+
+```java
+public static final Attribute<Car, Double> PRICE =
+        simpleNullableAttribute(Car.class, Double.class, "price", Car::getPrice);
+```
+
+### MultiValueAttribute
+
+```java
+public static final Attribute<Car, String> FEATURES =
+        multiValueAttribute(Car.class, String.class, "features", Car::getFeatures);
+```
+
+### MultiValueNullableAttribute
+
+```java
+public static final Attribute<Car, String> FEATURES =
+        multiValueNullableAttribute(Car.class, String.class, "features", Car::getFeatures);
+```
+
+### Virtual attributes
+
+```java
+public static final Attribute<Car, Boolean> IS_CHEAP =
+        simpleAttribute(Car.class, Boolean.class, "isCheap", car -> car.getPrice() < 4000);
+```
+
+## Class-based function inference
+
+The older inference overloads remain source- and binary-compatible for class-based implementations which retain
+concrete generic signatures. This includes named and anonymous classes:
+
+```java
+SimpleFunction<Car, Double> function = new SimpleFunction<Car, Double>() {
+    @Override
+    public Double apply(Car car) {
+        return car.getPrice();
+    }
+};
+
+Attribute<Car, Double> price = attribute("price", function);
+```
+
+Inherited generic implementations are supported when a concrete subclass binds all required type variables. Raw or
+unresolved generic implementations fail with an `IllegalStateException` which directs callers to the explicit overload.
+Passing a lambda or method reference to an inference overload also fails deterministically with that guidance.
+
+The inference overloads use only supported Java reflection over generic interfaces and superclasses. They do not use
+`Unsafe`, privileged lookups, constant-pool access or module opens, and they remain useful for class-based functions,
+so they are not deprecated.
+
+CQEngine no longer publishes TypeTools as a transitive dependency. Applications which use TypeTools directly must
+declare their own dependency. It was not part of any CQEngine public signature.

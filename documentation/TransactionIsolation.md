@@ -6,7 +6,13 @@ A transaction is composed of a set of objects to be added to the collection, and
 
 Reading threads are guaranteed to see a consistent version of the collection where transactions have been applied in their entirety. Reads are lock-free, however writes are serialized. When using this feature it is also necessary to call close() on ResultSets.
 
-Example usage (source code [here](../code/src/test/java/com/googlecode/cqengine/examples/transactions/TransactionalIndexedCollectionDemo.java)):
+When a collection uses disk or off-heap persistence, each collection operation starts with a rollback outcome and is
+committed only after its object-store and index work completes normally. An exception rolls the persistence request
+back. Iterators retain their request until close; each successful `Iterator.remove()` is committed while the cursor
+remains open. Composite persistence across independent SQLite databases does not provide a distributed transaction.
+See [Persistence](Persistence.md) for the complete request, locking and recovery contract.
+
+Example usage (source code [here](../src/test/java/com/googlecode/cqengine/examples/transactions/TransactionalIndexedCollectionDemo.java)):
 ```java
 // Create example Car objects...
 Car car1 = CarFactory.createCar(1); // "Ford Fusion"

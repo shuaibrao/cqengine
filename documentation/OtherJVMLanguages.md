@@ -83,12 +83,12 @@ type jInt = java.lang.Integer
 
 **Problem**
 
-When using `QueryFactory.attribute(Foo::bar)` to generate an attribute, the underlying call to
-`TypeResolver.resolveRawArguments` might be unable to extract the type information from a kotlin-generated function call.
+Kotlin-generated callable objects do not expose concrete Java generic arguments at runtime, so CQEngine cannot infer the
+object and attribute types from `QueryFactory.attribute(Foo::bar)`.
 
 **Solution**
 
-An inline helper method in Kotlin, will give you the same functionality, in simple oneliner:
+An inline Kotlin helper can pass both types explicitly:
 
 ```kotlin
 inline fun <reified O, reified A> attribute(accessor: KProperty1<O, A>): FunctionalSimpleAttribute<O, A> {
@@ -105,4 +105,3 @@ class Foo(
     }
 }
 ```
-

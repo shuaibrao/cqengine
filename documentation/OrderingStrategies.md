@@ -23,7 +23,7 @@ Note that the set of indexes required to support the _index_ ordering strategy o
       * A single index is NOT sufficient, because these types of attributes do not guarantee that every object in the collection will provide at least one value for these types of attributes.
       * For example, if results are to be ordered by an attribute `Car.FEATURES` but not every car in the collection has special features, then those objects in the collection will be missing from the index on `Car.FEATURES`.
 
-The following is an example of how to enable the _index_ ordering strategy on a `MultiValueAttribute` (full source [here](../code/src/test/java/com/googlecode/cqengine/examples/ordering/IndexOrderingDemo.java)):
+The following is an example of how to enable the _index_ ordering strategy on a `MultiValueAttribute` (full source [here](../src/test/java/com/googlecode/cqengine/examples/ordering/IndexOrderingDemo.java)):
 
 ```java
 public static void main(String[] args) {

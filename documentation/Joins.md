@@ -1,12 +1,14 @@
 # Performing Joins with CQEngine #
 
-Although it is often easier and more performant to de-normalize data, it is possible with CQEngine to perform JOINs and SQL EXISTS-type queries between `IndexedCollection`s at runtime with reasonable performance (at least, outperforming external databases).
+CQEngine can perform JOIN and SQL `EXISTS`-style queries between `IndexedCollection`s at runtime. Their cost depends
+on collection size, indexes, selectivity and result consumption; compare them with denormalization or an external
+database using the intended workload.
 
 
 
 ## SQL EXISTS ##
 Given a collection of Cars, and a collections of Garages, find cars which are convertible or which have a sunroof, which can be serviced by garages in a particular city.
-Source code of this example [here](../code/src/test/java/com/googlecode/cqengine/examples/join/SqlExists.java).
+Source code of this example [here](../src/test/java/com/googlecode/cqengine/examples/join/SqlExists.java).
 
 ```java
 package com.googlecode.cqengine.examples.join;
@@ -59,7 +61,7 @@ BMW M3 has a sunroof or is convertible, and can be serviced in Dublin
 
 ## SQL EXISTS-based JOIN ##
 Given a collection of Cars, and a collections of Garages, find cars which are convertible or which have a sunroof, which can be serviced by garages in a particular city, along with the names of those garages.
-Source code of this example [here](../code/src/test/java/com/googlecode/cqengine/examples/join/SqlExistsBasedJoin.java).
+Source code of this example [here](../src/test/java/com/googlecode/cqengine/examples/join/SqlExistsBasedJoin.java).
 
 ```java
 package com.googlecode.cqengine.examples.join;
@@ -133,7 +135,7 @@ The following shows an approach to perform a JOIN between three IndexedCollectio
 
 However, the approach to do so involves nesting `existsIn()` queries, and this can be done to any depth, allowing JOINs between any number of collections.
 
-The full source code for this example can be found [here](../code/src/test/java/com/googlecode/cqengine/examples/join/ThreeWayJoin.java).
+The full source code for this example can be found [here](../src/test/java/com/googlecode/cqengine/examples/join/ThreeWayJoin.java).
 ```java
 public static void main(String[] args) {
     IndexedCollection<User> users = new ConcurrentIndexedCollection<User>();

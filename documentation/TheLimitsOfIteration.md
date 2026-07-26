@@ -3,7 +3,7 @@ The classic way to retrieve objects matching some criteria from a collection, is
 
 **Example: Perform a Query via _Naive Iteration_**
 
-This is hugely inefficient, it performs up to 20,000 tests, for a collection of 10,000 cars:
+This straightforward implementation performs up to 20,000 predicate tests for a collection of 10,000 cars:
 ```
     public static Collection<Car> getBlueCarsWithFourDoors(Collection<Car> allCars) {
         List<Car> results = new LinkedList<Car>();
@@ -19,7 +19,7 @@ This is hugely inefficient, it performs up to 20,000 tests, for a collection of 
 
 **Time Complexity**
 
-Let number of objects in the collection = _n_. Let number of tests to be applied to each object = _t_. If there were 10,000 objects in the collection and 5 tests to apply to each object, performing the query would require _n_ x _t_ tests, or 50,000 tests in total. Every _additional_ object added to the collection would require _five_ additional tests to be performed. Performance of queries would _degrade_ as additional objects were added, which is not scalable. The [time complexity](http://en.wikipedia.org/wiki/Time_complexity) of this (worst case) is O(_n_ _t_).
+Let number of objects in the collection = _n_. Let number of tests to be applied to each object = _t_. If there were 10,000 objects in the collection and 5 tests to apply to each object, performing the query would require _n_ x _t_ tests, or 50,000 tests in total. Every _additional_ object added to the collection would require _five_ additional tests to be performed. The scan cost therefore grows with collection size; whether that is acceptable depends on the workload. The [time complexity](http://en.wikipedia.org/wiki/Time_complexity) of this (worst case) is O(_n_ _t_).
 
 **_Optimized Iteration_**
 
@@ -33,6 +33,6 @@ The problem with optimization #1, is that implementing it requires **statistical
 
 **Comparison with CQEngine**
 
-  * CQEngine **maintains statistical information** on the makeup of collections, and in fact will always re-order queries to maximize execution speed.
-  * CQEngine uses **lazy evaluation** heavily: the result sets returned by CQEngine are rarely _materialized_, and instead act as a _view_ over the set of objects in the collection which ultimately match the query.
+  * CQEngine indexes report retrieval costs which the query engine uses to order compatible query branches. That reduces expected work but does not guarantee a globally optimal plan for every workload.
+  * CQEngine uses **lazy evaluation** heavily: many result sets act as a _view_ over matching objects rather than eagerly materializing them.
   * Of course, the main problem with the approach above, is that it **uses iteration in the first place**, always having minimum time complexity O(_n_). It would be useful if it could somehow **_jump_** to the sets of cars which have four doors, or which are blue, or both, without having to scan the collection at all.

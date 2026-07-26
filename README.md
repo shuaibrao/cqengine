@@ -1,19 +1,17 @@
-[![Build Status](https://travis-ci.org/npgall/cqengine.svg?branch=master)](https://travis-ci.org/npgall/cqengine)
-[![Maven Central](https://maven-badges.herokuapp.com/maven-central/com.googlecode.cqengine/cqengine/badge.svg)](http://search.maven.org/#search%7Cga%7C1%7Cg%3A%22com.googlecode.cqengine%22%20AND%20a%3Acqengine)
-
-
-
 # CQEngine - Collection Query Engine #
 
-CQEngine – Collection Query Engine – is a high-performance Java collection which can be searched with SQL-like queries, with _extremely_ low latency.
+CQEngine 4.0 continues Niall Gallagher's original CQEngine project, keeping it current and maintained for modern
+Java applications. It preserves the `com.googlecode.cqengine` API and module identity, compiles to Java 21 bytecode,
+and is verified on Java 21 and Java 25.
 
-  * Achieve millions of queries per second, with query latencies measured in microseconds
-  * Offload query traffic from databases - scale your application tier
-  * Outperform databases by a factor of thousands, even on low-end hardware
+CQEngine is an indexed Java collection with SQL-like and programmatic query APIs. Suitable indexes can reduce the
+work required for selective queries and can avoid repeated database lookups. Actual latency, throughput, allocation
+and memory use depend on the data, query, indexes, result cardinality, persistence mode and how fully callers consume
+and close each `ResultSet`. See the [benchmark guide](documentation/Benchmark.md).
 
 Supports on-heap persistence, off-heap persistence, disk persistence, and supports MVCC transaction isolation.
 
-Interesting reviews of CQEngine:
+Reviews of the original CQEngine project:
   * [dzone.com: Comparing the search performance of CQEngine with standard Java collections](https://dzone.com/articles/comparing-search-performance)
   * [dzone.com: Getting started with CQEngine: LINQ for Java, only faster](https://dzone.com/articles/getting-started-cqengine-linq)
   * CQEngine in the wild: [excelian.com](http://www.excelian.com/exposure-and-counterparty-limit-checking) | [gravity4.com](http://gravity4.com/welcome-gravity4-engineering-blog/) | [snapdeal.com](http://engineering.snapdeal.com/how-were-building-a-system-to-scale-for-billions-of-requests-per-day-201601/) (3-5 billion requests/day)
@@ -21,20 +19,14 @@ Interesting reviews of CQEngine:
 ## The Limits of Iteration ##
 The classic way to retrieve objects matching some criteria from a collection, is to iterate through the collection and apply some tests to each object. If the object matches the criteria, then it is added to a result set. This is repeated for every object in the collection.
 
-Conventional iteration is hugely inefficient, with time complexity O(_n_ _t_). It can be optimized, but requires **statistical knowledge** of the makeup of the collection. [Read more: The Limits of Iteration](documentation/TheLimitsOfIteration.md)
+A full scan performs O(_n_ _t_) predicate work, where _n_ is collection size and _t_ is the predicate cost. Maintained
+indexes can reduce that work for suitable query shapes, but their value depends on lookup selectivity, result
+consumption and update cost. [Read more: The Limits of Iteration](documentation/TheLimitsOfIteration.md)
 
-**Benchmark Sneak Peek**
-
-Even with optimizations applied to convention iteration, CQEngine can outperform conventional iteration by wide margins. Here is a graph for a test comparing CQEngine latency with iteration for a range-type query:
-
-![quantized-navigable-index-carid-between.png](documentation/images/quantized-navigable-index-carid-between.png)
-
-  * **1,116,071 queries per second** (on a single 1.8GHz CPU core)
-  * **0.896 microseconds per query**
-  * CQEngine is **330187.50% faster** than naive iteration
-  * CQEngine is **325727.79% faster** than optimized iteration
-
-See the [Benchmark](documentation/Benchmark.md) wiki page for details of this test, and other tests with various types of query.
+The JMH suite measures query lifecycle, indexed query scenarios, mutation, persistence, concurrency, sampled latency
+and JVM allocation as distinct workloads. See the [benchmark guide](documentation/Benchmark.md) for the methodology,
+machine boundary and interpretation rules. The current-machine preview is regenerated from a complete qualified run;
+it is not a universal performance guarantee.
 
 
 ---
@@ -42,18 +34,21 @@ See the [Benchmark](documentation/Benchmark.md) wiki page for details of this te
 
 ## CQEngine Overview ##
 
-CQEngine solves the scalability and latency problems of iteration by making it possible to build _indexes_ on the fields of the objects stored in a collection, and applying algorithms based on the rules of set theory to _reduce the time complexity_ of accessing them.
+CQEngine can avoid full collection scans by building _indexes_ on object fields and applying set-based query
+planning. The benefit depends on the selected indexes, query shape and result consumption; it is not a latency or
+allocation guarantee.
 
 **Indexing and Query Plan Optimization**
 
-  * **Simple Indexes** can be added to any number of individual fields in a collection of objects, allowing queries on just those fields to be answered in O(_1_) time complexity
+  * **Simple Indexes** can be added to any number of individual fields in a collection of objects. A hash index can provide expected O(_1_) equality lookup before result traversal; other index and query types have different costs
   * **Multiple indexes on the same field** can be added, each optimized for different types of query - for example equality, numerical range, string starts with etc.
-  * **Compound Indexes** can be added which span multiple fields, allowing queries referencing several fields to also be answered in O(_1_) time complexity
+  * **Compound Indexes** can span multiple fields. Exact compound lookups can avoid a scan, but lookup, intersection and result-consumption costs still depend on the selected index and cardinality
   * **Nested Queries** are fully supported, such as the SQL equivalent of "`WHERE color = 'blue' AND(NOT(doors = 2 OR price > 53.00))`"
-  * **Standing Query Indexes** can be added; these allow _arbitrarily complex queries_, or _nested query fragments_, to be answered in O(_1_) time complexity, regardless of the number of fields referenced. Large queries containing branches or query fragments for which standing query indexes exist, will automatically benefit from O(_1_) time complexity evaluation of their branches; in total several indexes might be used to accelerate complex queries
-  * **Statistical Query Plan Optimization** - when several fields have suitable indexes, CQEngine will use statistical information from the indexes, to internally make a query plan which selects the indexes which can perform the query with minimum time complexity. When some referenced fields have suitable indexes and some do not, CQEngine will use the available indexes first, and will then iterate the smallest possible set of results from those indexes to filter objects for the rest of the query. In those cases time complexity will be greater than O(_1_), but usually significantly less than O(_n_)
+  * **Standing Query Indexes** can be added for _arbitrarily complex queries_ or _nested query fragments_. They provide direct access to the maintained matching set, while iterating or materializing that set remains proportional to the results consumed. Large queries can use matching standing indexes to accelerate individual branches
+  * **Statistical Query Plan Optimization** - when several fields have suitable indexes, CQEngine uses index statistics to select a lower-cost query plan. When only some referenced fields have suitable indexes, CQEngine uses those indexes first and filters their results for the remaining predicates. That can reduce work relative to O(_n_), depending on selectivity and result consumption
   * **Iteration fallback** -  if no suitable indexes are available, CQEngine will evaluate the query via iteration, using lazy evaluation. CQEngine can always evaluate every query, even if no suitable indexes are available. Queries are not coupled with indexes, so indexes can be added after the fact, to speed up existing queries
-  * **CQEngine supports full concurrency** and expects that objects will be added to and removed from the collection at runtime; CQEngine will take care of updating all registered indexes in realtime
+  * **Concurrent collection variants** update registered indexes as objects are added and removed. Their documented
+    isolation and locking semantics differ; callers must select the variant appropriate to their workload
   * **Type-safe** - nearly all errors in queries result in _compile-time_ errors instead of exceptions at runtime: all indexes, and all queries, are strongly typed using generics at both object-level and field-level
   * **On-heap/off-heap/disk** - objects can be stored on-heap (like a conventional Java collection), or off-heap (in native memory, within the JVM process but outside the Java heap), or persisted to disk
 
@@ -104,12 +99,17 @@ cars.add(new Car(3, "honda civic", "has a flat tyre and high mileage", Arrays.as
 
 Note: add import statement to your class: _`import static com.googlecode.cqengine.query.QueryFactory.*`_
 
+Every `ResultSet` is closeable. Use try-with-resources whenever the caller consumes a result locally; this remains
+correct if the collection later gains an index or persistence implementation which owns external resources.
+
 * *Example 1: Find cars whose name ends with 'vic' or whose id is less than 2*
 
   Query:
   ```java
     Query<Car> query1 = or(endsWith(Car.NAME, "vic"), lessThan(Car.CAR_ID, 2));
-    cars.retrieve(query1).forEach(System.out::println);
+    try (ResultSet<Car> results = cars.retrieve(query1)) {
+        results.forEach(System.out::println);
+    }
   ```
   Prints:
   ```
@@ -122,7 +122,9 @@ Note: add import statement to your class: _`import static com.googlecode.cqengin
   Query:
   ```java
     Query<Car> query2 = and(contains(Car.DESCRIPTION, "flat tyre"), equal(Car.FEATURES, "spare tyre"));
-    cars.retrieve(query2).forEach(System.out::println);
+    try (ResultSet<Car> results = cars.retrieve(query2)) {
+        results.forEach(System.out::println);
+    }
   ```
   Prints:
   ```
@@ -134,7 +136,9 @@ Note: add import statement to your class: _`import static com.googlecode.cqengin
   Query:
   ```java
     Query<Car> query3 = and(in(Car.FEATURES, "sunroof", "radio"), not(contains(Car.DESCRIPTION, "dirty")));
-    cars.retrieve(query3).forEach(System.out::println);
+    try (ResultSet<Car> results = cars.retrieve(query3)) {
+        results.forEach(System.out::println);
+    }
   ```
    Prints:
   ```
@@ -142,7 +146,8 @@ Note: add import statement to your class: _`import static com.googlecode.cqengin
     Car{carId=3, name='honda civic', description='has a flat tyre and high mileage', features=[radio]}
   ```
 
-Complete source code for these examples can be found [here](http://github.com/npgall/cqengine/blob/master/code/src/test/java/com/googlecode/cqengine/examples/introduction/).
+Complete source code for these examples is under
+[`src/test/java/com/googlecode/cqengine/examples/introduction/`](src/test/java/com/googlecode/cqengine/examples/introduction/).
 
 ---
 
@@ -150,38 +155,44 @@ Complete source code for these examples can be found [here](http://github.com/np
 
 As an alternative to programmatic queries, CQEngine also has support for running string-based queries on the collection, in either SQL or CQN (CQEngine Native) format.
 
-Example of running an SQL query on a collection (full source [here](https://github.com/npgall/cqengine/blob/master/code/src/test/java/com/googlecode/cqengine/examples/parser/SQLQueryDemo.java)):
+Both parsers enforce finite input, token and nesting limits. CQN regular expressions retain an explicitly named
+trusted-compatibility policy by default and can be disabled or replaced for untrusted boundaries. See
+[SQL and CQN string queries](documentation/StringQueries.md) for configuration and the exact trust contract.
+
+Example of running an SQL query on a collection (full source
+[here](src/test/java/com/googlecode/cqengine/examples/parser/SQLQueryDemo.java)):
 ```java
 public static void main(String[] args) {
     SQLParser<Car> parser = SQLParser.forPojoWithAttributes(Car.class, createAttributes(Car.class));
     IndexedCollection<Car> cars = new ConcurrentIndexedCollection<Car>();
     cars.addAll(CarFactory.createCollectionOfCars(10));
 
-    ResultSet<Car> results = parser.retrieve(cars, "SELECT * FROM cars WHERE (" +
-                                    "(manufacturer = 'Ford' OR manufacturer = 'Honda') " +
-                                    "AND price <= 5000.0 " +
-                                    "AND color NOT IN ('GREEN', 'WHITE')) " +
-                                    "ORDER BY manufacturer DESC, price ASC");
-                                    
-    results.forEach(System.out::println); // Prints: Honda Accord, Ford Fusion, Ford Focus
+    try (ResultSet<Car> results = parser.retrieve(cars, "SELECT * FROM cars WHERE (" +
+            "(manufacturer = 'Ford' OR manufacturer = 'Honda') " +
+            "AND price <= 5000.0 " +
+            "AND color NOT IN ('GREEN', 'WHITE')) " +
+            "ORDER BY manufacturer DESC, price ASC")) {
+        results.forEach(System.out::println); // Prints: Honda Accord, Ford Fusion, Ford Focus
+    }
 }
 ```
 
-Example of running a CQN query on a collection (full source [here](https://github.com/npgall/cqengine/blob/master/code/src/test/java/com/googlecode/cqengine/examples/parser/CQNQueryDemo.java)):
+Example of running a CQN query on a collection (full source
+[here](src/test/java/com/googlecode/cqengine/examples/parser/CQNQueryDemo.java)):
 ```java
 public static void main(String[] args) {
     CQNParser<Car> parser = CQNParser.forPojoWithAttributes(Car.class, createAttributes(Car.class));
     IndexedCollection<Car> cars = new ConcurrentIndexedCollection<Car>();
     cars.addAll(CarFactory.createCollectionOfCars(10));
 
-    ResultSet<Car> results = parser.retrieve(cars,
-                                    "and(" +
-                                        "or(equal(\"manufacturer\", \"Ford\"), equal(\"manufacturer\", \"Honda\")), " +
-                                        "lessThanOrEqualTo(\"price\", 5000.0), " +
-                                        "not(in(\"color\", GREEN, WHITE))" +
-                                    ")");
-                                    
-    results.forEach(System.out::println); // Prints: Ford Focus, Ford Fusion, Honda Accord
+    try (ResultSet<Car> results = parser.retrieve(cars,
+            "and(" +
+                "or(equal(\"manufacturer\", \"Ford\"), equal(\"manufacturer\", \"Honda\")), " +
+                "lessThanOrEqualTo(\"price\", 5000.0), " +
+                "not(in(\"color\", GREEN, WHITE))" +
+            ")")) {
+        results.forEach(System.out::println); // Prints: Ford Focus, Ford Fusion, Honda Accord
+    }
 }
 ```
 
@@ -231,7 +242,8 @@ Note: CQEngine also supports complex queries via **`and`**, **`or`**, **`not`**,
 | [<sub>PartialDisk</sub>](http://htmlpreview.github.io/?http://raw.githubusercontent.com/npgall/cqengine/master/documentation/javadoc/apidocs/com/googlecode/cqengine/index/disk/PartialDiskIndex.html) | ✓      | ✓      | ✓      | ✓      | ✓      | ✓      |        |        |        |        |        | ✓      |        |        |
 <sup>[1]</sup> See: [forStandingQuery()](http://htmlpreview.github.io/?http://raw.githubusercontent.com/npgall/cqengine/master/documentation/javadoc/apidocs/com/googlecode/cqengine/query/QueryFactory.html#forStandingQuery-com.googlecode.cqengine.query.Query-)
 
-The [Benchmark](documentation/Benchmark.md) page contains examples of how to add these indexes to a collection, and measures their impact on latency.
+The [benchmark guide](documentation/Benchmark.md) contains the current JMH methodology and the original CQEngine
+results retained as project history.
 
 ---
 
@@ -251,7 +263,8 @@ public static final Attribute<Car, Integer> CAR_ID = new SimpleAttribute<Car, In
 ```
 ...or alternatively, from a lambda expression or method reference:
 ```java
-public static final Attribute<Car, Integer> Car_ID = attribute("carId", Car::getCarId);
+public static final Attribute<Car, Integer> CAR_ID =
+        simpleAttribute(Car.class, Integer.class, "carId", Car::getCarId);
 ```
 (For some caveats on using lambdas, please read [LambdaAttributes](documentation/LambdaAttributes.md))
 
@@ -269,7 +282,8 @@ public static final Attribute<Car, String> FEATURES = new MultiValueAttribute<Ca
 ```
 ...or alternatively, from a lambda expression or method reference:
 ```java
-public static final Attribute<Car, String> FEATURES = attribute(String.class, "features", Car::getFeatures);
+public static final Attribute<Car, String> FEATURES =
+        multiValueAttribute(Car.class, String.class, "features", Car::getFeatures);
 ```
 
 #### Null values ####
@@ -312,7 +326,8 @@ public static final Attribute<Car, Boolean> IS_DIRTY = new SimpleAttribute<Car, 
 ```
 ...or, the same thing using a lambda:
 ```java
-public static final Attribute<Car, Boolean> IS_DIRTY = attribute("is_dirty", car -> car.description.contains("dirty"));
+public static final Attribute<Car, Boolean> IS_DIRTY =
+        simpleAttribute(Car.class, Boolean.class, "is_dirty", car -> car.description.contains("dirty"));
 ```
 
 A `HashIndex` could be built on the virtual attribute above, enabling fast retrievals of cars which are either dirty or not dirty, without needing to scan the collection.
@@ -407,11 +422,13 @@ IndexedCollection<Car> cars = new ConcurrentIndexedCollection<Car>(CompositePers
 
 Indexes can similarly be stored on-heap, off-heap, or on disk. Each index requires a certain type of persistence. It is necessary to configure the collection in advance with an appropriate combination of persistences for use by whichever indexes are added.
 
-It is possible to store the collection on-heap, but to store some indexes off-heap. Similarly it is possible to have a variety of index types on the same collection, each using a different type of persistence. On-heap persistence is by far the fastest, followed by off-heap persistence, and then by disk persistence.
+It is possible to store the collection on-heap while storing selected indexes off-heap or on disk, or to combine
+several persistence types. Each choice has different heap, native-memory, disk, durability and latency costs. The
+current JMH suite measures representative modes but establishes no universal ranking or capacity limit.
 
-If both the collection and all of its indexes are stored off-heap or on disk, then it is possible to have extremely large collections which don't use any heap memory or RAM at all.
-
-CQEngine has been tested using off-heap persistence with collections of 10 million objects, and using disk persistence with collections of 100 million objects.
+The original project reported tests with 10 million off-heap objects and 100 million disk-persisted objects. Those
+historical scale observations are not current release evidence or a sizing commitment for CQEngine 4.0; qualify the
+actual object graph, indexes, storage and host before adoption.
 
 **On-heap**
 
@@ -436,7 +453,8 @@ cars.addIndex(DiskIndex.onAttribute(Car.MANUFACTURER));
 
 ### Querying with persistence ###
 
-When either the `IndexedCollection`, or one or more indexes are located off-heap or on disk, take care to close the ResultSet when finished reading. You can use a _try-with-resources_ block to achieve this:
+Close every locally consumed `ResultSet`. This is required for off-heap, disk and transactional implementations, and
+keeps calling code correct if resource-owning indexes are added later. Use a _try-with-resources_ block:
 ```java
 try (ResultSet<Car> results = cars.retrieve(equal(Car.MANUFACTURER, "Ford"))) {
     results.forEach(System.out::println);
@@ -466,7 +484,7 @@ CQEngine [ResultSet](http://htmlpreview.github.io/?http://raw.githubusercontent.
 
   * [stream()](http://htmlpreview.github.io/?http://raw.githubusercontent.com/npgall/cqengine/master/documentation/javadoc/apidocs/com/googlecode/cqengine/resultset/ResultSet.html#stream()) - Returns a Java 8+ `Stream` allowing CQEngine results to be grouped, aggregated, and transformed in flexible ways using lambda expressions.
  
-  * [close()](http://htmlpreview.github.io/?http://raw.githubusercontent.com/npgall/cqengine/master/documentation/javadoc/apidocs/com/googlecode/cqengine/resultset/ResultSet.html#close()) -  Releases any resources or closes the transaction which was opened for the query. Whether or not it is necessary to close the ResultSet depends on which implementation of IndexedCollection is in use and the types of indexes added to it.
+  * [close()](http://htmlpreview.github.io/?http://raw.githubusercontent.com/npgall/cqengine/master/documentation/javadoc/apidocs/com/googlecode/cqengine/resultset/ResultSet.html#close()) - Releases resources or the transaction opened for the query. Close every `ResultSet` you own, preferably with try-with-resources. If you wrap and return a result set, ownership transfers only when the wrapper's `close()` closes its delegate.
   
 ---
 
@@ -489,12 +507,17 @@ CQEngine can be instructed to order results via query options as follows.
 
 **Order by price descending**
 ```java
-ResultSet<Car> results = cars.retrieve(query, queryOptions(orderBy(descending(Car.PRICE))));
+try (ResultSet<Car> results = cars.retrieve(query, queryOptions(orderBy(descending(Car.PRICE))))) {
+    results.forEach(System.out::println);
+}
 ```
 
 **Order by price descending, then number of doors ascending**
 ```java
-ResultSet<Car> results = cars.retrieve(query, queryOptions(orderBy(descending(Car.PRICE), ascending(Car.DOORS))));
+try (ResultSet<Car> results = cars.retrieve(
+        query, queryOptions(orderBy(descending(Car.PRICE), ascending(Car.DOORS))))) {
+    results.forEach(System.out::println);
+}
 ```
 
 Note that ordering results as above uses the default _materialize_ ordering strategy. This is relatively expensive, dependent on the number of objects matching the query, and can cause latency in accessing the first object. It requires all results to be materialized into a sorted set up-front _before iteration can begin_.
@@ -528,7 +551,9 @@ CQEngine has been designed with support for grouping and aggregation in mind, bu
 
 CQEngine `ResultSet` can be converted into a Java 8 `Stream` by calling `ResultSet.stream()`.
 
-Note that Streams are **evaluated via filtering** and they do not avail of CQEngine indexes. So **for best performance, as much of the overall query as possible should be encapsulated in the CQEngine query**, as opposed to in lambda expressions in the stream. This combination would dramatically outperform a stream and lambda expression alone, which simply filtered the collection.
+Note that Streams are **evaluated via filtering** and do not use CQEngine indexes. Put selective indexed predicates
+in the CQEngine query when appropriate, then measure the complete workload; a stream-only scan and an indexed query
+have different setup, update and result-consumption costs.
 
 Here's how to transform a `ResultSet` into a `Stream`, to compute the distinct set of Colors of cars which match a CQEngine query.
 ```java
@@ -537,10 +562,12 @@ public static void main(String[] args) {
     cars.addAll(CarFactory.createCollectionOfCars(10));
     cars.addIndex(NavigableIndex.onAttribute(Car.MANUFACTURER));
 
-    Set<Car.Color> distinctColorsOfFordCars = cars.retrieve(equal(Car.MANUFACTURER, "Ford"))
-            .stream()
-            .map(Car::getColor)
-            .collect(Collectors.toSet());
+    Set<Car.Color> distinctColorsOfFordCars;
+    try (ResultSet<Car> results = cars.retrieve(equal(Car.MANUFACTURER, "Ford"))) {
+        distinctColorsOfFordCars = results.stream()
+                .map(Car::getColor)
+                .collect(Collectors.toSet());
+    }
 
     System.out.println(distinctColorsOfFordCars); // prints: [GREEN, RED]
 }
@@ -568,25 +595,39 @@ For more information, see JavaDocs for: [MetadataEngine](http://htmlpreview.gith
 
 CQEngine has seamless integration with JPA/ORM frameworks such as Hibernate or EclipseLink.
 
-Simply put, CQEngine can build indexes on, and query, any type of Java collection or arbitrary data source. ORM frameworks return entity objects loaded from database tables in Java collections, therefore CQEngine can act as a very fast in-memory query engine on top of such data.
+Simply put, CQEngine can build indexes on, and query, Java collections or arbitrary data sources. ORM frameworks
+often return database entities in Java collections, so CQEngine can provide indexed in-memory queries over that data.
 
 
 ---
 
 
-## Usage in Maven and Non-Maven Projects ##
+## Using CQEngine artifacts ##
 
-CQEngine is in Maven Central, and can be added to a Maven project as follows:
+The unreleased 4.0 final will use the `io.github.shuaibrao:cqengine` coordinate shown below. The current local release
+candidate is `4.0.0-rc.1`; use that version when consuming artifacts staged by this checkout.
+
+```kotlin
+dependencies {
+    implementation("io.github.shuaibrao:cqengine:4.0.0")
+}
 ```
+
+The equivalent Maven dependency is:
+
+```xml
 <dependency>
-    <groupId>com.googlecode.cqengine</groupId>
+    <groupId>io.github.shuaibrao</groupId>
     <artifactId>cqengine</artifactId>
-    <version>x.x.x</version>
+    <version>4.0.0</version>
 </dependency>
 ```
-See [ReleaseNotes](documentation/ReleaseNotes.md) for the latest version number.
 
-For non-Maven projects, a version built with [maven-shade-plugin](http://maven.apache.org/plugins/maven-shade-plugin/) is also provided, which contains CQEngine and all of its own dependencies packaged in a single jar file (ending "-all"). It can be downloaded from Maven central as "-all.jar" [here](http://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22com.googlecode.cqengine%22%20AND%20a%3A%22cqengine%22).
+The optional, non-executable `all` classifier embeds the runtime implementation. Use it instead of the thin artifact
+and its transitives, never alongside them. See
+[using CQEngine artifacts](documentation/Downloads.md) and
+[Java compatibility](documentation/JavaCompatibility.md) for the complete classpath, module-path and native-access
+contract.
 
 ---
 
@@ -599,7 +640,7 @@ CQEngine should generally be compatible with other JVM languages besides Java to
 
 ## Related Projects ##
 
-  * CQEngine is somewhat similar to [Microsoft LINQ](http://en.wikipedia.org/wiki/Language_Integrated_Query), but a difference is LINQ queries on collections are evaluated via iteration/filtering whereas CQEngine uses set theory, thus CQEngine would outperform LINQ
+  * CQEngine is somewhat similar to [Microsoft LINQ](http://en.wikipedia.org/wiki/Language_Integrated_Query). CQEngine can use maintained indexes where a collection query would otherwise iterate and filter, but relative performance depends on the workload and must be measured
 
   * [Concurrent Trees](http://github.com/npgall/concurrent-trees/) provides Concurrent Radix Trees and Concurrent Suffix Trees, used by some indexes in CQEngine
 
@@ -609,12 +650,10 @@ CQEngine should generally be compatible with other JVM languages besides Java to
 
 ## Project Status ##
 
-  * CQEngine 3.6.0 is the current release as of writing (January 2021), and is in Maven central
-  * A [ReleaseNotes](documentation/ReleaseNotes.md) page has been added to document changes between releases
-  * API / JavaDocs are available [here](http://htmlpreview.github.io/?http://raw.githubusercontent.com/npgall/cqengine/master/documentation/javadoc/apidocs/index.html)
-
-Report any bugs/feature requests in the [Issues](http://github.com/npgall/cqengine/issues) tab.
-For support please use the [Discussion Forum](http://groups.google.com/forum/#!forum/cqengine-discuss), not direct email to the developers.
+  * CQEngine 4.0 continues from the original CQEngine 3.6.0 release and is currently unreleased
+  * [Release notes](documentation/ReleaseNotes.md) contain the complete CQEngine release history and 4.0 upgrade notes
+  * The build and consumer matrix supports Java 21 and Java 25
+  * Generate current API documentation with `./gradlew javadoc`; the entry point is then `build/docs/javadoc/index.html`
 
 
 Many thanks to JetBrains for supporting CQEngine with free IntelliJ licenses!
