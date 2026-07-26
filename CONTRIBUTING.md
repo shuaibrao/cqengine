@@ -4,6 +4,37 @@ CQEngine is a mature library with a widely used `com.googlecode.cqengine.*` API 
 Changes should be focused, preserve established behavior unless the change is intentional, and include evidence
 appropriate to their compatibility, security and performance risk.
 
+Please also read the [code of conduct](CODE_OF_CONDUCT.md); it applies in all project spaces.
+
+## Licensing of contributions
+
+CQEngine is Apache-2.0, and contributions are accepted under the project's
+[Individual Contributor License Agreement](CLA.md), which keeps the project's copyright position
+consolidated with the maintainer. Agreeing is part of the normal workflow: sign off every commit
+with the Developer Certificate of Origin trailer —
+
+```bash
+git commit -s
+```
+
+— which adds `Signed-off-by: Your Name <your@email>`. Submitting a signed-off pull request
+constitutes acceptance of the CLA. Unsigned commits cannot be merged.
+
+## Pull requests
+
+- Fork the repository and make the change on a topic branch; open the pull request against `main`.
+- Keep commits focused; one logical change per PR where practical, and no unrelated formatting or
+  dependency churn.
+- Every commit carries a DCO `Signed-off-by` trailer (see above).
+- Run the focused verification for every affected contract (table below) before requesting review;
+  state in the PR description which gates were run.
+- Explain what changed and why in the PR description; link the issue where one exists.
+- Reviews may ask for compatibility, persistence-format or performance evidence — those requests
+  follow directly from the change-discipline rules later in this page.
+
+Bug reports and feature requests use the issue forms; suspected vulnerabilities go through the
+[security policy](SECURITY.md), never a public issue.
+
 ## Development environment
 
 Use the committed Gradle wrapper; do not substitute a system Gradle installation. The build compiles Java 21

@@ -1,0 +1,31 @@
+name: Feature request
+description: Propose a new capability or API improvement
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem statement
+      description: >-
+        What are you trying to do with CQEngine that is harder or more verbose than it should be?
+        Describe the use case (collection shape, indexes, query pattern), not just the missing
+        feature.
+    validations:
+      required: true
+  - type: textarea
+    id: api-sketch
+    attributes:
+      label: Proposed API sketch
+      description: >-
+        A rough sketch of the API you would like to call. Note expected behavior for resource
+        ownership (ResultSet closing), persistence implications, and thread-safety if relevant.
+      render: java
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: >-
+        How you solve this today (existing queries or indexes, wrapper code, another library) and
+        why that is not good enough.
