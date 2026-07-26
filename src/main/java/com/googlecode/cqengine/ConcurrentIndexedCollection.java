@@ -74,6 +74,7 @@ public class ConcurrentIndexedCollection<O> implements IndexedCollection<O> {
     protected final ObjectStore<O> objectStore;
     protected final QueryEngineInternal<O> indexEngine;
     protected final MetadataEngine<O> metadataEngine;
+    protected final boolean requestScopeCloseRequired;
 
     /**
      * Creates a new {@link ConcurrentIndexedCollection} with default settings, using {@link OnHeapPersistence}.
@@ -93,6 +94,7 @@ public class ConcurrentIndexedCollection<O> implements IndexedCollection<O> {
     @SuppressWarnings({"rawtypes", "this-escape"}) // Legacy signature; callbacks are not invoked or published here.
     public ConcurrentIndexedCollection(Persistence<O, ? extends Comparable> persistence) {
         this.persistence = persistence;
+        this.requestScopeCloseRequired = !(persistence instanceof OnHeapPersistence);
         this.objectStore = persistence.createObjectStore();
         QueryEngineInternal<O> queryEngine = new CollectionQueryEngine<O>();
         try (InitialRequestScope requestScope = new InitialRequestScope(persistence)) {
@@ -588,7 +590,7 @@ public class ConcurrentIndexedCollection<O> implements IndexedCollection<O> {
         if (queryOptions == null) {
             queryOptions = new QueryOptions();
         }
-        if (!(persistence instanceof OnHeapPersistence)) {
+        if (requestScopeCloseRequired) {
             persistence.openRequestScopeResources(queryOptions);
         }
         queryOptions.put(Persistence.class, persistence);
@@ -603,18 +605,25 @@ public class ConcurrentIndexedCollection<O> implements IndexedCollection<O> {
     }
 
     protected void closeRequestScopeResourcesIfNecessary(QueryOptions queryOptions) {
+        if (!requestScopeCloseRequired) {
+            return;
+        }
         RequestScopeTransactionOutcome outcome = (RequestScopeTransactionOutcome) queryOptions.get(REQUEST_SCOPE_OUTCOME);
         if (outcome == null) {
             outcome = RequestScopeTransactionOutcome.COMMIT;
         }
-        if (!(persistence instanceof OnHeapPersistence)) {
-            persistence.closeRequestScopeResources(queryOptions, outcome);
-        }
+        persistence.closeRequestScopeResources(queryOptions, outcome);
     }
 
     protected void closeRequestScopeResourcesIfNecessary(
             QueryOptions queryOptions,
             RequestScopeTransactionOutcome outcome) {
+        if (!requestScopeCloseRequired) {
+            // On-heap fast path: skip the outcome bookkeeping, but keep dispatching to the overridable
+            // one-arg method so subclasses hooking request-scope closure still observe every close.
+            closeRequestScopeResourcesIfNecessary(queryOptions);
+            return;
+        }
         queryOptions.put(REQUEST_SCOPE_OUTCOME, outcome);
         try {
             closeRequestScopeResourcesIfNecessary(queryOptions);
@@ -641,7 +650,7 @@ public class ConcurrentIndexedCollection<O> implements IndexedCollection<O> {
     }
 
     protected void commitRequestScopeTransaction(QueryOptions queryOptions) {
-        if (!(persistence instanceof OnHeapPersistence)) {
+        if (requestScopeCloseRequired) {
             persistence.commitRequestScopeTransaction(queryOptions);
         }
     }
