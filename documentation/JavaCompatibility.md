@@ -114,6 +114,13 @@ must disable transitive dependencies so embedded and external copies do not coex
 The thin and `all` runtime artifacts carry `Automatic-Module-Name: cqengine`. Only the thin artifact carries the OSGi
 bundle headers. None of the artifacts is executable.
 
+Because the published classes, JPMS module name and OSGi bundle symbolic name are identical to the original
+`com.googlecode.cqengine:cqengine` artifact, the two artifacts are mutually exclusive. The Gradle module metadata
+declares the `com.googlecode.cqengine:cqengine` capability on the thin and `all` runtime variants, which turns an
+accidental mixed graph into a resolution error instead of a duplicate-class hazard. Maven consumers do not see
+capabilities and should ban `com.googlecode.cqengine:cqengine` with the Enforcer Plugin's `bannedDependencies` rule
+(see the README's "Coexistence with com.googlecode.cqengine" section for the snippet).
+
 ## Persistence format compatibility
 
 CQEngine uses Kryo 5.6.2 with reference tracking enabled. `TRUSTED_STORE_COMPATIBILITY`, the default deserialization

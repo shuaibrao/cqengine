@@ -629,6 +629,41 @@ and its transitives, never alongside them. See
 [Java compatibility](documentation/JavaCompatibility.md) for the complete classpath, module-path and native-access
 contract.
 
+### Coexistence with com.googlecode.cqengine ###
+
+This artifact ships the same `com.googlecode.cqengine` classes as the original
+`com.googlecode.cqengine:cqengine` artifact, so the two must never appear together in one dependency graph. The
+Gradle module metadata declares the capability `com.googlecode.cqengine:cqengine`, so Gradle consumers fail
+resolution automatically if a transitive dependency still pulls in the original artifact; resolve the conflict by
+excluding the original or by adding a
+[capability resolution strategy](https://docs.gradle.org/current/userguide/dependency_capability_conflict.html)
+selecting this artifact. Maven does not read capabilities, so Maven consumers should ban the original coordinate
+explicitly with the Maven Enforcer Plugin:
+
+```xml
+<plugin>
+    <groupId>org.apache.maven.plugins</groupId>
+    <artifactId>maven-enforcer-plugin</artifactId>
+    <executions>
+        <execution>
+            <id>ban-original-cqengine</id>
+            <goals>
+                <goal>enforce</goal>
+            </goals>
+            <configuration>
+                <rules>
+                    <bannedDependencies>
+                        <excludes>
+                            <exclude>com.googlecode.cqengine:cqengine</exclude>
+                        </excludes>
+                    </bannedDependencies>
+                </rules>
+            </configuration>
+        </execution>
+    </executions>
+</plugin>
+```
+
 ---
 
 ## Using CQEngine in Scala, Kotlin, or other JVM languages ##

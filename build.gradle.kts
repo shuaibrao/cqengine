@@ -4448,6 +4448,10 @@ abstract class VerifyLocalPublication : DefaultTask() {
         )
 
         val thinStaged = versionDirectory.resolve("$artifactStem.jar")
+        val expectedJarCapabilities = setOf(
+            "$GROUP_NAME:$ARTIFACT_NAME:$version",
+            "$UPSTREAM_GROUP_NAME:$ARTIFACT_NAME:$version",
+        )
         verifyModuleVariant(
             variantsByName.getValue("apiElements"),
             expectedAttributes = mapOf(
@@ -4460,6 +4464,7 @@ abstract class VerifyLocalPublication : DefaultTask() {
             expectedFile = "$ARTIFACT_NAME-$version.jar",
             stagedFile = thinStaged,
             expectedDependencies = EXPECTED_DEPENDENCIES,
+            expectedCapabilities = expectedJarCapabilities,
         )
         verifyModuleVariant(
             variantsByName.getValue("runtimeElements"),
@@ -4473,6 +4478,7 @@ abstract class VerifyLocalPublication : DefaultTask() {
             expectedFile = "$ARTIFACT_NAME-$version.jar",
             stagedFile = thinStaged,
             expectedDependencies = EXPECTED_DEPENDENCIES,
+            expectedCapabilities = expectedJarCapabilities,
         )
         verifyModuleVariant(
             variantsByName.getValue("shadowRuntimeElements"),
@@ -4486,6 +4492,7 @@ abstract class VerifyLocalPublication : DefaultTask() {
             expectedFile = "$ARTIFACT_NAME-$version-all.jar",
             stagedFile = versionDirectory.resolve("$artifactStem-all.jar"),
             expectedDependencies = emptyList(),
+            expectedCapabilities = expectedJarCapabilities,
         )
         verifyModuleVariant(
             variantsByName.getValue("sourcesElements"),
@@ -4519,17 +4526,33 @@ abstract class VerifyLocalPublication : DefaultTask() {
         expectedFile: String,
         stagedFile: File,
         expectedDependencies: List<PomDependency>,
+        expectedCapabilities: Set<String> = emptySet(),
     ) {
         val name = variant["name"] as String
-        val expectedKeys = if (expectedDependencies.isEmpty()) {
-            setOf("name", "attributes", "files")
-        }
-        else {
-            setOf("name", "attributes", "dependencies", "files")
+        val expectedKeys = buildSet {
+            add("name")
+            add("attributes")
+            if (expectedDependencies.isNotEmpty()) add("dependencies")
+            add("files")
+            if (expectedCapabilities.isNotEmpty()) add("capabilities")
         }
         assertJsonKeys(variant, expectedKeys, "variant $name")
         val attributes = jsonObject(variant["attributes"], "Gradle module attributes for $name")
         assertValid(attributes == expectedAttributes, "Unexpected attributes for $name: $attributes")
+
+        val capabilities = (variant["capabilities"] as? List<*>).orEmpty().mapIndexed { index, value ->
+            val capability = jsonObject(value, "Gradle module capability $index for $name")
+            assertJsonKeys(capability, setOf("group", "name", "version"), "capability $index for $name")
+            "${capability["group"]}:${capability["name"]}:${capability["version"]}"
+        }
+        assertValid(
+            capabilities.size == capabilities.toSet().size,
+            "Variant $name declares duplicate capabilities: $capabilities",
+        )
+        assertValid(
+            capabilities.toSet() == expectedCapabilities,
+            "Unexpected capabilities for $name. Expected $expectedCapabilities, found $capabilities",
+        )
 
         val dependencies = if (expectedDependencies.isEmpty()) {
             emptyList()
@@ -4967,6 +4990,7 @@ abstract class VerifyLocalPublication : DefaultTask() {
             .withResolverStyle(ResolverStyle.STRICT)
         private val POSITIVE_INTEGER = Regex("[1-9][0-9]*")
         private const val GROUP_NAME = "io.github.shuaibrao"
+        private const val UPSTREAM_GROUP_NAME = "com.googlecode.cqengine"
         private const val ARTIFACT_NAME = "cqengine"
         private const val ARTIFACT_DIRECTORY = "io/github/shuaibrao/cqengine"
         private const val MAVEN_METADATA = "maven-metadata.xml"
@@ -6785,6 +6809,18 @@ val verifyReleaseInvocation by tasks.registering(VerifyReleaseInvocation::class)
 
 tasks.check {
     dependsOn(formatRatchetCheck, qualifyCandidateEarlyFailureTest, verifyPublishedJars)
+}
+
+// The fork ships the same classes, JPMS module and OSGi bundle as the original
+// com.googlecode.cqengine:cqengine artifact. Declaring that coordinate as an explicit capability
+// (alongside the implicit own-GAV capability, which explicit declarations would otherwise replace)
+// makes Gradle fail resolution when both artifacts meet in one dependency graph instead of
+// silently duplicating every class.
+listOf("apiElements", "runtimeElements", "shadowRuntimeElements").forEach { variantName ->
+    configurations.named(variantName) {
+        outgoing.capability("${project.group}:cqengine:${project.version}")
+        outgoing.capability("com.googlecode.cqengine:cqengine:${project.version}")
+    }
 }
 
 publishing {
