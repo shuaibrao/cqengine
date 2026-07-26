@@ -5903,7 +5903,7 @@ val verifyPersistenceTestJava25 by tasks.registering(VerifyTestTaskResults::clas
         persistenceTestJava25Execution,
         25,
         40,
-        538,
+        540,
         expectedPersistenceSkips,
     )
 }
@@ -5982,7 +5982,7 @@ val verifyPersistenceTestJava21 by tasks.registering(VerifyTestTaskResults::clas
         persistenceTestJava21Execution,
         21,
         40,
-        538,
+        540,
         expectedPersistenceSkips,
     )
 }

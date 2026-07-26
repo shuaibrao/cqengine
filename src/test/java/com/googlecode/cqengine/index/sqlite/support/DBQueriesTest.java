@@ -734,6 +734,47 @@ public class DBQueriesTest {
     }
 
     @Test
+    public void adoptsLegacyTableWhoseAttributeNameSanitizedToTheEmptyComponent() throws SQLException {
+        ConnectionManager connectionManager = temporaryFileDatabase.getConnectionManager(true);
+        Connection connection = connectionManager.getConnection(null, noQueryOptions());
+        String versionTwoName = DBUtils.createSQLiteIndexTableNameV2("***", "");
+        String otherVersionTwoName = DBUtils.createSQLiteIndexTableNameV2("###", "");
+        try {
+            // A pre-4.0 store whose attribute name contained no alphanumeric characters used the bare
+            // "cqtbl_" table with the "cqidx__value" index; seed exactly that legacy schema.
+            try (Statement statement = connection.createStatement()) {
+                statement.executeUpdate(
+                        "CREATE TABLE \"cqtbl_\" (objectKey INTEGER, value TEXT, "
+                                + "PRIMARY KEY (objectKey, value)) WITHOUT ROWID;");
+                statement.executeUpdate("CREATE INDEX \"cqidx__value\" ON \"cqtbl_\" (value);");
+                statement.executeUpdate("INSERT INTO \"cqtbl_\" (objectKey, value) VALUES (1, 'legacy');");
+            }
+
+            TestAssertions.assertTrue(DBQueries.migrateLegacyIndexTableIfNeeded("", versionTwoName, connection));
+            TestAssertions.assertTrue(DBQueries.indexTableExists(versionTwoName, connection));
+            assertObjectExistenceInSQLIteMasterTable("cqtbl_", "table", false, connectionManager);
+            assertObjectExistenceInSQLIteMasterTable("cqidx__value", "index", false, connectionManager);
+            assertObjectExistenceInSQLIteMasterTable(
+                    "cqidx_" + versionTwoName + "_value", "index", true, connectionManager);
+            try (java.sql.ResultSet entries = DBQueries.getAllIndexEntries(versionTwoName, connection)) {
+                TestAssertions.assertTrue(entries.next());
+                TestAssertions.assertEquals(1, entries.getInt(1));
+                TestAssertions.assertEquals("legacy", entries.getString(2));
+                TestAssertions.assertFalse(entries.next());
+            }
+
+            // Reopening is a no-op, and a different all-non-alphanumeric attribute cannot claim the data.
+            TestAssertions.assertFalse(DBQueries.migrateLegacyIndexTableIfNeeded("", versionTwoName, connection));
+            TestAssertions.assertFalse(
+                    DBQueries.migrateLegacyIndexTableIfNeeded("", otherVersionTwoName, connection));
+            TestAssertions.assertFalse(DBQueries.indexTableExists(otherVersionTwoName, connection));
+        }
+        finally {
+            DBUtils.closeQuietly(connection);
+        }
+    }
+
+    @Test
     public void atomicallyMigratesLegacyTableDataAndIndexToVersionTwoName() throws SQLException {
         ConnectionManager connectionManager = temporaryFileDatabase.getConnectionManager(true);
         Connection connection = connectionManager.getConnection(null, noQueryOptions());

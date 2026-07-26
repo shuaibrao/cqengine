@@ -167,7 +167,9 @@ public class SQLiteIndex<A extends Comparable<A>, O, K> extends AbstractAttribut
         String validatedSuffix = DBUtils.validateSQLiteIdentifierSuffix(tableNameSuffix);
         String validatedLegacySuffix = DBUtils.validateSQLiteIdentifierSuffix(legacyTableNameSuffix);
         this.tableName = DBUtils.createSQLiteIndexTableNameV2(attribute.getAttributeName(), validatedSuffix);
-        this.legacyTableName = DBUtils.validateSQLiteIdentifierComponent(
+        // The legacy sanitizer could produce an empty component for an all-non-alphanumeric attribute name;
+        // such a store used the bare "cqtbl_" table, so the empty legacy identity stays adoptable here.
+        this.legacyTableName = DBUtils.validateSQLiteIdentifierSuffix(
                 DBUtils.sanitizeForTableName(attribute.getAttributeName()) + validatedLegacySuffix);
         this.primaryKeyAttribute = primaryKeyAttribute;
         this.foreignKeyAttribute = foreignKeyAttribute;

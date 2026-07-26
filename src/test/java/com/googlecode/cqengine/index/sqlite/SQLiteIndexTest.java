@@ -125,6 +125,25 @@ public class SQLiteIndexTest {
     }
 
     @Test
+    public void acceptsAttributeNameWhoseLegacySanitizationIsEmpty() {
+        SimpleAttribute<Car, Integer> punctuationNamed = new SimpleAttribute<Car, Integer>("***") {
+            @Override
+            public Integer getValue(Car car, QueryOptions queryOptions) {
+                return car.getCarId();
+            }
+        };
+
+        SQLiteIndex<Integer, Car, Integer> index = new SQLiteIndex<Integer, Car, Integer>(
+                punctuationNamed,
+                OBJECT_TO_ID,
+                ID_TO_OBJECT,
+                "");
+
+        assertEquals(DBUtils.createSQLiteIndexTableNameV2("***", ""), index.tableName);
+        assertEquals("", index.legacyTableName);
+    }
+
+    @Test
     public void rejectsNullTableNameSuffix() {
         TestAssertions.assertThrows(
                 NullPointerException.class,

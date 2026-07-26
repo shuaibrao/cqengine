@@ -63,7 +63,9 @@ public class DBQueries {
      */
     public static boolean migrateLegacyIndexTableIfNeeded(
             String legacyTableName, String versionTwoTableName, Connection connection) {
-        String validatedLegacyName = DBUtils.validateSQLiteIdentifierComponent(legacyTableName);
+        // The legacy component may be empty: the historical sanitizer mapped all-non-alphanumeric
+        // attribute names to the bare "cqtbl_" table. Version-two components are never empty.
+        String validatedLegacyName = DBUtils.validateSQLiteIdentifierSuffix(legacyTableName);
         String validatedVersionTwoName = DBUtils.validateSQLiteIdentifierComponent(versionTwoTableName);
         if (validatedLegacyName.equals(validatedVersionTwoName)) {
             return false;
@@ -139,7 +141,7 @@ public class DBQueries {
     private static boolean migrateLegacyIndexTableInTransaction(
             String legacyTableName, String versionTwoTableName, Connection connection) throws SQLException {
         String mappedVersionTwoName = readIdentifierMigration(legacyTableName, connection);
-        boolean legacyTableExists = indexTableExists(legacyTableName, connection);
+        boolean legacyTableExists = legacyIndexTableExists(legacyTableName, connection);
         boolean versionTwoTableExists = indexTableExists(versionTwoTableName, connection);
 
         if (mappedVersionTwoName != null) {
@@ -161,11 +163,36 @@ public class DBQueries {
         }
 
         createIdentifierMigrationsTable(connection);
-        renameIndexTable(legacyTableName, versionTwoTableName, connection);
-        dropIndexOnTable(legacyTableName, connection);
+        renameLegacyIndexTable(legacyTableName, versionTwoTableName, connection);
+        dropLegacyIndexOnTable(legacyTableName, connection);
         createIndexOnTable(versionTwoTableName, connection);
         recordIdentifierMigration(legacyTableName, versionTwoTableName, connection);
         return true;
+    }
+
+    private static String legacyTableNameValue(String legacyTableName) {
+        return "cqtbl_" + DBUtils.validateSQLiteIdentifierSuffix(legacyTableName);
+    }
+
+    private static boolean legacyIndexTableExists(String legacyTableName, Connection connection) throws SQLException {
+        return actualTableExists(legacyTableNameValue(legacyTableName), connection);
+    }
+
+    private static void renameLegacyIndexTable(
+            String legacyTableName, String versionTwoTableName, Connection connection) throws SQLException {
+        String sql = "ALTER TABLE " + quoteGeneratedIdentifier(legacyTableNameValue(legacyTableName))
+                + " RENAME TO " + tableIdentifier(versionTwoTableName) + ";";
+        try (Statement statement = connection.createStatement()) {
+            statement.executeUpdate(sql);
+        }
+    }
+
+    private static void dropLegacyIndexOnTable(String legacyTableName, Connection connection) throws SQLException {
+        String sql = "DROP INDEX IF EXISTS " + quoteGeneratedIdentifier(
+                "cqidx_" + DBUtils.validateSQLiteIdentifierSuffix(legacyTableName) + "_value") + ";";
+        try (Statement statement = connection.createStatement()) {
+            statement.executeUpdate(sql);
+        }
     }
 
     private static String readIdentifierMigration(String legacyTableName, Connection connection) throws SQLException {
@@ -196,15 +223,6 @@ public class DBQueries {
         String sql = "CREATE TABLE IF NOT EXISTS \"" + IDENTIFIER_MIGRATIONS_TABLE + "\" ("
                 + "legacy_component TEXT PRIMARY KEY NOT NULL, "
                 + "v2_component TEXT UNIQUE NOT NULL);";
-        try (Statement statement = connection.createStatement()) {
-            statement.executeUpdate(sql);
-        }
-    }
-
-    private static void renameIndexTable(
-            String legacyTableName, String versionTwoTableName, Connection connection) throws SQLException {
-        String sql = "ALTER TABLE " + tableIdentifier(legacyTableName)
-                + " RENAME TO " + tableIdentifier(versionTwoTableName) + ";";
         try (Statement statement = connection.createStatement()) {
             statement.executeUpdate(sql);
         }
