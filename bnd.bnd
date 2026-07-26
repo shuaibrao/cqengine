@@ -1,0 +1,5 @@
+Bundle-SymbolicName: cqengine
+Bundle-Name: CQEngine
+Bundle-License: https://www.apache.org/licenses/LICENSE-2.0
+-exportcontents: com.googlecode.cqengine.*
+-removeheaders: Bnd-LastModified,Created-By,Tool

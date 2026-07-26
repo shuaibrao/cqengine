@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FindBugsFilter>
+    <!-- These mutable public fields are part of the upstream API; making them final would change that contract. -->
+    <Match>
+        <Class name="com.googlecode.cqengine.codegen.AttributeNameProducers"/>
+        <Field name="USE_MEMBER_NAMES_VERBATIM"/>
+        <Bug pattern="MS_SHOULD_BE_FINAL"/>
+    </Match>
+    <Match>
+        <Class name="com.googlecode.cqengine.index.sqlite.support.SQLiteIndexFlags"/>
+        <Field name="BULK_IMPORT"/>
+        <Bug pattern="MS_SHOULD_BE_FINAL"/>
+    </Match>
+    <Match>
+        <Class name="com.googlecode.cqengine.index.sqlite.support.SQLiteIndexFlags"/>
+        <Field name="BULK_IMPORT_SUSPEND_SYNC_AND_JOURNALING"/>
+        <Bug pattern="MS_SHOULD_BE_FINAL"/>
+    </Match>
+    <Match>
+        <Class name="com.googlecode.cqengine.persistence.support.PersistenceFlags"/>
+        <Field name="READ_REQUEST"/>
+        <Bug pattern="MS_SHOULD_BE_FINAL"/>
+    </Match>
+    <Match>
+        <Class name="com.googlecode.cqengine.query.parser.cqn.support.ApacheSolrDataMathParser"/>
+        <Field name="UTC"/>
+        <Bug pattern="MS_SHOULD_BE_FINAL"/>
+    </Match>
+    <!-- The SQL parser deliberately adapts the CQN parser with the same dialect-level type name. -->
+    <Match>
+        <Class name="com.googlecode.cqengine.query.parser.sql.support.DateMathParser"/>
+        <Bug pattern="NM_SAME_SIMPLE_NAME_AS_SUPERCLASS"/>
+    </Match>
+</FindBugsFilter>

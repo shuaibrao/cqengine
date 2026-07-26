@@ -1,0 +1,51 @@
+[versions]
+antlr = "4.13.2"
+bnd = "7.3.0"
+byteBuddy = { strictly = "1.18.5" }
+concurrentTrees = "2.6.1"
+cyclonedx = "3.2.4"
+dependencyCheck = "12.2.2"
+equalsverifier = "4.5"
+findsecbugs = "1.14.0"
+jacoco = "0.8.15"
+japicmp = "0.26.1"
+javassist = "3.32.0-GA"
+jcstress = "0.16"
+jmh = "1.37"
+jmhPlugin = "0.7.3"
+junitPlatform = "6.0.3"
+kryo = "5.6.2"
+licenseReport = "3.1.4"
+mockito = "5.23.0"
+objenesis = { strictly = "3.5" }
+shadow = "9.5.1"
+spotbugs = "4.10.2"
+spotbugsPlugin = "6.5.8"
+sqlite = "3.53.2.0"
+
+[libraries]
+antlr-runtime = { module = "org.antlr:antlr4-runtime", version.ref = "antlr" }
+antlr-tool = { module = "org.antlr:antlr4", version.ref = "antlr" }
+byte-buddy = { module = "net.bytebuddy:byte-buddy", version.ref = "byteBuddy" }
+concurrent-trees = { module = "com.googlecode.concurrent-trees:concurrent-trees", version.ref = "concurrentTrees" }
+equalsverifier = { module = "nl.jqno.equalsverifier:equalsverifier", version.ref = "equalsverifier" }
+findsecbugs = { module = "com.h3xstream.findsecbugs:findsecbugs-plugin", version.ref = "findsecbugs" }
+javassist = { module = "org.javassist:javassist", version.ref = "javassist" }
+japicmp = { module = "com.github.siom79.japicmp:japicmp", version.ref = "japicmp" }
+jcstress-core = { module = "org.openjdk.jcstress:jcstress-core", version.ref = "jcstress" }
+junit-bom = { module = "org.junit:junit-bom", version.ref = "junitPlatform" }
+junit-jupiter = { module = "org.junit.jupiter:junit-jupiter" }
+junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher" }
+kryo-core = { module = "com.esotericsoftware:kryo", version.ref = "kryo" }
+mockito-core = { module = "org.mockito:mockito-core", version.ref = "mockito" }
+objenesis = { module = "org.objenesis:objenesis", version.ref = "objenesis" }
+sqlite-jdbc = { module = "org.xerial:sqlite-jdbc", version.ref = "sqlite" }
+
+[plugins]
+bnd = { id = "biz.aQute.bnd.builder", version.ref = "bnd" }
+cyclonedx = { id = "org.cyclonedx.bom", version.ref = "cyclonedx" }
+dependency-check = { id = "org.owasp.dependencycheck", version.ref = "dependencyCheck" }
+jmh = { id = "me.champeau.jmh", version.ref = "jmhPlugin" }
+license-report = { id = "com.github.jk1.dependency-license-report", version.ref = "licenseReport" }
+shadow = { id = "com.gradleup.shadow", version.ref = "shadow" }
+spotbugs = { id = "com.github.spotbugs", version.ref = "spotbugsPlugin" }

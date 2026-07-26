@@ -1,0 +1,17 @@
+.gradle/
+.idea/
+*.iml
+
+build/
+**/build/
+target/
+**/target/
+
+*.log
+hs_err_pid*
+replay_pid*
+
+**/__pycache__/
+**/*.pyc
+.agent/hooks/state/
+.claude/settings.local.json
