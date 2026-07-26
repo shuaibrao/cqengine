@@ -1,0 +1,4 @@
+interface:
+  display_name: "Dependency Source Lookup"
+  short_description: "Inspect pinned dependency implementations"
+  default_prompt: "Use $opensrc to inspect the pinned dependency implementation behind this behavior."

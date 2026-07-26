@@ -1,0 +1,4 @@
+interface:
+  display_name: "GitHub Operations"
+  short_description: "Inspect GitHub PRs, issues, and workflows"
+  default_prompt: "Use $github-ops to inspect the relevant GitHub state without changing it."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "CQEngine PR Review"
+  short_description: "Review CQEngine changes with full context"
+  default_prompt: "Use $pr-review to review this CQEngine pull request and report actionable findings."

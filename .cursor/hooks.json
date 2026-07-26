@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "command": "python3 .agent/hooks/session_init.py --harness cursor"
+      }
+    ],
+    "beforeShellExecution": [
+      {
+        "command": "python3 .agent/hooks/shell_exec_guard.py --harness cursor"
+      }
+    ],
+    "stop": [
+      {
+        "command": "python3 .agent/hooks/self_improvement_check.py --harness cursor",
+        "loop_limit": 1
+      }
+    ]
+  }
+}

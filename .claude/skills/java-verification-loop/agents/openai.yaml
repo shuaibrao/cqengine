@@ -1,0 +1,4 @@
+interface:
+  display_name: "Java Verification Loop"
+  short_description: "Verify CQEngine changes with focused Gradle gates"
+  default_prompt: "Use $java-verification-loop to verify this CQEngine change with proportionate checks."

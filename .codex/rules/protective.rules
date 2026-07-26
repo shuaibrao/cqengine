@@ -1,0 +1,28 @@
+prefix_rule(
+    pattern = ["git", "push", ["--force", "-f", "--force-with-lease", "--force-if-includes"]],
+    decision = "forbidden",
+    justification = "Force-pushing rewrites remote history. Integrate the remote and push without force.",
+    match = [
+        "git push --force origin main",
+        "git push -f origin main",
+        "git push --force-with-lease origin main",
+        "git push --force-if-includes origin main",
+    ],
+    not_match = ["git push origin main", "git status --short"],
+)
+
+prefix_rule(
+    pattern = ["git", "push"],
+    decision = "prompt",
+    justification = "Review pushes before mutating remote refs.",
+    match = ["git push origin main"],
+    not_match = ["git status --short"],
+)
+
+prefix_rule(
+    pattern = ["rm", ["-rf", "-fr", "-rF", "-Fr", "-Rf", "-fR"], ["src", "./src", "gradle", "./gradle", "scripts", "./scripts", "documentation", "./documentation", "benchmarks", "./benchmarks", "consumer-tests", "./consumer-tests", "config", "./config", ".agent", "./.agent", ".cursor", "./.cursor", ".claude", "./.claude", ".codex", "./.codex"]],
+    decision = "forbidden",
+    justification = "Do not recursively remove protected project directories.",
+    match = ["rm -rf src", "rm -fr ./documentation", "rm -Rf benchmarks"],
+    not_match = ["rm -rf build", "rm -rf /tmp/cqengine-scratch", "rm file.txt"],
+)

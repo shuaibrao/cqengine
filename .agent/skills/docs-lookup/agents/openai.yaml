@@ -1,0 +1,4 @@
+interface:
+  display_name: "Dependency Documentation"
+  short_description: "Look up current dependency documentation"
+  default_prompt: "Use $docs-lookup to verify the current API and recommended usage for this dependency."

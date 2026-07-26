@@ -1,0 +1,4 @@
+interface:
+  display_name: "Mermaid Diagrams"
+  short_description: "Create readable architecture and flow diagrams"
+  default_prompt: "Use $mermaid-diagrams to create a concise diagram for this design."
