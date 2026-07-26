@@ -7,7 +7,7 @@ unset BASH_ENV ENV CDPATH PYTHONHOME PYTHONINSPECT PYTHONPATH PYTHONSTARTUP
 usage() {
     cat >&2 <<'EOF'
 usage:
-  scripts/central-portal.sh upload <bundle.zip> <deployment-name> USER_MANAGED
+  scripts/central-portal.sh upload <bundle.zip> <deployment-name> <USER_MANAGED|AUTOMATIC>
   scripts/central-portal.sh status <deployment-id>
   scripts/central-portal.sh publish <deployment-id> <same-deployment-id> <version>
   scripts/central-portal.sh drop <deployment-id> <same-deployment-id>
@@ -78,8 +78,8 @@ case "$command" in
             echo "bundle path contains unsupported characters" >&2
             exit 1
         fi
-        if [[ "$publishing_type" != USER_MANAGED ]]; then
-            echo "publication tooling permits USER_MANAGED Central deployments only" >&2
+        if [[ "$publishing_type" != USER_MANAGED && "$publishing_type" != AUTOMATIC ]]; then
+            echo "publication tooling permits USER_MANAGED or AUTOMATIC Central deployments only" >&2
             exit 1
         fi
         response="$(portal_request \

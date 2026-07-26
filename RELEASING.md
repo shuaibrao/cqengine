@@ -128,3 +128,45 @@ After reviewing a successful run, copy its generated benchmark views into the tr
 This explicit step keeps qualification read-only with respect to committed source. Review and commit the generated
 result directory separately; its metadata binds the measured commit and executable hashes, so a documentation-only
 commit does not misrepresent the measured library bytes.
+
+## Publishing through GitHub (release-bundle workflow)
+
+Signing and the Central Portal hand-off run on a GitHub-hosted runner via `.github/workflows/release-bundle.yml`.
+The workflow never re-runs the multi-hour qualification; it proves the runner's rebuild reproduces the qualified
+bytes by hashing the rebuilt publication inventory against the committed readiness manifest, and refuses to sign
+on any mismatch.
+
+1. Qualify the release commit locally (`scripts/qualify-candidate.sh`, above). The commit qualified is the commit
+   whose bytes are published.
+2. Commit the qualification evidence so the workflow can verify it:
+
+   ```bash
+   mkdir -p release-evidence/<version>
+   cp build/local-release-evidence/qualification/wrapper-completion.properties \
+      build/local-release-evidence/qualification/local-readiness-manifest.txt \
+      release-evidence/<version>/
+   git add release-evidence/<version> && git commit
+   ```
+
+   Evidence-only commits after the qualified commit are safe: the workflow checks out and rebuilds the qualified
+   `sourceCommit` itself (which must be an ancestor of the tag), so the published bytes are still the qualified ones.
+3. Confirm `io.github.shuaibrao:cqengine:<version>` is absent from Maven Central, then create and push the signed
+   release tag — this is the release decision:
+
+   ```bash
+   git tag -s v<version> -m 'CQEngine <version>'
+   git push origin v<version>
+   ```
+
+4. Dispatch the workflow from the tag and approve the `maven-central` environment run when prompted:
+
+   ```bash
+   gh workflow run release-bundle.yml --ref v<version> -f version=<version> -f centralPublishing=user-managed
+   ```
+
+   `centralPublishing=skip` produces the signed bundle artifact only; `user-managed` uploads and waits for
+   `VALIDATED`, leaving the final publish to the Portal UI; `automatic` publishes as soon as validation passes and
+   cannot be undone. Central releases are immutable — a bad release is superseded by a new version, never replaced.
+5. After Central lists the artifacts, verify the public bytes against the retained bundle artifact, create the
+   GitHub release from the tag attaching the evidence artifacts, and bump `gradle.properties` to the next
+   `-SNAPSHOT`.

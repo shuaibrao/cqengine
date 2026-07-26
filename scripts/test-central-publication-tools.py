@@ -245,12 +245,20 @@ def main() -> None:
         require(uploaded == DEPLOYMENT_ID, uploaded)
         automatic = subprocess.run(
             [str(portal), "upload", str(output), "cqengine-4.0.0-rc.1", "AUTOMATIC"],
+            check=True,
+            env=portal_environment,
+            stdout=subprocess.PIPE,
+            text=True,
+        ).stdout.strip()
+        require(automatic == DEPLOYMENT_ID, automatic)
+        unsupported = subprocess.run(
+            [str(portal), "upload", str(output), "cqengine-4.0.0-rc.1", "PORTAL_API"],
             env=portal_environment,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE,
             text=True,
         )
-        require(automatic.returncode != 0, "automatic Central publication was accepted")
+        require(unsupported.returncode != 0, "an unsupported Central publishing type was accepted")
         status_result = subprocess.run(
             [str(portal), "status", DEPLOYMENT_ID],
             check=True,
