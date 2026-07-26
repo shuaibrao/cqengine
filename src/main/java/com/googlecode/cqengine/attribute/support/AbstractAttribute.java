@@ -104,11 +104,22 @@ public abstract class AbstractAttribute<O, A> implements Attribute<O, A> {
         return other instanceof AbstractAttribute;
     }
 
+    /**
+     * Returns the hash code computed once during construction from the object type, attribute type and attribute
+     * name. That static computation is the documented contract; it never dispatches to an overridable method on a
+     * partially constructed object.
+     */
     @Override
     public int hashCode() {
         return cachedHashCode;
     }
 
+    /**
+     * @deprecated Overriding this method has no effect: the cached hash code returned by {@link #hashCode()} is
+     * computed statically during construction from the object type, attribute type and attribute name. Retained
+     * only for compatibility with subclasses that still override or call it; scheduled for removal.
+     */
+    @Deprecated(since = "4.0", forRemoval = true)
     protected int calcHashCode() {
         return calculateHashCode(objectType, attributeType, attributeName);
     }
