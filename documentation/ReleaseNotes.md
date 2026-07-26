@@ -6,6 +6,18 @@ CQEngine 4.0 continues from CQEngine 3.6.0 with a supported Java baseline, curre
 Gradle build and additional correctness, resource-safety and security controls. Existing
 `com.googlecode.cqengine` packages and the `cqengine` module and OSGi bundle names are retained.
 
+> **Upgrading from 3.x?** Follow the [migration guide](MigrationTo4.md). The changes most likely
+> to affect existing applications:
+>
+> 1. Inline **lambda/method-reference attributes** need the new explicit-type factories.
+> 2. `DiskPersistence`/`OffHeapPersistence` have **no finalizers** — close them explicitly.
+> 3. The SQLite **busy timeout defaults to 3,000 ms** (was effectively infinite); override via
+>    persistence properties if you relied on unbounded waits.
+> 4. Opening a disk store performs a **one-way table migration** — 3.x cannot reopen it; back up
+>    stores first.
+> 5. **`UniqueIndex` no longer overwrites on re-add** of an equal object; use
+>    `update(...)` to replace stored objects.
+
 ### Java and build compatibility
 
   * Java 21 is the minimum runtime and bytecode level. The library and its external-consumer paths are tested on
