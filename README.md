@@ -54,9 +54,9 @@ allocation guarantee.
 
 Several implementations of CQEngine's `IndexedCollection` are provided, supporting various concurrency and transaction isolation levels:
 
-  * [ConcurrentIndexedCollection](http://htmlpreview.github.io/?http://raw.githubusercontent.com/npgall/cqengine/master/documentation/javadoc/apidocs/com/googlecode/cqengine/ConcurrentIndexedCollection.html) - lock-free concurrent reads and writes with no transaction isolation
-  * [ObjectLockingIndexedCollection](http://htmlpreview.github.io/?http://raw.githubusercontent.com/npgall/cqengine/master/documentation/javadoc/apidocs/com/googlecode/cqengine/ObjectLockingIndexedCollection.html) - lock-free concurrent reads, and some locking of writes for object-level transaction isolation and consistency guarantees
-  * [TransactionalIndexedCollection](http://htmlpreview.github.io/?http://raw.githubusercontent.com/npgall/cqengine/master/documentation/javadoc/apidocs/com/googlecode/cqengine/TransactionalIndexedCollection.html)  - lock-free concurrent reads, and sequential writes for full [transaction isolation](documentation/TransactionIsolation.md) using Multi-Version Concurrency Control
+  * [ConcurrentIndexedCollection](src/main/java/com/googlecode/cqengine/ConcurrentIndexedCollection.java) - lock-free concurrent reads and writes with no transaction isolation
+  * [ObjectLockingIndexedCollection](src/main/java/com/googlecode/cqengine/ObjectLockingIndexedCollection.java) - lock-free concurrent reads, and some locking of writes for object-level transaction isolation and consistency guarantees
+  * [TransactionalIndexedCollection](src/main/java/com/googlecode/cqengine/TransactionalIndexedCollection.java)  - lock-free concurrent reads, and sequential writes for full [transaction isolation](documentation/TransactionIsolation.md) using Multi-Version Concurrency Control
 
 For more details see [TransactionIsolation](documentation/TransactionIsolation.md).
 
@@ -64,10 +64,10 @@ For more details see [TransactionIsolation](documentation/TransactionIsolation.m
 
 ## Complete Example ##
 
-In CQEngine applications mostly interact with [IndexedCollection](http://htmlpreview.github.io/?http://raw.githubusercontent.com/npgall/cqengine/master/documentation/javadoc/apidocs/com/googlecode/cqengine/IndexedCollection.html), which is an implementation of [java.util.Set](http://docs.oracle.com/javase/6/docs/api/java/util/Set.html), and it provides two additional methods:
+In CQEngine applications mostly interact with [IndexedCollection](src/main/java/com/googlecode/cqengine/IndexedCollection.java), which is an implementation of [java.util.Set](http://docs.oracle.com/javase/6/docs/api/java/util/Set.html), and it provides two additional methods:
 
-  * [addIndex(SomeIndex)](http://htmlpreview.github.io/?http://raw.githubusercontent.com/npgall/cqengine/master/documentation/javadoc/apidocs/com/googlecode/cqengine/engine/QueryEngine.html#addIndex(com.googlecode.cqengine.index.Index)) allows indexes to be added to the collection
-  * [retrieve(Query)](http://htmlpreview.github.io/?http://raw.githubusercontent.com/npgall/cqengine/master/documentation/javadoc/apidocs/com/googlecode/cqengine/engine/QueryEngine.html#retrieve(com.googlecode.cqengine.query.Query)) accepts a [Query](http://htmlpreview.github.io/?http://raw.githubusercontent.com/npgall/cqengine/master/documentation/javadoc/apidocs/com/googlecode/cqengine/query/Query.html) and returns a [ResultSet](http://htmlpreview.github.io/?http://raw.githubusercontent.com/npgall/cqengine/master/documentation/javadoc/apidocs/com/googlecode/cqengine/resultset/ResultSet.html) providing objects matching that query. `ResultSet` implements [java.lang.Iterable](http://docs.oracle.com/javase/6/docs/api/java/lang/Iterable.html), so accessing results is achieved by iterating the result set, or accessing it as a Java 8+ Stream
+  * [addIndex(SomeIndex)](src/main/java/com/googlecode/cqengine/engine/QueryEngine.java) allows indexes to be added to the collection
+  * [retrieve(Query)](src/main/java/com/googlecode/cqengine/engine/QueryEngine.java) accepts a [Query](src/main/java/com/googlecode/cqengine/query/Query.java) and returns a [ResultSet](src/main/java/com/googlecode/cqengine/resultset/ResultSet.java) providing objects matching that query. `ResultSet` implements [java.lang.Iterable](http://docs.oracle.com/javase/6/docs/api/java/lang/Iterable.html), so accessing results is achieved by iterating the result set, or accessing it as a Java 8+ Stream
 
 Here is a **complete example** of how to build a collection, add indexes and perform queries. It does not discuss _attributes_, which are discussed below.
 
@@ -225,22 +225,22 @@ Note: CQEngine also supports complex queries via **`and`**, **`or`**, **`not`**,
 
 | <sub>**Index Type**</sub> | <sub>**EQ**</sub> | <sub>**IN**</sub> | <sub>**LT**</sub> | <sub>**GT**</sub> | <sub>**BT**</sub> | <sub>**SW**</sub> | <sub>**EW**</sub> | <sub>**SC**</sub> | <sub>**CI**</sub> | <sub>**HS**</sub> | <sub>**RX**</sub> | <sub>**SQ**</sub> | <sub>**QZ**</sub> | <sub>**LP**</sub> |
 |:---------------|:-------|:-------|:-------|:-------|:-------|:-------|:-------|:-------|:-------|:-------|:-------|:-------|:-------|:-------|
-| [<sub>Hash</sub>](http://htmlpreview.github.io/?http://raw.githubusercontent.com/npgall/cqengine/master/documentation/javadoc/apidocs/com/googlecode/cqengine/index/hash/HashIndex.html) | ✓      | ✓      |        |        |        |        |        |        |        |        |        |        | ✓      |        |
-| [<sub>Unique</sub>](http://htmlpreview.github.io/?http://raw.githubusercontent.com/npgall/cqengine/master/documentation/javadoc/apidocs/com/googlecode/cqengine/index/unique/UniqueIndex.html) | ✓      | ✓      |        |        |        |        |        |        |        |        |        |        |        |        |
-| [<sub>Compound</sub>](http://htmlpreview.github.io/?http://raw.githubusercontent.com/npgall/cqengine/master/documentation/javadoc/apidocs/com/googlecode/cqengine/index/compound/CompoundIndex.html) | ✓      | ✓      |        |        |        |        |        |        |        |        |        |        | ✓      |        |
-| [<sub>Navigable</sub>](http://htmlpreview.github.io/?http://raw.githubusercontent.com/npgall/cqengine/master/documentation/javadoc/apidocs/com/googlecode/cqengine/index/navigable/NavigableIndex.html) | ✓      | ✓      | ✓      | ✓      | ✓      |        |        |        |        |        |        |        | ✓      |        |
-| [<sub>PartialNavigable</sub>](http://htmlpreview.github.io/?http://raw.githubusercontent.com/npgall/cqengine/master/documentation/javadoc/apidocs/com/googlecode/cqengine/index/navigable/PartialNavigableIndex.html) | ✓      | ✓      | ✓      | ✓      | ✓      |        |        |        |        |        |        | ✓      |        |        |
-| [<sub>RadixTree</sub>](http://htmlpreview.github.io/?http://raw.githubusercontent.com/npgall/cqengine/master/documentation/javadoc/apidocs/com/googlecode/cqengine/index/radix/RadixTreeIndex.html) | ✓      | ✓      |        |        |        | ✓      |        |        |        |        |        |        |        |        |
-| [<sub>ReversedRadixTree</sub>](http://htmlpreview.github.io/?http://raw.githubusercontent.com/npgall/cqengine/master/documentation/javadoc/apidocs/com/googlecode/cqengine/index/radixreversed/ReversedRadixTreeIndex.html) | ✓      | ✓      |        |        |        |        | ✓      |        |        |        |        |        |        |        |
-| [<sub>InvertedRadixTree</sub>](http://htmlpreview.github.io/?http://raw.githubusercontent.com/npgall/cqengine/master/documentation/javadoc/apidocs/com/googlecode/cqengine/index/radixinverted/InvertedRadixTreeIndex.html) | ✓      | ✓      |        |        |        |        |        |        | ✓      |        |        |        |        | ✓      |
-| [<sub>SuffixTree</sub>](http://htmlpreview.github.io/?http://raw.githubusercontent.com/npgall/cqengine/master/documentation/javadoc/apidocs/com/googlecode/cqengine/index/suffix/SuffixTreeIndex.html) | ✓      | ✓      |        |        |        |        | ✓      | ✓      |        |        |        |        |        |        |
-| [<sub>StandingQuery</sub>](http://htmlpreview.github.io/?http://raw.githubusercontent.com/npgall/cqengine/master/documentation/javadoc/apidocs/com/googlecode/cqengine/index/standingquery/StandingQueryIndex.html) |        |        |        |        |        |        |        |        |        |        |        | ✓      |        |        |
-| [<sub>Fallback</sub>](http://htmlpreview.github.io/?http://raw.githubusercontent.com/npgall/cqengine/master/documentation/javadoc/apidocs/com/googlecode/cqengine/index/fallback/FallbackIndex.html) | ✓      | ✓      | ✓      | ✓      | ✓      | ✓      | ✓      | ✓      | ✓      | ✓      | ✓      |        |        | ✓      |
-| [<sub>OffHeap</sub>](http://htmlpreview.github.io/?http://raw.githubusercontent.com/npgall/cqengine/master/documentation/javadoc/apidocs/com/googlecode/cqengine/index/offheap/OffHeapIndex.html) | ✓      | ✓      | ✓      | ✓      | ✓      | ✓      |        |        |        |        |        | ✓<sup>[1]</sup>      |        |        |
-| [<sub>PartialOffHeap</sub>](http://htmlpreview.github.io/?http://raw.githubusercontent.com/npgall/cqengine/master/documentation/javadoc/apidocs/com/googlecode/cqengine/index/offheap/PartialOffHeapIndex.html) | ✓      | ✓      | ✓      | ✓      | ✓      | ✓      |        |        |        |        |        | ✓      |        |        |
-| [<sub>Disk</sub>](http://htmlpreview.github.io/?http://raw.githubusercontent.com/npgall/cqengine/master/documentation/javadoc/apidocs/com/googlecode/cqengine/index/disk/DiskIndex.html) | ✓      | ✓      | ✓      | ✓      | ✓      | ✓      |        |        |        |        |        | ✓<sup>[1]</sup>      |        |        |
-| [<sub>PartialDisk</sub>](http://htmlpreview.github.io/?http://raw.githubusercontent.com/npgall/cqengine/master/documentation/javadoc/apidocs/com/googlecode/cqengine/index/disk/PartialDiskIndex.html) | ✓      | ✓      | ✓      | ✓      | ✓      | ✓      |        |        |        |        |        | ✓      |        |        |
-<sup>[1]</sup> See: [forStandingQuery()](http://htmlpreview.github.io/?http://raw.githubusercontent.com/npgall/cqengine/master/documentation/javadoc/apidocs/com/googlecode/cqengine/query/QueryFactory.html#forStandingQuery-com.googlecode.cqengine.query.Query-)
+| [<sub>Hash</sub>](src/main/java/com/googlecode/cqengine/index/hash/HashIndex.java) | ✓      | ✓      |        |        |        |        |        |        |        |        |        |        | ✓      |        |
+| [<sub>Unique</sub>](src/main/java/com/googlecode/cqengine/index/unique/UniqueIndex.java) | ✓      | ✓      |        |        |        |        |        |        |        |        |        |        |        |        |
+| [<sub>Compound</sub>](src/main/java/com/googlecode/cqengine/index/compound/CompoundIndex.java) | ✓      | ✓      |        |        |        |        |        |        |        |        |        |        | ✓      |        |
+| [<sub>Navigable</sub>](src/main/java/com/googlecode/cqengine/index/navigable/NavigableIndex.java) | ✓      | ✓      | ✓      | ✓      | ✓      |        |        |        |        |        |        |        | ✓      |        |
+| [<sub>PartialNavigable</sub>](src/main/java/com/googlecode/cqengine/index/navigable/PartialNavigableIndex.java) | ✓      | ✓      | ✓      | ✓      | ✓      |        |        |        |        |        |        | ✓      |        |        |
+| [<sub>RadixTree</sub>](src/main/java/com/googlecode/cqengine/index/radix/RadixTreeIndex.java) | ✓      | ✓      |        |        |        | ✓      |        |        |        |        |        |        |        |        |
+| [<sub>ReversedRadixTree</sub>](src/main/java/com/googlecode/cqengine/index/radixreversed/ReversedRadixTreeIndex.java) | ✓      | ✓      |        |        |        |        | ✓      |        |        |        |        |        |        |        |
+| [<sub>InvertedRadixTree</sub>](src/main/java/com/googlecode/cqengine/index/radixinverted/InvertedRadixTreeIndex.java) | ✓      | ✓      |        |        |        |        |        |        | ✓      |        |        |        |        | ✓      |
+| [<sub>SuffixTree</sub>](src/main/java/com/googlecode/cqengine/index/suffix/SuffixTreeIndex.java) | ✓      | ✓      |        |        |        |        | ✓      | ✓      |        |        |        |        |        |        |
+| [<sub>StandingQuery</sub>](src/main/java/com/googlecode/cqengine/index/standingquery/StandingQueryIndex.java) |        |        |        |        |        |        |        |        |        |        |        | ✓      |        |        |
+| [<sub>Fallback</sub>](src/main/java/com/googlecode/cqengine/index/fallback/FallbackIndex.java) | ✓      | ✓      | ✓      | ✓      | ✓      | ✓      | ✓      | ✓      | ✓      | ✓      | ✓      |        |        | ✓      |
+| [<sub>OffHeap</sub>](src/main/java/com/googlecode/cqengine/index/offheap/OffHeapIndex.java) | ✓      | ✓      | ✓      | ✓      | ✓      | ✓      |        |        |        |        |        | ✓<sup>[1]</sup>      |        |        |
+| [<sub>PartialOffHeap</sub>](src/main/java/com/googlecode/cqengine/index/offheap/PartialOffHeapIndex.java) | ✓      | ✓      | ✓      | ✓      | ✓      | ✓      |        |        |        |        |        | ✓      |        |        |
+| [<sub>Disk</sub>](src/main/java/com/googlecode/cqengine/index/disk/DiskIndex.java) | ✓      | ✓      | ✓      | ✓      | ✓      | ✓      |        |        |        |        |        | ✓<sup>[1]</sup>      |        |        |
+| [<sub>PartialDisk</sub>](src/main/java/com/googlecode/cqengine/index/disk/PartialDiskIndex.java) | ✓      | ✓      | ✓      | ✓      | ✓      | ✓      |        |        |        |        |        | ✓      |        |        |
+<sup>[1]</sup> See: [forStandingQuery()](src/main/java/com/googlecode/cqengine/query/QueryFactory.java-com.googlecode.cqengine.query.Query-)
 
 The [benchmark guide](documentation/Benchmark.md) contains the current JMH methodology and the original CQEngine
 results retained as project history.
@@ -270,9 +270,9 @@ public static final Attribute<Car, Integer> CAR_ID =
 
 Usually attributes are defined as anonymous `static` `final` objects like this. Supplying the `"carId"` string parameter to the constructor is actually optional, but it is recommended as it will appear in query `toString`s.
 
-Since this attribute reads a field from a `Car` object, the usual place to put the attribute is inside the `Car` class - and this makes queries more readable. However it could really be defined in any class, such as in a `CarAttributes` class or similar. The example above is for a **[SimpleAttribute](http://htmlpreview.github.io/?http://raw.githubusercontent.com/npgall/cqengine/master/documentation/javadoc/apidocs/com/googlecode/cqengine/attribute/SimpleAttribute.html)**, which is designed for fields containing only one value.
+Since this attribute reads a field from a `Car` object, the usual place to put the attribute is inside the `Car` class - and this makes queries more readable. However it could really be defined in any class, such as in a `CarAttributes` class or similar. The example above is for a **[SimpleAttribute](src/main/java/com/googlecode/cqengine/attribute/SimpleAttribute.java)**, which is designed for fields containing only one value.
 
-CQEngine also supports **[MultiValueAttribute](http://htmlpreview.github.io/?http://raw.githubusercontent.com/npgall/cqengine/master/documentation/javadoc/apidocs/com/googlecode/cqengine/attribute/MultiValueAttribute.html)** which can read the values of fields which themselves are collections. And so it supports building indexes on objects based on things like keywords associated with those objects.
+CQEngine also supports **[MultiValueAttribute](src/main/java/com/googlecode/cqengine/attribute/MultiValueAttribute.java)** which can read the values of fields which themselves are collections. And so it supports building indexes on objects based on things like keywords associated with those objects.
 
 Here's how to define a `MultiValueAttribute` for a `Car` object which reads the values from `Car.features` where that field is a `List<String>`:
 ```java
@@ -287,26 +287,26 @@ public static final Attribute<Car, String> FEATURES =
 ```
 
 #### Null values ####
-Note **if your data contains `null` values**, you should use **[SimpleNullableAttribute](http://htmlpreview.github.io/?http://raw.githubusercontent.com/npgall/cqengine/master/documentation/javadoc/apidocs/com/googlecode/cqengine/attribute/SimpleNullableAttribute.html)** or **[MultiValueNullableAttribute](http://htmlpreview.github.io/?http://raw.githubusercontent.com/npgall/cqengine/master/documentation/javadoc/apidocs/com/googlecode/cqengine/attribute/MultiValueNullableAttribute.html)** instead.
+Note **if your data contains `null` values**, you should use **[SimpleNullableAttribute](src/main/java/com/googlecode/cqengine/attribute/SimpleNullableAttribute.java)** or **[MultiValueNullableAttribute](src/main/java/com/googlecode/cqengine/attribute/MultiValueNullableAttribute.java)** instead.
 
 In particular, note that `SimpleAttribute` and `MultiValueAttribute` do not perform any null checking on your data, and so if your data inadvertently contains null values, you may get obscure `NullPointerException`s. This is because null checking does not come for free. Attributes are accessed heavily, and the non-nullable versions of these attributes are designed to minimize latency by skipping explicit null checks. They defer to the JVM to do the null checking implicitly. 
 
 As a rule of thumb, if you get a `NullPointerException`, it's probably because you used the wrong type of attribute. The problem will usually go away if you switch your code to use a nullable attribute instead. If you don't know if your data may contain null values, just use the nullable attributes. They contain the logic to check for and handle null values automatically.
 
-The nullable attributes also allow CQEngine to work with [object inheritance](https://github.com/npgall/cqengine/tree/master/code/src/test/java/com/googlecode/cqengine/examples/inheritance), where some objects in the collection have certain optional fields (e.g. in subclasses) while others might not.
+The nullable attributes also allow CQEngine to work with [object inheritance](src/test/java/com/googlecode/cqengine/examples/inheritance), where some objects in the collection have certain optional fields (e.g. in subclasses) while others might not.
 
 #### Creating queries dynamically ####
 
-Dynamic queries can be composed at runtime by instantiating and combining Query objects directly; see [this package](http://htmlpreview.github.io/?http://raw.githubusercontent.com/npgall/cqengine/master/documentation/javadoc/apidocs/com/googlecode/cqengine/query/simple/package-summary.html) and [this package](http://htmlpreview.github.io/?http://raw.githubusercontent.com/npgall/cqengine/master/documentation/javadoc/apidocs/com/googlecode/cqengine/query/logical/package-summary.html). For advanced cases, it is also possible to define attributes at runtime, using [ReflectiveAttribute](http://htmlpreview.github.io/?http://raw.githubusercontent.com/npgall/cqengine/master/documentation/javadoc/apidocs/com/googlecode/cqengine/attribute/ReflectiveAttribute.html) or [AttributeBytecodeGenerator](http://htmlpreview.github.io/?http://raw.githubusercontent.com/npgall/cqengine/master/documentation/javadoc/apidocs/com/googlecode/cqengine/codegen/AttributeBytecodeGenerator.html).
+Dynamic queries can be composed at runtime by instantiating and combining Query objects directly; see [this package](src/main/java/com/googlecode/cqengine/query/simple/) and [this package](src/main/java/com/googlecode/cqengine/query/logical/). For advanced cases, it is also possible to define attributes at runtime, using [ReflectiveAttribute](src/main/java/com/googlecode/cqengine/attribute/ReflectiveAttribute.java) or [AttributeBytecodeGenerator](src/main/java/com/googlecode/cqengine/codegen/AttributeBytecodeGenerator.java).
 
 #### Generate attributes automatically ####
 
 CQEngine also provides several ways to generate attributes automatically.
 
-Note these are an alternative to using [ReflectiveAttribute](http://htmlpreview.github.io/?http://raw.githubusercontent.com/npgall/cqengine/master/documentation/javadoc/apidocs/com/googlecode/cqengine/attribute/ReflectiveAttribute.html), which was discussed above. Whereas `ReflectiveAttribute` is a special type of attribute which reads values at runtime using reflection, `AttributeSourceGenerator` and `AttributeBytecodeGenerator` generate code for attributes which is compiled and so does not use reflection at runtime, which can be more efficient.
+Note these are an alternative to using [ReflectiveAttribute](src/main/java/com/googlecode/cqengine/attribute/ReflectiveAttribute.java), which was discussed above. Whereas `ReflectiveAttribute` is a special type of attribute which reads values at runtime using reflection, `AttributeSourceGenerator` and `AttributeBytecodeGenerator` generate code for attributes which is compiled and so does not use reflection at runtime, which can be more efficient.
 
-  * [AttributeSourceGenerator](http://htmlpreview.github.io/?http://raw.githubusercontent.com/npgall/cqengine/master/documentation/javadoc/apidocs/com/googlecode/cqengine/codegen/AttributeSourceGenerator.html) can automatically generate the source code for the simple and multi-value attributes discussed above.
-  * [AttributeBytecodeGenerator](http://htmlpreview.github.io/?http://raw.githubusercontent.com/npgall/cqengine/master/documentation/javadoc/apidocs/com/googlecode/cqengine/codegen/AttributeBytecodeGenerator.html) can automatically generate the class bytecode for the simple and multi-value attributes discussed above, and load them into the application at runtime as if they had been compiled from source code.
+  * [AttributeSourceGenerator](src/main/java/com/googlecode/cqengine/codegen/AttributeSourceGenerator.java) can automatically generate the source code for the simple and multi-value attributes discussed above.
+  * [AttributeBytecodeGenerator](src/main/java/com/googlecode/cqengine/codegen/AttributeBytecodeGenerator.java) can automatically generate the class bytecode for the simple and multi-value attributes discussed above, and load them into the application at runtime as if they had been compiled from source code.
 
 See [AutoGenerateAttributes](documentation/AutoGenerateAttributes.md) for more details.
 
@@ -395,7 +395,7 @@ Note that the disk persistence will automatically create an index on the specifi
 
 Wrap any Java collection, in a CQEngine IndexedCollection without any copying of objects.
  * This can be a convenient way to run queries or build indexes on existing collections.
- * However some caveats relating to concurrency support and the performance of the underlying collection apply, see [WrappingPersistence](http://htmlpreview.github.io/?http://raw.githubusercontent.com/npgall/cqengine/master/documentation/javadoc/apidocs/com/googlecode/cqengine/persistence/wrapping/WrappingPersistence.html) for details.
+ * However some caveats relating to concurrency support and the performance of the underlying collection apply, see [WrappingPersistence](src/main/java/com/googlecode/cqengine/persistence/wrapping/WrappingPersistence.java) for details.
 
 ```java
 Collection<Car> collection = // obtain any Java collection
@@ -464,27 +464,27 @@ try (ResultSet<Car> results = cars.retrieve(equal(Car.MANUFACTURER, "Ford"))) {
 
 ## Result Sets ##
 
-CQEngine [ResultSet](http://htmlpreview.github.io/?http://raw.githubusercontent.com/npgall/cqengine/master/documentation/javadoc/apidocs/com/googlecode/cqengine/resultset/ResultSet.html)s provide the following methods:
+CQEngine [ResultSet](src/main/java/com/googlecode/cqengine/resultset/ResultSet.java)s provide the following methods:
 
-  * [iterator()](http://htmlpreview.github.io/?http://raw.githubusercontent.com/npgall/cqengine/master/documentation/javadoc/apidocs/com/googlecode/cqengine/resultset/ResultSet.html#iterator()) - Allows the `ResultSet` to be iterated, returning the next object matching the query in each iteration as determined via _lazy evaluation_
+  * [iterator()](src/main/java/com/googlecode/cqengine/resultset/ResultSet.java) - Allows the `ResultSet` to be iterated, returning the next object matching the query in each iteration as determined via _lazy evaluation_
     * Result sets support **concurrent iteration** while the collection is being modified; the set of objects returned simply may or may not reflect changes made during iteration (depending on whether changes are made to areas of the collection or indexes already iterated or not)
 
-  * [uniqueResult()](http://htmlpreview.github.io/?http://raw.githubusercontent.com/npgall/cqengine/master/documentation/javadoc/apidocs/com/googlecode/cqengine/resultset/ResultSet.html#uniqueResult()) - Useful if the query is expected to only match one object, this method returns the first object which would be returned by the iterator, and it throws an exception if zero or more than one object is found
+  * [uniqueResult()](src/main/java/com/googlecode/cqengine/resultset/ResultSet.java) - Useful if the query is expected to only match one object, this method returns the first object which would be returned by the iterator, and it throws an exception if zero or more than one object is found
 
-  * [size()](http://htmlpreview.github.io/?http://raw.githubusercontent.com/npgall/cqengine/master/documentation/javadoc/apidocs/com/googlecode/cqengine/resultset/ResultSet.html#size()) - Returns the number of objects which _would be returned by the `ResultSet` if it was iterated_; CQEngine can often **accelerate** this calculation of size, based on the sizes of individual sets in indexes; see JavaDoc for details
+  * [size()](src/main/java/com/googlecode/cqengine/resultset/ResultSet.java) - Returns the number of objects which _would be returned by the `ResultSet` if it was iterated_; CQEngine can often **accelerate** this calculation of size, based on the sizes of individual sets in indexes; see JavaDoc for details
 
-  * [contains()](http://htmlpreview.github.io/?http://raw.githubusercontent.com/npgall/cqengine/master/documentation/javadoc/apidocs/com/googlecode/cqengine/resultset/ResultSet.html#contains(O)) -  Tests if a _given object_ would be contained in results matching a query; this is also an **accelerated** operation; when suitable indexes are available, CQEngine can avoid iterating results to test for containment; see JavaDoc for details
+  * [contains()](src/main/java/com/googlecode/cqengine/resultset/ResultSet.java) -  Tests if a _given object_ would be contained in results matching a query; this is also an **accelerated** operation; when suitable indexes are available, CQEngine can avoid iterating results to test for containment; see JavaDoc for details
 
-  * [getRetrievalCost()](http://htmlpreview.github.io/?http://raw.githubusercontent.com/npgall/cqengine/master/documentation/javadoc/apidocs/com/googlecode/cqengine/resultset/ResultSet.html#getRetrievalCost()) - This is a metric used internally by CQEngine to allow it to _choose between multiple indexes_ which support the query. This could occasionally be used by applications to ascertain if suitable indexes are available for any particular query, this will be `Integer.MAX_VALUE` for queries for which no suitable indexes are available
+  * [getRetrievalCost()](src/main/java/com/googlecode/cqengine/resultset/ResultSet.java) - This is a metric used internally by CQEngine to allow it to _choose between multiple indexes_ which support the query. This could occasionally be used by applications to ascertain if suitable indexes are available for any particular query, this will be `Integer.MAX_VALUE` for queries for which no suitable indexes are available
 
-  * [getMergeCost()](http://htmlpreview.github.io/?http://raw.githubusercontent.com/npgall/cqengine/master/documentation/javadoc/apidocs/com/googlecode/cqengine/resultset/ResultSet.html#getMergeCost()) - This is a metric used internally by CQEngine to allow it to _re-order_ elements of the query to minimize time complexity; for example CQEngine will order intersections such that the smallest set drives the _merge_; this metric is _roughly_ based on the theoretical cost to iterate underlying result sets
+  * [getMergeCost()](src/main/java/com/googlecode/cqengine/resultset/ResultSet.java) - This is a metric used internally by CQEngine to allow it to _re-order_ elements of the query to minimize time complexity; for example CQEngine will order intersections such that the smallest set drives the _merge_; this metric is _roughly_ based on the theoretical cost to iterate underlying result sets
     * For query fragments requiring _set union_ (`or`-based queries), this will be the _sum_ of merge costs from underlying result sets
     * For query fragments requiring _set intersection_ (`and`-based queries), this will be the _Math.min()_ of merge costs from underlying result sets, because intersections will be re-ordered to perform lowest-merge-cost intersections first
     * For query fragments requiring _set difference_ (`not`-based queries), this will be the merge cost from the first underlying result set
 
-  * [stream()](http://htmlpreview.github.io/?http://raw.githubusercontent.com/npgall/cqengine/master/documentation/javadoc/apidocs/com/googlecode/cqengine/resultset/ResultSet.html#stream()) - Returns a Java 8+ `Stream` allowing CQEngine results to be grouped, aggregated, and transformed in flexible ways using lambda expressions.
+  * [stream()](src/main/java/com/googlecode/cqengine/resultset/ResultSet.java) - Returns a Java 8+ `Stream` allowing CQEngine results to be grouped, aggregated, and transformed in flexible ways using lambda expressions.
  
-  * [close()](http://htmlpreview.github.io/?http://raw.githubusercontent.com/npgall/cqengine/master/documentation/javadoc/apidocs/com/googlecode/cqengine/resultset/ResultSet.html#close()) - Releases resources or the transaction opened for the query. Close every `ResultSet` you own, preferably with try-with-resources. If you wrap and return a result set, ownership transfers only when the wrapper's `close()` closes its delegate.
+  * [close()](src/main/java/com/googlecode/cqengine/resultset/ResultSet.java) - Releases resources or the transaction opened for the query. Close every `ResultSet` you own, preferably with try-with-resources. If you wrap and return a result set, ownership transfers only when the wrapper's `close()` closes its delegate.
   
 ---
 
@@ -577,7 +577,7 @@ public static void main(String[] args) {
 
 ## Accessing Index Metadata and Statistics from MetadataEngine ##
 
-The [MetadataEngine](http://htmlpreview.github.io/?http://raw.githubusercontent.com/npgall/cqengine/master/documentation/javadoc/apidocs/com/googlecode/cqengine/metadata/MetadataEngine.html), is a high-level API which can retrieve metatadata and statistics from indexes which have been added to the collection.
+The [MetadataEngine](src/main/java/com/googlecode/cqengine/metadata/MetadataEngine.java), is a high-level API which can retrieve metatadata and statistics from indexes which have been added to the collection.
 
 It provides access to the following:
   * Frequency distributions (the counts of each attribute value stored in an index)
@@ -586,7 +586,7 @@ It provides access to the following:
   * Count of distinct keys (how many distinct attribute values are in an index)
   * Count for a specific key (how many objects match a specific attribute value)
 
-For more information, see JavaDocs for: [MetadataEngine](http://htmlpreview.github.io/?http://raw.githubusercontent.com/npgall/cqengine/master/documentation/javadoc/apidocs/com/googlecode/cqengine/metadata/MetadataEngine.html), [AttributeMetadata](http://htmlpreview.github.io/?http://raw.githubusercontent.com/npgall/cqengine/master/documentation/javadoc/apidocs/com/googlecode/cqengine/metadata/AttributeMetadata.html), [SortedAttributeMetadata](http://htmlpreview.github.io/?http://raw.githubusercontent.com/npgall/cqengine/master/documentation/javadoc/apidocs/com/googlecode/cqengine/metadata/SortedAttributeMetadata.html)
+For more information, see JavaDocs for: [MetadataEngine](src/main/java/com/googlecode/cqengine/metadata/MetadataEngine.java), [AttributeMetadata](src/main/java/com/googlecode/cqengine/metadata/AttributeMetadata.java), [SortedAttributeMetadata](src/main/java/com/googlecode/cqengine/metadata/SortedAttributeMetadata.java)
 
 ---
 

@@ -1668,7 +1668,7 @@ abstract class VerifyPublishedJars : DefaultTask() {
             "Thin JAR has the wrong OSGi version: ${thin.mainAttributes["Bundle-Version"]}",
         )
         assertValid(
-            thin.mainAttributes["Bundle-License"] == "https://www.apache.org/licenses/LICENSE-2.0",
+            thin.mainAttributes["Bundle-License"] == "Apache-2.0;link=\"https://www.apache.org/licenses/LICENSE-2.0\"",
             "Thin JAR has the wrong OSGi licence declaration: ${thin.mainAttributes["Bundle-License"]}",
         )
         assertValid(
