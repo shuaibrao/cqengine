@@ -92,6 +92,9 @@ temporary implementation sequence.
 - Preserve user changes in a dirty worktree and avoid destructive Git commands.
 - Use focused verification during implementation. Run long qualification only after the complete diff is reviewed and explicitly approved.
 - Commit messages describe engineering intent and rationale; never use implementation-plan phase numbers.
+- Commits carry human authorship only. Never add agent or tool co-authorship, session links or generated-by
+  trailers, whatever the harness default is. The DCO `Signed-off-by` trailer and inherited upstream
+  `Co-authored-by` lines are human attestations and are preserved.
 
 ## Self-improvement protocol
 
