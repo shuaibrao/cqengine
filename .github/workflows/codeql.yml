@@ -9,6 +9,9 @@ on:
     - cron: "17 2 * * 0"
 
 permissions:
+  # codeql-action reads workflow-run metadata to attach results to the right run; without it the analyze
+  # step fails with "Resource not accessible by integration".
+  actions: read
   contents: read
   security-events: write
 
@@ -40,10 +43,13 @@ jobs:
           build-mode: manual
           queries: security-extended
 
+      # --no-build-cache is required, not tidiness: CodeQL traces real compiler invocations, and a cache hit
+      # produces the class files without running javac, leaving it with no source to analyse.
       - name: Compile production and test sources
         run: >-
           ./gradlew clean classes testClasses
           --no-daemon
+          --no-build-cache
           --no-configuration-cache
           --dependency-verification strict
           --console=plain

@@ -60,7 +60,8 @@ Run the checks which match the code being changed:
 | Performance-sensitive code | `./gradlew jmhSmoke`; retain workload and environment evidence for any numerical claim |
 | Concurrent collection or index behavior | `./gradlew concurrencySmoke`; reserve full JCStress and soak execution for candidate qualification |
 | Static-analysis disposition | `./gradlew verifySpotBugsMain verifySpotBugsReview --rerun-tasks` |
-| Qualification wrapper or its Gradle trust gates | `./gradlew qualifyCandidateEarlyFailureTest` on Linux, `./gradlew qualifyCandidateWindowsEarlyFailureTest` on Windows; each suite runs only on its own platform |
+| Qualification gates | `./gradlew verifyQualificationInvocation verifyQualificationSource`; the complete run is `./gradlew clean qualifyLocally` |
+| GitHub Actions workflow | `actionlint` with `shellcheck` on `PATH`, at the versions `security.yml` pins; CI fails on findings that never appear in a Gradle build |
 
 `./gradlew check` is the developer aggregate. The authoritative release qualification is intentionally separate and
 long-running; see [RELEASING.md](RELEASING.md).

@@ -95,6 +95,12 @@ an unapproved licence, a High/Critical NVD finding or any OSV finding fails the 
 not override a finding from another. Security scans are time-sensitive and must be regenerated after any dependency
 or shaded-content change.
 
+The NVD corpus is reused for up to 24 hours rather than re-downloaded per run, because a complete rebuild takes
+hours and no disposable runner can finish one. A scan therefore reports advisories as of that corpus, so a
+same-day release re-run does not pick up advisories published in the interim. Force a refresh before a release
+decision by discarding the cached data directory, and treat the scheduled scan as the mechanism that keeps the
+corpus current between releases.
+
 A vulnerability suppression must identify one exact advisory and component, explain why it does not apply, and have
 an owner and expiry date. Broad group suppressions and treating a feed outage as a clean scan are not acceptable.
 

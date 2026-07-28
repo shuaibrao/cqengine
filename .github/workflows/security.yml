@@ -67,7 +67,8 @@ jobs:
     name: NVD, OSV, SBOM, and licences
     if: github.event_name == 'push' || github.event_name == 'schedule'
     runs-on: ubuntu-24.04
-    timeout-minutes: 90
+    # A cold NVD database takes hours to assemble; the cache below means only the first run pays that.
+    timeout-minutes: 240
     environment: security-scan
 
     steps:
@@ -80,6 +81,16 @@ jobs:
         uses: ./.github/actions/setup-build-env
         with:
           cache-read-only: ${{ github.event_name != 'push' }}
+
+      # setup-gradle caches dependency resolution, not this. Without it every run rebuilds the CVE corpus
+      # from empty on a fresh runner, which no practical job timeout accommodates.
+      - name: Restore the vulnerability database
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.gradle/dependency-check-data
+          key: nvd-data-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: |
+            nvd-data-${{ runner.os }}-
 
       - name: Run authenticated security gates
         env:

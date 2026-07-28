@@ -19,6 +19,16 @@ require normal dependency-integrity review.
 against the preserved upstream commit, and `release-bundle.yml` rebuilds a qualified ancestor, so neither works from
 the default shallow clone. Keep `fetch-depth: 0` on those two workflows.
 
+`codeql.yml` compiles with `--no-build-cache`. CodeQL observes real compiler invocations, so a cache hit hands it the
+class files without running `javac` and the analysis fails with no source seen. The flag is a correctness
+requirement, not a performance preference.
+
+`ci.yml` leaves Gradle's configuration cache enabled while `qualifyLocally` disables it, so an incompatibility
+reaches CI without appearing in a local qualification. Reproduce one by running the CI command without
+`--no-configuration-cache`; a task that reads project state from an execution-time action, or whose action is defined
+in the build script, needs the state resolved at configuration time or an explicit
+`notCompatibleWithConfigurationCache` reason.
+
 ## Repository configuration
 
 Before enabling these workflows:

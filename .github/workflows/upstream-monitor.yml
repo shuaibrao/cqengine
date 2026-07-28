@@ -56,6 +56,8 @@ jobs:
               echo
               echo "### Upstream commits"
               echo
+              # shellcheck disable=SC2016  # %h/%H/%s are git format placeholders; double quotes would
+              # break them and turn the literal backticks into command substitution.
               git log --reverse --format='- [`%h`](https://github.com/npgall/cqengine/commit/%H) %s' \
                 "$BASELINE..FETCH_HEAD" --max-count=100
               if [ "$count" -gt 100 ]; then

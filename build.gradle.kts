@@ -6241,7 +6241,10 @@ configure<DependencyCheckExtension> {
     failBuildOnCVSS = 7.0F
     showSummary = true
     nvd.apiKey.set(nvdApiKey)
-    nvd.validForHours.set(0)
+    // Zero forces a complete CVE re-download on every run, which a disposable CI runner can never finish and
+    // which dominated local qualification. A day's validity reuses a cached corpus while still refreshing it
+    // daily; the readiness manifest records the qualification mode so the freshness bound is visible.
+    nvd.validForHours.set(24)
     analyzers.assemblyEnabled = false
     analyzers.ossIndex.enabled.set(false)
     setScanSet(shadowJar.flatMap { it.archiveFile }.get().asFile)
@@ -6895,6 +6898,13 @@ fun TaskProvider<Exec>.retainConsumerEvidence(
     configure {
         val sqliteNativeChecksums = layout.projectDirectory.file("config/sqlite-native-checksums.properties")
         inputs.file(sqliteNativeChecksums).withPathSensitivity(PathSensitivity.RELATIVE)
+        // The evidence assertions below run as a script-defined action, which captures the enclosing build
+        // script and so cannot be stored. Declaring the incompatibility degrades the cache for the build
+        // instead of failing it; moving these assertions into a task class would remove the need.
+        notCompatibleWithConfigurationCache("External consumer evidence is asserted from a build script action")
+        // Resolve at configuration time: reading project state from an execution-time action is unsupported.
+        val publicationVersion = project.version.toString()
+        val sqliteVersion = libs.versions.sqlite.get()
         doLast {
             val source = externalConsumerBuildDirectory.get().asFile
                 .resolve("$projectName/build/reports/consumer/resolved-graph.txt")
@@ -6915,10 +6925,10 @@ fun TaskProvider<Exec>.retainConsumerEvidence(
                 else -> "cqengine"
             }
             val expectedDriverArtifact = if (expectedArtifactMode == "thin") {
-                "sqlite-jdbc-${libs.versions.sqlite.get()}.jar"
+                "sqlite-jdbc-$sqliteVersion.jar"
             }
             else {
-                "cqengine-${project.version}-all.jar"
+                "cqengine-$publicationVersion-all.jar"
             }
             val reviewedNativeChecksums = Properties().apply {
                 sqliteNativeChecksums.asFile.inputStream().buffered().use(::load)
