@@ -48,6 +48,81 @@ function Test-NonWritablePath([string]$Path) {
     }
 }
 
+function Resolve-TrustedPython {
+    # The build's agent-config, markdown-link and harness gates all shell out to Python, but the wrapper narrows
+    # PATH to its bound tool directories, so the interpreter has to be resolved by absolute path beforehand.
+    # A Microsoft Store install makes that awkward: its PATH entry is an AppExecLink that cannot be hashed, and
+    # the package's own python.exe hashes but is not executable while python<major>.<minor>.exe is both. Accept
+    # only a candidate that this wrapper can both hash and run.
+    $candidates = New-Object System.Collections.Generic.List[string]
+    # A qualified run narrows PATH, so a wrapper invoked from inside one cannot discover an interpreter by name.
+    # Inherit the outer run's binding when present; it is still hashed and executed below before being accepted.
+    if (-not [string]::IsNullOrWhiteSpace($env:CQENGINE_TRUSTED_PYTHON)) {
+        $candidates.Add($env:CQENGINE_TRUSTED_PYTHON)
+    }
+    if (-not [string]::IsNullOrWhiteSpace($env:CQENGINE_PYTHON)) {
+        $candidates.Add($env:CQENGINE_PYTHON)
+    }
+    $previousPreference = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        # No 2>$null here: on Windows PowerShell that redirection discards the native command's stdout as well.
+        # The snippet deliberately contains no quote characters, so no shell or host re-quotes it on the way in.
+        $probe = @(& python -c 'import sys; print(sys.prefix); print(sys.version_info[0]); print(sys.version_info[1])')
+        if ($probe.Count -eq 3 -and -not [string]::IsNullOrWhiteSpace($probe[0])) {
+            $candidates.Add((Join-Path $probe[0] ("python{0}.{1}.exe" -f $probe[1], $probe[2])))
+            $candidates.Add((Join-Path $probe[0] 'python.exe'))
+        }
+    }
+    catch {
+    }
+    finally {
+        $ErrorActionPreference = $previousPreference
+    }
+    foreach ($candidate in $candidates) {
+        if (-not (Test-Path -LiteralPath $candidate -PathType Leaf)) {
+            continue
+        }
+        $resolved = $null
+        try {
+            $resolved = Resolve-CanonicalFile $candidate
+            [void](Get-Sha256Hex $resolved)
+        }
+        catch {
+            continue
+        }
+        $previousPreference = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        try {
+            [void](& $resolved --version 2>&1)
+            $ran = $LASTEXITCODE -eq 0
+        }
+        catch {
+            $ran = $false
+        }
+        finally {
+            $ErrorActionPreference = $previousPreference
+        }
+        if ($ran) {
+            return $resolved
+        }
+    }
+    return $null
+}
+
+function Remove-TreeSafely([string]$Path) {
+    if (-not (Test-Path -LiteralPath $Path)) {
+        return
+    }
+    try {
+        Remove-Item -LiteralPath $Path -Recurse -Force -ErrorAction Stop
+    }
+    catch {
+        # Gradle and JMH generate paths past MAX_PATH; the \\?\ prefix lifts the limit on the Win32 call beneath.
+        [System.IO.Directory]::Delete('\\?\' + $Path, $true)
+    }
+}
+
 function Get-ManifestValue([string]$ManifestPath, [string]$Key) {
     $prefix = "$Key="
     $manifestLines = @(Get-Content -LiteralPath $ManifestPath | Where-Object { $_.StartsWith($prefix) })
@@ -172,6 +247,14 @@ $trustedShSha256 = Get-Sha256Hex $trustedSh
 $trustedBashSha256 = Get-Sha256Hex $trustedBash
 $trustedNprocSha256 = Get-Sha256Hex $trustedNproc
 
+$trustedPython = Resolve-TrustedPython
+if ($null -eq $trustedPython) {
+    Write-QualifyError 'qualification requires a Python interpreter this wrapper can hash and execute'
+    Write-QualifyError 'set CQENGINE_PYTHON to an absolute python.exe, or install Python outside the Microsoft Store'
+    exit 1
+}
+$trustedPythonSha256 = Get-Sha256Hex $trustedPython
+
 $trustedPath = ($gitCmd, $gitUsrBin, $javaBin) -join ';'
 $env:JAVA_HOME = $javaHome
 $env:PATH = $trustedPath
@@ -188,6 +271,8 @@ $env:CQENGINE_TRUSTED_NPROC = $trustedNproc
 $env:CQENGINE_TRUSTED_NPROC_SHA256 = $trustedNprocSha256
 $env:CQENGINE_TRUSTED_JAVA = $bootstrapJava
 $env:CQENGINE_TRUSTED_JAVA_SHA256 = $bootstrapJavaSha256
+$env:CQENGINE_TRUSTED_PYTHON = $trustedPython
+$env:CQENGINE_TRUSTED_PYTHON_SHA256 = $trustedPythonSha256
 $env:CQENGINE_QUALIFY_COMMAND = 'scripts/qualify-candidate.ps1'
 $env:CQENGINE_RELEASE_INVOCATION = '1'
 $env:GIT_CONFIG_NOSYSTEM = '1'
@@ -221,11 +306,14 @@ if (-not (Test-Path -LiteralPath $hostRecord -PathType Leaf)) {
 
 $temporaryRoot = if (-not [string]::IsNullOrWhiteSpace($env:TEMP)) { $env:TEMP } else { $env:TMP }
 $temporaryRoot = Resolve-CanonicalDirectory $temporaryRoot
-$preflightGradleUserHome = Join-Path $temporaryRoot ("cqengine-release-gradle-home." + [guid]::NewGuid().ToString('N'))
+# MAX_PATH still applies to these trees. The deepest generated JMH class name needs an eight-character suffix to
+# stay inside 260 characters, which is also what the shell wrapper's mktemp template produces.
+$script:ShortId = { [guid]::NewGuid().ToString('N').Substring(0, 8) }
+$preflightGradleUserHome = Join-Path $temporaryRoot ("cqengine-release-gradle-home." + $script:ShortId.Invoke())
 $releaseGradleUserHome = $null
-$candidateRoot = Join-Path $temporaryRoot ("cqengine-release-source." + [guid]::NewGuid().ToString('N'))
-$qualificationLog = Join-Path $temporaryRoot ("cqengine-release-output." + [guid]::NewGuid().ToString('N') + '.log')
-$qualificationStart = Join-Path $temporaryRoot ("cqengine-release-start." + [guid]::NewGuid().ToString('N'))
+$candidateRoot = Join-Path $temporaryRoot ("cqengine-release-source." + $script:ShortId.Invoke())
+$qualificationLog = Join-Path $temporaryRoot ("cqengine-release-output." + $script:ShortId.Invoke() + '.log')
+$qualificationStart = Join-Path $temporaryRoot ("cqengine-release-start." + $script:ShortId.Invoke())
 New-Item -ItemType Directory -Path $preflightGradleUserHome | Out-Null
 New-Item -ItemType Directory -Path $candidateRoot | Out-Null
 New-Item -ItemType File -Path $qualificationLog | Out-Null
@@ -247,7 +335,7 @@ function Remove-QualificationTemp {
             continue
         }
         if ($isolatedGradleHome -like (Join-Path $temporaryRoot 'cqengine-release-gradle-home.*')) {
-            Remove-Item -LiteralPath $isolatedGradleHome -Recurse -Force -ErrorAction SilentlyContinue
+            Remove-TreeSafely $isolatedGradleHome
         }
         else {
             Write-QualifyError "refusing to remove unexpected Gradle home: $isolatedGradleHome"
@@ -260,7 +348,7 @@ function Remove-QualificationTemp {
         Write-QualifyError "refusing to remove unexpected qualification log: $qualificationLog"
     }
     if ($candidateRoot -like (Join-Path $temporaryRoot 'cqengine-release-source.*')) {
-        Remove-Item -LiteralPath $candidateRoot -Recurse -Force -ErrorAction SilentlyContinue
+        Remove-TreeSafely $candidateRoot
     }
     else {
         Write-QualifyError "refusing to remove unexpected candidate source: $candidateRoot"
@@ -443,9 +531,7 @@ try {
     }
 
     function Materialize-Candidate([string]$Destination) {
-        if (Test-Path -LiteralPath $Destination) {
-            Remove-Item -LiteralPath $Destination -Recurse -Force
-        }
+        Remove-TreeSafely $Destination
         New-Item -ItemType Directory -Path $Destination | Out-Null
         & $trustedGit -c core.hooksPath=NUL clone --no-checkout --no-hardlinks --quiet $projectRoot $Destination
         if ($LASTEXITCODE -ne 0) {
@@ -472,13 +558,15 @@ try {
         )
         Invoke-TrustedGit -Git $trustedGit -WorkDir $Destination -GitArgs @('update-ref', '--no-deref', 'HEAD', $sourceCommit)
         Invoke-TrustedGit -Git $trustedGit -WorkDir $Destination -GitArgs @('read-tree', $sourceCommit)
-        $archiveFile = Join-Path $temporaryRoot ("cqengine-archive." + [guid]::NewGuid().ToString('N') + '.tar')
+        $archiveFile = Join-Path $temporaryRoot ("cqengine-archive." + $script:ShortId.Invoke() + '.tar')
         try {
             & $trustedGit -c core.attributesFile=NUL -C $projectRoot archive --format=tar -o $archiveFile $sourceCommit
             if ($LASTEXITCODE -ne 0) {
                 throw 'git archive failed'
             }
-            & $trustedTar -xf $archiveFile -C $Destination
+            # GNU tar reads "C:\path" as a host:path remote spec and resolves the drive letter as a hostname,
+            # and under --force-local it still needs POSIX separators to open the path at all.
+            & $trustedTar --force-local -xf $archiveFile.Replace('\', '/') -C $Destination.Replace('\', '/')
             if ($LASTEXITCODE -ne 0) {
                 throw 'tar extract of git archive failed'
             }
@@ -561,16 +649,16 @@ try {
     $teeExitCode = $preflightTeeExitCode
     if ($preflightGradleExitCode -eq 0 -and $preflightTeeExitCode -eq 0) {
         if ($candidateRoot -like (Join-Path $temporaryRoot 'cqengine-release-source.*')) {
-            Remove-Item -LiteralPath $candidateRoot -Recurse -Force
+            Remove-TreeSafely $candidateRoot
         }
         else {
             throw "refusing to replace unexpected preflight candidate source: $candidateRoot"
         }
-        $candidateRoot = Join-Path $temporaryRoot ("cqengine-release-source." + [guid]::NewGuid().ToString('N'))
+        $candidateRoot = Join-Path $temporaryRoot ("cqengine-release-source." + $script:ShortId.Invoke())
         New-Item -ItemType Directory -Path $candidateRoot | Out-Null
         Assert-EmptyDirectory $candidateRoot 'release candidate source'
         Materialize-Candidate $candidateRoot
-        $releaseGradleUserHome = Join-Path $temporaryRoot ("cqengine-release-gradle-home." + [guid]::NewGuid().ToString('N'))
+        $releaseGradleUserHome = Join-Path $temporaryRoot ("cqengine-release-gradle-home." + $script:ShortId.Invoke())
         New-Item -ItemType Directory -Path $releaseGradleUserHome | Out-Null
         Assert-EmptyDirectory $releaseGradleUserHome 'release Gradle home'
         [System.IO.File]::WriteAllText(
@@ -688,9 +776,7 @@ try {
             ((Get-Item -LiteralPath $destination -Force).Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
             throw "refusing to replace symbolic-link output path: $destination"
         }
-        if (Test-Path -LiteralPath $destination) {
-            Remove-Item -LiteralPath $destination -Recurse -Force
-        }
+        Remove-TreeSafely $destination
         if (-not (Test-Path -LiteralPath $source)) {
             return
         }
@@ -755,6 +841,7 @@ try {
         "trustedBash=$trustedBash sha256:$trustedBashSha256"
         "trustedNproc=$trustedNproc sha256:$trustedNprocSha256"
         "trustedJava=$bootstrapJava sha256:$bootstrapJavaSha256"
+        "trustedPython=$trustedPython sha256:$trustedPythonSha256"
         'gitConfigGlobal=disabled'
         'gitConfigSystem=disabled'
         'gitObjectReplacement=disabled'

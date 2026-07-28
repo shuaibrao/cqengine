@@ -182,28 +182,35 @@ abstract class VerifySourceAndLegalProvenance @Inject constructor(
             "remote.upstream.fetch",
         )
         val originLocalConfigKeys = setOf("remote.origin.url", "remote.origin.fetch")
+        // Windows git init records these itself; they are git's own platform defaults rather than project
+        // configuration, so tolerate them without requiring them on a platform that never writes them.
+        val platformLocalConfigKeys = setOf("core.symlinks", "core.ignorecase")
         val hostedMode = "remote.origin.url" in localConfigKeys
         val commonLocalConfigKeys = coreLocalConfigKeys + upstreamLocalConfigKeys +
             if (hostedMode) originLocalConfigKeys else emptySet()
         val sourceLocalConfigKeys = commonLocalConfigKeys + setOf("branch.main.remote", "branch.main.merge")
         val detachedLocalConfigKeys = commonLocalConfigKeys + setOf("core.autocrlf", "core.eol")
+        val reviewedLocalConfigKeys = localConfigKeys.toSet() - platformLocalConfigKeys
         requireValid(
-            localConfigKeys.toSet() == sourceLocalConfigKeys || localConfigKeys.toSet() == detachedLocalConfigKeys,
+            reviewedLocalConfigKeys == sourceLocalConfigKeys || reviewedLocalConfigKeys == detachedLocalConfigKeys,
             "Unexpected local Git configuration inventory: $localConfigKeys",
         )
         val expectedLocalConfig = linkedMapOf(
             "core.repositoryformatversion" to "0",
-            "core.filemode" to "true",
+            // Windows filesystems carry no executable bit, so git records filemode=false there.
+            "core.filemode" to if (System.getProperty("os.name").startsWith("Windows", true)) "false" else "true",
             "core.bare" to "false",
             "core.logallrefupdates" to "true",
             "remote.upstream.url" to expectedUpstreamUrl.get(),
             "remote.upstream.fetch" to "+refs/heads/*:refs/remotes/upstream/*",
         ).apply {
+            // Symlink support stays off where git records it: the wrapper already refuses symlinked build paths.
+            if ("core.symlinks" in localConfigKeys) put("core.symlinks", "false")
             if (hostedMode) {
                 put("remote.origin.url", expectedOriginUrl.get())
                 put("remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*")
             }
-            if (localConfigKeys.toSet() == sourceLocalConfigKeys) {
+            if (reviewedLocalConfigKeys == sourceLocalConfigKeys) {
                 put("branch.main.remote", if (hostedMode) "origin" else "upstream")
                 put("branch.main.merge", if (hostedMode) "refs/heads/main" else "refs/heads/master")
             }
@@ -5533,7 +5540,10 @@ dependencies {
 }
 
 val pythonExecutable = providers.provider {
-    if (System.getProperty("os.name").lowercase(Locale.ROOT).contains("windows")) "python" else "python3"
+    // The qualification wrapper narrows PATH to its bound tool directories, so it resolves the interpreter itself
+    // and passes it by absolute path; a bare name would not resolve inside a qualified run.
+    System.getenv("CQENGINE_TRUSTED_PYTHON")
+        ?: if (System.getProperty("os.name").lowercase(Locale.ROOT).contains("windows")) "python" else "python3"
 }
 
 val centralPublicationToolsTest by tasks.registering(Exec::class) {

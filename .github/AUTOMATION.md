@@ -15,6 +15,10 @@ qualification described in `RELEASING.md`.
 All third-party actions are pinned to full commit hashes. Dependabot proposes Gradle and action updates, which still
 require normal dependency-integrity review.
 
+`ci.yml` and `release-bundle.yml` check out full history. `formatRatchetCheck` compares maintainer-changed lines
+against the preserved upstream commit, and `release-bundle.yml` rebuilds a qualified ancestor, so neither works from
+the default shallow clone. Keep `fetch-depth: 0` on those two workflows.
+
 ## Repository configuration
 
 Before enabling these workflows:

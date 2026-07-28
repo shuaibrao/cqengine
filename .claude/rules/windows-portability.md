@@ -21,5 +21,9 @@ These defaults silently weaken fail-closed checks; each one has already produced
 - Native-command stderr becomes an `ErrorRecord` under `$ErrorActionPreference = 'Stop'`, including with `2>$null`. Route every native invocation that may legitimately write stderr through a helper that restores the preference afterward.
 - `Set-StrictMode` rejects `.Count` on a scalar, so a pipeline that yields one item breaks a length check. Wrap pipeline results in `@()`.
 - Resolve system executables by absolute path when the script narrows `PATH`; `cmd.exe`, `reg.exe` and `powershell.exe` are otherwise unreachable.
+- MSYS tools inherit POSIX path parsing. GNU `tar` reads `C:\path` as a `host:path` remote spec and tries to resolve the drive letter as a hostname, so pass `--force-local` and convert separators to `/`; `--force-local` alone still fails on backslashes.
 - Emit progress with `Write-Host`, not `Write-Output`: inside a function the latter joins the return value.
+- `2>$null` on a native command discards its stdout as well, so a captured probe silently returns nothing. Set `$ErrorActionPreference` around the call instead of redirecting.
+- Keep quote characters out of `-c`/`-e` snippets passed to interpreters; build the interesting part of the string on the PowerShell side so no host re-quotes it.
+- A Microsoft Store interpreter is not one file: its PATH entry is an unhashable AppExecLink, and inside the package `python.exe` hashes but will not execute while `python<major>.<minor>.exe` does both. Accept a bound tool only after proving this process can both hash and run it.
 - Fixtures committed under an ambient `core.autocrlf=true` read back dirty once the script disables system and global Git configuration. Write fixture content with LF.

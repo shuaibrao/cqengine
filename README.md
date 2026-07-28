@@ -689,8 +689,3 @@ CQEngine should generally be compatible with other JVM languages besides Java to
   * [Release notes](documentation/ReleaseNotes.md) contain the complete CQEngine release history and 4.0 upgrade notes
   * The build and consumer matrix supports Java 21 and Java 25
   * Generate current API documentation with `./gradlew javadoc`; the entry point is then `build/docs/javadoc/index.html`
-
-
-Many thanks to JetBrains for supporting CQEngine with free IntelliJ licenses!
-
-[![](documentation/images/logo_jetbrains.png)](http://www.jetbrains.com)[![](documentation/images/logo_intellij_idea.png)](http://www.jetbrains.com/idea/)

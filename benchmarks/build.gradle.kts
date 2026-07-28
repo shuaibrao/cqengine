@@ -1228,10 +1228,23 @@ abstract class VerifyJmhBaseline : BenchmarkHostAwareTask() {
         val expectedJvmArgs = COMMON_JVM_ARGS +
             "-Djava.io.tmpdir=${benchmarkBuildRoot.resolve("tmp/${specification.taskName}")}" +
             specification.requiredJvmArgs
-        if (jvmArgs.toSet() != expectedJvmArgs) {
+        // The JVM reports its own region and variant here; the build never sets them. A Linux qualification under
+        // LC_ALL=C reports them empty while a Windows host reports a real region, so compare those two by key.
+        // Encoding and language stay exact because they change locale-sensitive behaviour, and the published
+        // environment.properties records the locale that actually applied.
+        fun byLocaleKey(arguments: Set<String>): Set<String> = arguments.mapTo(mutableSetOf()) { argument ->
+            when {
+                argument.startsWith("-Duser.country=") -> "-Duser.country"
+                argument.startsWith("-Duser.variant=") -> "-Duser.variant"
+                else -> argument
+            }
+        }
+        val observedJvmArgs = byLocaleKey(jvmArgs.toSet())
+        val comparableJvmArgs = byLocaleKey(expectedJvmArgs)
+        if (observedJvmArgs != comparableJvmArgs) {
             throw GradleException(
-                "$benchmark JVM argument inventory differs; missing=${expectedJvmArgs - jvmArgs.toSet()}, " +
-                    "unexpected=${jvmArgs.toSet() - expectedJvmArgs}",
+                "$benchmark JVM argument inventory differs; missing=${comparableJvmArgs - observedJvmArgs}, " +
+                    "unexpected=${observedJvmArgs - comparableJvmArgs}",
             )
         }
         val forbiddenJvmArgs = jvmArgs.filter { argument ->
@@ -2683,6 +2696,12 @@ val jmhPublicationInputFiles = jmhBaselineDefinitions.map { definition ->
     layout.buildDirectory.file("reports/${definition.reportDirectory}/results.json")
 }
 
+// The qualification wrapper narrows PATH to its bound tool directories and passes the interpreter it resolved,
+// so a bare name would not resolve inside a qualified run.
+fun benchmarkPythonExecutable(): String =
+    System.getenv("CQENGINE_TRUSTED_PYTHON")
+        ?: if (System.getProperty("os.name").lowercase(Locale.ROOT).contains("windows")) "python" else "python3"
+
 val generateJmhPublicationReport by tasks.registering(Exec::class) {
     description = "Generates sanitized tables and SVGs from the authoritative JMH baseline."
     group = "verification"
@@ -2708,7 +2727,7 @@ val generateJmhPublicationReport by tasks.registering(Exec::class) {
             throw GradleException("No benchmark-host approval record exists for '$label'")
         }
         commandLine(
-            if (System.getProperty("os.name").lowercase(Locale.ROOT).contains("windows")) "python" else "python3",
+            benchmarkPythonExecutable(),
             rootProject.layout.projectDirectory.file("scripts/generate-benchmark-report.py").asFile,
             "--input",
             layout.buildDirectory.dir("reports").get().asFile,
@@ -2760,7 +2779,7 @@ val syncBenchmarkDocumentation by tasks.registering(Exec::class) {
             .dir("benchmarks/results/${benchmarkDocumentationLine.get()}/${sourceCommit.take(8)}-$label")
             .asFile
         commandLine(
-            if (System.getProperty("os.name").lowercase(Locale.ROOT).contains("windows")) "python" else "python3",
+            benchmarkPythonExecutable(),
             rootProject.layout.projectDirectory.file("scripts/generate-benchmark-report.py").asFile,
             "--input",
             layout.buildDirectory.dir("reports").get().asFile,
