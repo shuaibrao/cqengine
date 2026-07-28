@@ -623,8 +623,8 @@ The equivalent Maven dependency is:
 </dependency>
 ```
 
-The optional, non-executable `all` classifier embeds the runtime implementation. Use it instead of the thin artifact
-and its transitives, never alongside them. See
+CQEngine publishes one runtime artifact with declared dependencies, so you control the version of every library it
+resolves. The shaded `all` classifier that 3.x published is not part of 4.0. See
 [using CQEngine artifacts](documentation/Downloads.md) and
 [Java compatibility](documentation/JavaCompatibility.md) for the complete classpath, module-path and native-access
 contract.

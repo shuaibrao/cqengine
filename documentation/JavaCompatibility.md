@@ -2,7 +2,7 @@
 
 CQEngine requires Java 21 or later. Its published classes target Java 21 bytecode (`--release 21`) and the supported
 runtime matrix is Java 21 and Java 25. Core queries, parsers, attribute generation, serialization and persistence are
-tested through independently resolved thin and `all` artifacts on both runtimes.
+tested through an independently resolved published artifact on both runtimes.
 
 ## API compatibility
 
@@ -46,26 +46,21 @@ SQLite loads native code for disk and off-heap persistence. On Java 25, use:
 
 | Launch form | Native-access option |
 |---|---|
-| Classpath, thin or `all` JAR | `--enable-native-access=ALL-UNNAMED` |
-| Module path, thin JAR | `--enable-native-access=org.xerial.sqlitejdbc` |
-| Module path, `all` JAR | `--enable-native-access=cqengine` |
+| Classpath | `--enable-native-access=ALL-UNNAMED` |
+| Module path | `--enable-native-access=org.xerial.sqlitejdbc` |
 
 Java 21 does not require a native-access option. These options grant native access only; they do not open JDK
 packages to reflection.
 
-The optional `all` JAR contains the complete 20-library native inventory from sqlite-jdbc 3.53.2.0. Packaging
-verification checks every native path and SHA-256 digest against the reviewed version-specific inventory. Runtime
-qualification is deliberately host-specific: each Java 21/25 thin and `all` consumer derives sqlite-jdbc's current
+Runtime qualification is deliberately host-specific: each Java 21/25 consumer derives sqlite-jdbc's current
 OS/architecture resource, extracts it into an isolated directory, verifies the extracted bytes, confirms native mode
 and runs SQLite version, integrity and compile-option queries. The retained report identifies the resource which was
 actually loaded. Natives for other platforms are byte-verified, not represented as loaded on the current host.
 
 ## JPMS
 
-The thin and `all` runtime JARs are automatic modules named `cqengine`. They must never appear together on one module
-path or classpath. The thin form resolves SQLite and the other dependencies as separate modules. The `all` form embeds
-its runtime dependencies and relocates their packages except SQLite, which remains under `org.sqlite`; it must not be
-combined with an external SQLite JAR.
+The runtime JAR is an automatic module named `cqengine`. It resolves SQLite and the other dependencies as separate
+modules.
 
 A modular application which generates attributes or serializes application objects must export its model package and
 open it only to the modules which inspect it. For the thin artifact, a typical descriptor contains:
@@ -77,46 +72,34 @@ exports com.example.model;
 opens com.example.model to cqengine, com.esotericsoftware.kryo, org.javassist;
 ```
 
-For the `all` artifact, the relocated implementations are inside `cqengine`:
-
-```java
-requires cqengine;
-
-exports com.example.model;
-opens com.example.model to cqengine;
-```
-
 CQEngine itself requires no application-wide or JDK-wide module opening.
 
 ## OSGi
 
-The thin JAR is the canonical `cqengine` OSGi bundle. It exports the CQEngine packages, imports its external
+The published JAR is the canonical `cqengine` OSGi bundle. It exports the CQEngine packages, imports its external
 dependencies and declares a JavaSE 21 execution environment. Version qualifiers are normalized to OSGi syntax; for
 example, `4.0.0-rc.1` is represented as `4.0.0.rc_1`.
 
-The `all` JAR is not an OSGi bundle. It is supported as a classpath library and automatic JPMS module only.
-
 ## Published artifacts
 
-CQEngine is published as `io.github.shuaibrao:cqengine:<version>` in four forms:
+CQEngine is published as `io.github.shuaibrao:cqengine:<version>` in three forms:
 
 | Artifact | Purpose |
 |---|---|
-| `cqengine-<version>.jar` | Canonical thin library with declared transitive dependencies |
-| `cqengine-<version>-all.jar` | Optional non-executable library with relocated dependencies; SQLite remains unrelocated |
+| `cqengine-<version>.jar` | Library with declared transitive dependencies |
 | `cqengine-<version>-sources.jar` | Source attachment |
 | `cqengine-<version>-javadoc.jar` | API documentation attachment |
 
-The thin and `all` forms contain the same CQEngine class names, but relocation can change descriptors which expose a
-dependency type. Compile and run against the same artifact form. A Maven consumer requesting the `all` classifier
-must disable transitive dependencies so embedded and external copies do not coexist.
+The runtime artifact carries `Automatic-Module-Name: cqengine` and the OSGi bundle headers. None of the artifacts is
+executable.
 
-The thin and `all` runtime artifacts carry `Automatic-Module-Name: cqengine`. Only the thin artifact carries the OSGi
-bundle headers. None of the artifacts is executable.
+CQEngine 3.x additionally published a shaded `all` classifier whose relocated packages could change descriptors that
+expose a dependency type. Version 4.0 publishes no shaded form, so a consumer's compile and runtime descriptors are
+the same by construction.
 
 Because the published classes, JPMS module name and OSGi bundle symbolic name are identical to the original
 `com.googlecode.cqengine:cqengine` artifact, the two artifacts are mutually exclusive. The Gradle module metadata
-declares the `com.googlecode.cqengine:cqengine` capability on the thin and `all` runtime variants, which turns an
+declares the `com.googlecode.cqengine:cqengine` capability on the API and runtime variants, which turns an
 accidental mixed graph into a resolution error instead of a duplicate-class hazard. Maven consumers do not see
 capabilities and should ban `com.googlecode.cqengine:cqengine` with the Enforcer Plugin's `bannedDependencies` rule
 (see the README's "Coexistence with com.googlecode.cqengine" section for the snippet).

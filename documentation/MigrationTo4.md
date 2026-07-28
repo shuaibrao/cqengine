@@ -12,13 +12,14 @@ of deliberate behavioural changes can still affect existing code. This page list
 |---|---|
 | [New coordinate](#1-new-maven-coordinate) | Always — the group id changed |
 | [Java 21 baseline](#2-java-21-baseline) | You run on Java 8–17 |
-| [Lambda attributes](#3-lambda-and-method-reference-attributes-need-explicit-types) | You create attributes from inline lambdas or method references |
-| [`close()` instead of `finalize()`](#4-disk-and-off-heap-persistence-must-be-closed-explicitly) | You rely on GC to release disk/off-heap stores |
-| [SQLite busy timeout](#5-sqlite-busy-timeout-now-3000-ms-by-default) | You share a disk store between contending processes/collections |
-| [One-way SQLite migration](#6-sqlite-table-migration-is-one-way) | You open existing disk/off-heap stores |
-| [`UniqueIndex` re-add semantics](#7-uniqueindex-no-longer-overwrites-on-re-add) | You "update" objects by re-adding an equal object |
-| [Exception-type changes](#8-exception-type-changes) | You catch specific exception types from the parser or persistence |
-| [`ResultSet` ownership](#9-close-every-resultset) | Any query code (best practice, now load-bearing) |
+| [No shaded `all` classifier](#3-the-shaded-all-classifier-is-no-longer-published) | You depend on `cqengine` with `<classifier>all</classifier>` |
+| [Lambda attributes](#4-lambda-and-method-reference-attributes-need-explicit-types) | You create attributes from inline lambdas or method references |
+| [`close()` instead of `finalize()`](#5-disk-and-off-heap-persistence-must-be-closed-explicitly) | You rely on GC to release disk/off-heap stores |
+| [SQLite busy timeout](#6-sqlite-busy-timeout-now-3000-ms-by-default) | You share a disk store between contending processes/collections |
+| [One-way SQLite migration](#7-sqlite-table-migration-is-one-way) | You open existing disk/off-heap stores |
+| [`UniqueIndex` re-add semantics](#8-uniqueindex-no-longer-overwrites-on-re-add) | You "update" objects by re-adding an equal object |
+| [Exception-type changes](#9-exception-type-changes) | You catch specific exception types from the parser or persistence |
+| [`ResultSet` ownership](#10-close-every-resultset) | Any query code (best practice, now load-bearing) |
 
 ## 1. New Maven coordinate
 
@@ -49,10 +50,34 @@ builds.
 
 CQEngine 4.0 requires Java 21+ and is verified on Java 21 and Java 25. No `--add-opens` flags are
 needed for any feature. On Java 25 with disk or off-heap persistence, grant SQLite native access:
-`--enable-native-access=ALL-UNNAMED` (classpath), `--enable-native-access=org.xerial.sqlitejdbc`
-(thin jar, module path) or `--enable-native-access=cqengine` (`all` jar, module path).
+`--enable-native-access=ALL-UNNAMED` (classpath) or `--enable-native-access=org.xerial.sqlitejdbc`
+(module path).
 
-## 3. Lambda and method-reference attributes need explicit types
+## 3. The shaded `all` classifier is no longer published
+
+CQEngine 3.x published `cqengine-<version>-all.jar`, which embedded ANTLR, Kryo, Javassist,
+Objenesis and concurrent-trees under relocated `com.googlecode.cqengine.lib.*` packages and carried
+SQLite unrelocated. Version 4.0 publishes only the library JAR with declared dependencies.
+
+If you depended on the classifier, remove it and depend on the normal artifact with transitive
+resolution enabled:
+
+```xml
+<dependency>
+    <groupId>io.github.shuaibrao</groupId>
+    <artifactId>cqengine</artifactId>
+    <version>4.0.0</version>
+</dependency>
+```
+
+You now resolve ANTLR, Kryo, Javassist, Objenesis, concurrent-trees and sqlite-jdbc directly, which
+is why the change was made: a shaded artifact pins its embedded versions, so a consumer cannot
+patch one of them without waiting for a CQEngine release. If your build relied on relocation to
+avoid a version conflict with its own copy of one of those libraries, resolve the conflict in your
+dependency graph, or shade CQEngine yourself as part of your own packaging step where you control
+the relocation rules.
+
+## 4. Lambda and method-reference attributes need explicit types
 
 The JVM does not reliably expose generic types of synthetic lambdas, so the TypeTools-based
 inference was removed. Class-based functional attributes keep working; inline lambdas and method
@@ -73,7 +98,7 @@ Equivalent factories exist for each shape: `simpleAttribute`, `simpleNullableAtt
 [LambdaAttributes](LambdaAttributes.md). If your application used TypeTools itself through
 CQEngine's transitive dependency, declare it directly now.
 
-## 4. Disk and off-heap persistence must be closed explicitly
+## 5. Disk and off-heap persistence must be closed explicitly
 
 `DiskPersistence` and `OffHeapPersistence` no longer have `finalize()` methods. An application
 that dropped the last reference and relied on GC to release the SQLite store now leaks the file
@@ -90,7 +115,7 @@ finally {
 }
 ```
 
-## 5. SQLite busy timeout now 3,000 ms by default
+## 6. SQLite busy timeout now 3,000 ms by default
 
 3.x waited effectively forever (`Integer.MAX_VALUE` ms) for a conflicting SQLite lock. 4.0 waits
 at most 3,000 ms and then throws `SQLiteBusyException` (a subclass of `IllegalStateException`,
@@ -104,7 +129,7 @@ DiskPersistence<Car, Integer> persistence = DiskPersistence.onPrimaryKeyInFileWi
 
 Treat a busy failure as retryable back-pressure, not corruption.
 
-## 6. SQLite table migration is one-way
+## 7. SQLite table migration is one-way
 
 4.0 replaces the historical sanitized table names with collision-resistant SHA-256-derived names.
 Opening an existing store migrates its tables transactionally and records a durable assignment so
@@ -117,7 +142,7 @@ a different colliding attribute name can never claim the data. Two consequences:
   store adopts the legacy data under its collision-free new name, and the durable assignment
   record prevents any different colliding name from claiming it later.
 
-## 7. `UniqueIndex` no longer overwrites on re-add
+## 8. `UniqueIndex` no longer overwrites on re-add
 
 3.x silently overwrote the index entry when an equal-but-different object was added, which could
 corrupt the index. 4.0 follows `Set` semantics: re-adding an equal object keeps the **existing**
@@ -132,7 +157,7 @@ cars.add(updatedCar);
 cars.update(singleton(oldCar), singleton(updatedCar));
 ```
 
-## 8. Exception-type changes
+## 9. Exception-type changes
 
 | Situation | 3.x threw | 4.0 throws |
 |---|---|---|
@@ -144,7 +169,7 @@ cars.update(singleton(oldCar), singleton(updatedCar));
 Existing `catch (RuntimeException)` / `catch (IllegalStateException)` blocks keep working;
 narrower catches may need the new types.
 
-## 9. Close every `ResultSet`
+## 10. Close every `ResultSet`
 
 Every `ResultSet` returned by `retrieve()` is caller-owned and must be closed — including from
 purely on-heap collections, so the code stays correct when an index or persistence layer that owns

@@ -1,8 +1,10 @@
 {
   "permissions": {
     "deny": [
-      "Bash(git push --force*)",
-      "Bash(git push *--force*)",
+      "Bash(git push --force)",
+      "Bash(git push --force *)",
+      "Bash(git push * --force)",
+      "Bash(git push * --force *)",
       "Bash(git push -f *)",
       "Bash(git push *-f)",
       "Bash(rm -rf src*)",

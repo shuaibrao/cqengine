@@ -26,6 +26,8 @@ Use `--json` and `--jq` for machine-readable results. Read existing review comme
 
 ## Mutations
 
-Only when requested, use `gh issue create/comment/close`, `gh pr create/review/merge`, workflow dispatch, release, or repository commands. Preview the exact content before posting when wording or recipients matter. Never force-push, overwrite a release, or append AI/agent attribution.
+Only when requested, use `gh issue create/comment/close`, `gh pr create/review/merge`, workflow dispatch, release, or repository commands. Preview the exact content before posting when wording or recipients matter. Never overwrite a release or append AI/agent attribution.
+
+Replace a published branch only with a lease-checked push, which aborts when the remote holds commits the local clone has not seen. An unconditional force discards them silently and is blocked.
 
 Commit and PR text must describe engineering intent. Do not encode implementation-plan phase numbers in titles or messages.

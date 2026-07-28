@@ -9,7 +9,7 @@ PROTECTED_ROOTS = (
     "config", "third-party-licenses", "archive", ".agent", ".cursor", ".claude", ".codex",
 )
 
-FORCE_PUSH = re.compile(r"\bgit\s+push\b[^|;&]*(?:--force(?:-with-lease|-if-includes)?|-f(?:\s|$))")
+FORCE_PUSH = re.compile(r"\bgit\s+push\b[^|;&]*(?:--force(?!-with-lease|-if-includes)|-f(?:\s|$))")
 RECURSIVE_FORCE_REMOVE = re.compile(
     r"\brm\s+-(?=[rRfF]*[rR])(?=[rRfF]*[fF])[rRfF]+\s+([^|;&]+)",
 )

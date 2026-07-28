@@ -184,14 +184,8 @@ subprojects {
                 "org.objenesis:objenesis:3.4",
                 "org.xerial:sqlite-jdbc:3.53.2.0",
             )
-            val expectedModules = if (artifactMode == "thin") {
-                expectedThinModules
-            }
-            else {
-                sortedSetOf(cqengineCoordinate)
-            }
-            check(modules == expectedModules) {
-                "Unexpected $artifactMode consumer modules. Expected $expectedModules, resolved $modules"
+            check(modules == expectedThinModules) {
+                "Unexpected $artifactMode consumer modules. Expected $expectedThinModules, resolved $modules"
             }
 
             val artifacts = configuration.resolvedConfiguration.resolvedArtifacts
@@ -208,17 +202,15 @@ subprojects {
             check(cqengineArtifacts.size == 1) {
                 "Expected one CQEngine artifact, resolved ${cqengineArtifacts.map { it.file.name }}"
             }
-            val expectedClassifier = if (artifactMode == "all") "all" else null
-            check(cqengineArtifacts.single().classifier == expectedClassifier) {
-                "Expected classifier ${expectedClassifier ?: "<none>"}, resolved " +
-                    (cqengineArtifacts.single().classifier ?: "<none>")
+            check(cqengineArtifacts.single().classifier == null) {
+                "Expected no classifier, resolved " + (cqengineArtifacts.single().classifier ?: "<none>")
             }
 
             val stagedPom = versionDirectory.listFiles()
                 ?.singleOrNull { it.isFile && it.extension == "pom" }
                 ?: throw GradleException("Expected one staged POM in $versionDirectory")
             val artifactStem = stagedPom.name.removeSuffix(".pom")
-            val stagedArtifactName = if (artifactMode == "all") "$artifactStem-all.jar" else "$artifactStem.jar"
+            val stagedArtifactName = "$artifactStem.jar"
             val stagedArtifact = versionDirectory.resolve(stagedArtifactName)
             check(stagedArtifact.isFile) { "Missing staged artifact: $stagedArtifact" }
             val resolvedSha256 = digest(cqengineArtifacts.single().file, "SHA-256")
@@ -242,15 +234,8 @@ subprojects {
                     "SHA-256 $resolvedSha256 != $inventorySha256 or " +
                     "SHA-512 $resolvedSha512 != $inventorySha512"
             }
-            if (artifactMode == "all") {
-                check(artifacts.size == 1) {
-                    "The all consumer must resolve one non-transitive artifact: ${artifacts.map { it.file.name }}"
-                }
-            }
-            else {
-                check(artifacts.size == expectedThinModules.size) {
-                    "Thin consumer expected ${expectedThinModules.size} JARs, resolved ${artifacts.map { it.file.name }}"
-                }
+            check(artifacts.size == expectedThinModules.size) {
+                "Consumer expected ${expectedThinModules.size} JARs, resolved ${artifacts.map { it.file.name }}"
             }
 
             val producerPath = canonicalProducerRoot.toPath()

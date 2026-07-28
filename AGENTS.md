@@ -6,7 +6,7 @@
 - Correctness and deterministic cleanup come before micro-optimisation. Persistence transactions, result sets, iterators and native resources must remain safe on every failure path.
 - Treat performance as measured behavior. CQEngine is not allocation-free; publish latency, throughput or allocation claims only with exact JMH workload and environment evidence.
 - Keep Java 21 bytecode and verify both Java 21 and Java 25 without consumer-hidden `--add-opens` workarounds.
-- Keep the thin artifact canonical. The optional `all` classifier is a non-executable compatibility artifact and must be tested independently.
+- Publish one library artifact with declared dependencies. Consumers choose their own dependency versions, so do not reintroduce a shaded artifact that pins them.
 - Preserve Apache-2.0 lineage and all required third-party notices.
 
 ## Project identity
@@ -34,7 +34,7 @@ CQEngine 4.0 continues Niall Gallagher's CQEngine project from upstream commit
 | `src/test/` | Unit, functional, persistence, compatibility and failure-injection tests |
 | `benchmarks/` | Non-published JMH project |
 | `stress-tests/` | Non-published JCStress and concurrent read/write soak qualification |
-| `consumer-tests/` | Isolated thin, shaded, POM and module-path consumers |
+| `consumer-tests/` | Isolated classpath, POM and module-path consumers |
 | `documentation/` | CQEngine user, compatibility, persistence, benchmark and maintainer guides |
 | `gradle/` | Wrapper, dependency locks, verification metadata and version catalog |
 | `config/` | Static-analysis and licence policy |

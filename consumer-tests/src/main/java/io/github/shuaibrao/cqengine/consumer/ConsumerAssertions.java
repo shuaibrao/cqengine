@@ -29,17 +29,12 @@ final class ConsumerAssertions {
         File cqengineJar = new File(new URI(codeSource.toString())).getCanonicalFile();
         require(cqengineJar.isFile(), "CQEngine was not loaded from a published JAR: " + cqengineJar);
         require(cqengineJar.getName().endsWith(".jar"), "CQEngine code source is not a JAR: " + cqengineJar);
-        if ("all".equals(mode)) {
-            require(cqengineJar.getName().endsWith("-all.jar"),
-                    "All consumer loaded the wrong artifact: " + cqengineJar);
-        }
-        else if ("thin".equals(mode)) {
-            require(!cqengineJar.getName().endsWith("-all.jar"),
-                    "Thin consumer loaded the all classifier: " + cqengineJar);
-        }
-        else {
+        if (!"thin".equals(mode)) {
             throw new AssertionError("Unexpected artifact mode: " + mode);
         }
+        // CQEngine publishes one runtime artifact, so a classifier here means the graph resolved something else.
+        require(cqengineJar.getName().matches("cqengine-.+\\.jar") && !cqengineJar.getName().endsWith("-all.jar"),
+                "Consumer resolved an unexpected CQEngine artifact: " + cqengineJar);
         require(!cqengineJar.toPath().startsWith(producerRoot.toPath().resolve("build/classes")),
                 "CQEngine leaked producer classes onto the consumer classpath: " + cqengineJar);
 

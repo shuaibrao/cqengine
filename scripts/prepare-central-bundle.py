@@ -219,7 +219,6 @@ def primary_names(version: str) -> list[str]:
     stem = f"{ARTIFACT}-{version}"
     return [
         f"{stem}.jar",
-        f"{stem}-all.jar",
         f"{stem}-sources.jar",
         f"{stem}-javadoc.jar",
         f"{stem}.pom",

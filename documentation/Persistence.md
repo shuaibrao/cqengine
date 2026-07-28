@@ -4,8 +4,7 @@ CQEngine supports on-heap, off-heap and disk-backed collections. Off-heap and di
 stored objects are serialized through the `PojoSerializer` selected by `@PersistenceConfig`. This guide describes the
 transaction, locking, naming and serialization contracts which matter when a collection is durable.
 
-The thin artifact obtains sqlite-jdbc through its declared dependency. The optional `all` artifact embeds the exact
-20-native sqlite-jdbc 3.53.2.0 inventory, with every native path and SHA-256 checked at packaging time. Runtime
+CQEngine obtains sqlite-jdbc through its declared dependency. Runtime
 qualification extracts and loads only the native selected for the current OS and architecture, verifies the extracted
 bytes and executes SQLite integrity, version and compile-option queries. Evidence never treats checksum validation of
 another platform's binary as proof that binary was loaded.

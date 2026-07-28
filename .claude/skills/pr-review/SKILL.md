@@ -14,7 +14,7 @@ Use `github-ops` to read PR metadata, diff, checks and existing comments. Read `
 - Correctness, edge cases, resource ownership, concurrency and failure cleanup
 - Java 21 bytecode plus Java 21/25 runtime behavior without hidden module opens
 - Public/protected API descriptors, inherited serialization identities, JPMS/OSGi identity and upstream 3.6.0 baselines
-- Thin versus `all` artifact behavior, publication metadata, legal resources and reproducibility
+- Published artifact behavior, publication metadata, legal resources and reproducibility
 - Dependency locks, verification metadata, signatures/checksums and vulnerability evidence
 - Parser limits/regex policy, Kryo trust/bounds, SQLite transactions, native access and persisted-format compatibility
 - JMH lifecycle correctness and allocation/performance claims tied to exact evidence

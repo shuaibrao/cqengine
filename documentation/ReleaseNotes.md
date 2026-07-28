@@ -38,8 +38,7 @@ Gradle build and additional correctness, resource-safety and security controls. 
     does not require `--add-opens` on the classpath or module path.
   * Java 25 applications using disk or off-heap persistence must grant native access to SQLite:
     `--enable-native-access=ALL-UNNAMED` on the classpath,
-    `--enable-native-access=org.xerial.sqlitejdbc` for the thin JAR on the module path, or
-    `--enable-native-access=cqengine` for the `all` JAR on the module path. Core in-memory use needs no native-access
+    or `--enable-native-access=org.xerial.sqlitejdbc` on the module path. Core in-memory use needs no native-access
     option.
 
 ### API and behavior changes
@@ -90,9 +89,8 @@ Gradle build and additional correctness, resource-safety and security controls. 
     extended SQLite codes through `SQLiteBusyException`.
   * SQLite JDBC is upgraded to 3.53.2.0. Collection mutations acquire the writer slot before schema reads so the
     configured busy timeout also governs deferred-to-write transaction contention.
-  * The `all` JAR's 20 bundled SQLite natives are checked by exact path and SHA-256. External thin and `all`
-    consumers on Java 21 and Java 25 additionally extract and load the native selected for the current OS and
-    architecture, compare its extracted bytes with the resolved artifact, and execute version, integrity and
+  * External consumers on Java 21 and Java 25 extract and load the sqlite-jdbc native selected for the current OS
+    and architecture, compare its extracted bytes with the resolved artifact, and execute version, integrity and
     compile-option queries. Qualification evidence distinguishes the one native loaded on the host from the other
     platform binaries which are checksum-verified only.
 
@@ -115,14 +113,14 @@ Gradle build and additional correctness, resource-safety and security controls. 
 ### Artifacts and module use
 
   * The release coordinate is `io.github.shuaibrao:cqengine:4.0.0`.
-  * The canonical artifact is the thin `cqengine-4.0.0.jar`, accompanied by sources and Javadocs. The optional
-    non-executable `cqengine-4.0.0-all.jar` embeds the runtime dependencies and relocates their packages except
-    SQLite, which remains under `org.sqlite`. It has no `Main-Class` and is a library, not an application.
-  * Thin and `all` artifacts must not be present in the same dependency graph. Maven consumers which request the
-    `all` classifier must disable transitive dependencies.
-  * Both runtime JARs have the automatic-module name `cqengine`. The thin JAR is also the canonical OSGi bundle and
-    requires a Java 21 execution environment; the `all` JAR is supported on the classpath and as an automatic JPMS
-    module, but does not claim the OSGi bundle identity.
+  * The published artifact is `cqengine-4.0.0.jar`, accompanied by sources and Javadocs. It has no `Main-Class` and
+    is a library, not an application.
+  * The shaded `all` classifier published by CQEngine 3.x is discontinued. A shaded artifact pins the versions it
+    embeds, so consumers could not patch ANTLR, Kryo, Javassist, Objenesis or concurrent-trees without waiting for a
+    CQEngine release. Depend on the normal artifact with transitive resolution, or shade CQEngine inside your own
+    packaging step where you control the relocation rules. See [migrating to CQEngine 4](MigrationTo4.md).
+  * The runtime JAR has the automatic-module name `cqengine`, is the canonical OSGi bundle and requires a Java 21
+    execution environment.
   * Release qualification requires reproducible JARs containing Apache-2.0 legal material. Dependency versions are
     locked and verified, and the release includes sources, Javadocs, Maven and Gradle metadata plus artifact-bound
     SBOM and licence evidence.

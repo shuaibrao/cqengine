@@ -26,18 +26,20 @@ The equivalent Maven dependency is:
 </dependency>
 ```
 
-The coordinate contains four artifact forms:
+The coordinate contains three artifact forms:
 
 | Artifact | Purpose |
 |---|---|
 | `cqengine-<version>.jar` | Canonical thin library with declared runtime dependencies |
-| `cqengine-<version>-all.jar` | Optional non-executable library with embedded, mostly relocated dependencies |
 | `cqengine-<version>-sources.jar` | Source attachment |
 | `cqengine-<version>-javadoc.jar` | Current API documentation |
 
-Use either the thin artifact or the `all` classifier, never both. Maven consumers selecting `all` must disable
-transitive dependencies so embedded and external copies cannot coexist. The `all` JAR has no `Main-Class`; it is a
-library, not an application. The thin artifact is also the canonical OSGi bundle.
+The library JAR is the only runtime artifact and is also the canonical OSGi bundle. It declares its runtime
+dependencies, so a consumer resolves and upgrades ANTLR, Kryo, SQLite and the other libraries directly rather than
+inheriting whichever versions a shaded build embedded.
+
+CQEngine 3.x also published a shaded `all` classifier. Version 4.0 does not; see
+[migrating to CQEngine 4](MigrationTo4.md) if you depended on it.
 
 See [Java compatibility](JavaCompatibility.md) for classpath, module-path, OSGi and native-access requirements, and
 [Releasing CQEngine](../RELEASING.md) for producing the verified local repository.

@@ -86,7 +86,7 @@ represented by Jupiter-native contract matrices, and the functional lane still e
 
 ## Change discipline
 
-- Keep the thin library JAR canonical. The optional `all` classifier is a non-executable compatibility artifact.
+- Keep the published library JAR canonical, with declared rather than embedded dependencies.
 - Preserve the public API and serialized or persisted formats unless a reviewed compatibility change and migration
   path are part of the change.
 - Close locally consumed `ResultSet`, iterator, JDBC and persistence resources deterministically. Use
@@ -113,7 +113,7 @@ artifacts verify, so `--write-locks` fails first with a verification error when 
 Build-plugin changes must resolve the tasks and metadata variants which actually use the plugins:
 
 ```bash
-./gradlew clean shadowJar generatePomFileForMavenJavaPublication --write-verification-metadata sha256,pgp
+./gradlew clean jar generatePomFileForMavenJavaPublication --write-verification-metadata sha256,pgp
 ./gradlew tasks cyclonedxDirectBom generateLicenseReport checkLicense --no-parallel --write-verification-metadata sha256,pgp
 ```
 

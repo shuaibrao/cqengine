@@ -57,12 +57,14 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-Runtime dependencies and the all artifact
------------------------------------------
+Runtime dependencies
+--------------------
 
-The thin artifact does not embed runtime dependencies. The optional `all`
-artifact embeds and relocates selected dependencies; shading does not
-relicense them.
+The published artifact does not embed its runtime dependencies. It declares
+them, so each is resolved and licensed as its own artifact. The notices below
+are retained because CQEngine packages the licence texts and because earlier
+CQEngine versions published a shaded artifact that embedded these libraries;
+shading never relicensed them.
 
 ANTLR Runtime 4.13.2 is BSD-3-Clause. Its complete notice and licence text is
 packaged at `META-INF/THIRD-PARTY-LICENSES/antlr4-runtime-4.13.2.txt`.

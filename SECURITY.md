@@ -89,11 +89,11 @@ OpenJDK JCStress and its JNA/JOpt Simple tool dependencies are build-only inputs
 They are locked and verified like other executable tooling but are absent from CQEngine's published POM, JARs and
 runtime SBOM.
 
-The release security gate produces a runtime CycloneDX SBOM and licence inventory and scans the runtime graph and
-shaded artifact with authenticated NVD data and OSV. Missing credentials, feed or analysis errors, inventory drift,
+The release security gate produces a runtime CycloneDX SBOM and licence inventory and scans the runtime dependency
+graph with authenticated NVD data and OSV. Missing credentials, feed or analysis errors, inventory drift,
 an unapproved licence, a High/Critical NVD finding or any OSV finding fails the gate. A clean result from one feed does
 not override a finding from another. Security scans are time-sensitive and must be regenerated after any dependency
-or shaded-content change.
+change.
 
 The NVD corpus is reused for up to 24 hours rather than re-downloaded per run, because a complete rebuild takes
 hours and no disposable runner can finish one. A scan therefore reports advisories as of that corpus, so a

@@ -43,4 +43,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "cqengine-external-consumers"
 
-include("thin", "all", "thin-module", "all-module")
+include("thin", "thin-module")

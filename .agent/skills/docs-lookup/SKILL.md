@@ -35,6 +35,6 @@ Use `npx -y ctx7` to locate and read current documentation. Prefer the dependenc
 - Concurrent Trees indexes
 - JMH and its Gradle plugin
 - JUnit, Mockito, EqualsVerifier and JaCoCo
-- Bnd, Shadow, SpotBugs/FindSecBugs, CycloneDX and Dependency-Check
+- Bnd, SpotBugs/FindSecBugs, CycloneDX and Dependency-Check
 
 Do not assume that the newest documentation describes the pinned version. Do not invent a Context7 ID; search when uncertain.

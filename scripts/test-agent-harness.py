@@ -53,17 +53,23 @@ def test_configs() -> None:
 
 
 def test_hooks() -> None:
-    commands = (
+    denied = (
         "git push --force origin main",
         "git push -f origin main",
-        "git push --force-with-lease origin main",
-        "git push --force-if-includes origin main",
         "rm -rf src",
         "rm -fr ./documentation",
         "rm -Rf benchmarks/results",
     )
+    # A lease-checked push refuses to discard commits the local clone has not seen, so it stays
+    # available for the history rewrites this project performs deliberately.
+    allowed = (
+        "git push --force-with-lease origin main",
+        "git push --force-if-includes origin main",
+        "git push origin main",
+        "rm -rf build",
+    )
     for harness in ("cursor", "claudecode", "codex"):
-        for command in commands:
+        for command in denied:
             payload = {"command": command} if harness == "cursor" else {
                 "tool_name": "Bash", "tool_input": {"command": command}
             }
@@ -74,11 +80,12 @@ def test_hooks() -> None:
                 decision = output.get("hookSpecificOutput", {}).get("permissionDecision")
                 require(decision == "deny", f"{harness} allowed {command}")
 
-        safe_payload = {"command": "rm -rf build"} if harness == "cursor" else {
-            "tool_name": "Bash", "tool_input": {"command": "rm -rf build"}
-        }
-        _, safe = hook("shell_exec_guard", harness, safe_payload)
-        require(safe == {}, f"{harness} blocked safe build cleanup")
+        for command in allowed:
+            payload = {"command": command} if harness == "cursor" else {
+                "tool_name": "Bash", "tool_input": {"command": command}
+            }
+            _, safe = hook("shell_exec_guard", harness, payload)
+            require(safe == {}, f"{harness} blocked {command}")
         _, context = hook("session_init", harness, {"cwd": str(ROOT)})
         require("CQEngine" in json.dumps(context), f"{harness} session context missing")
         _, stopped = hook("self_improvement_check", harness, {"stop_hook_active": True})

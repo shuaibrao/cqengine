@@ -68,8 +68,7 @@ A successful run proves these outcomes for the exact source commit and version:
   match to the reviewed full inventory;
 - NVD and OSV vulnerability scans, CycloneDX SBOM generation and runtime licence policy complete against their exact
   expected inventories;
-- thin, `all`, sources and Javadocs JARs satisfy their manifest, content, legal, relocation,
-  native-library and class-inventory contracts;
+- library, sources and Javadocs JARs satisfy their manifest, content, legal and class-inventory contracts;
 - Gradle-metadata, POM-only, classpath and module-path consumers resolve and execute the staged artifacts on both
   supported JDKs;
 - two builds from different absolute paths and isolated Gradle homes produce byte-identical publication artifacts,
@@ -95,7 +94,7 @@ The verified local Maven repository is written to:
 build/local-repository/
 ```
 
-It contains only conventional Maven repository content: the thin, `all`, sources and Javadocs JARs, POM, Gradle
+It contains only conventional Maven repository content: the library, sources and Javadocs JARs, POM, Gradle
 module metadata, Maven metadata and checksum sidecars.
 
 Publishable evidence is kept outside the Maven coordinate at:
@@ -136,7 +135,7 @@ After the wrapper succeeds:
    publishable evidence.
 5. Tag and announce the same source identity, including compatibility or migration notes and any performance limits.
 
-Re-run qualification after any source, dependency, version, shaded-content, legal or build change. Never combine
+Re-run qualification after any source, dependency, version, legal or build change. Never combine
 outputs from different qualification runs.
 
 After reviewing a successful run, copy its generated benchmark views into the tracked results tree with:

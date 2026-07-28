@@ -24,6 +24,8 @@ CHECKSUMS = {
     "sha256": "sha256",
     "sha512": "sha512",
 }
+# The exact set of files a Central deployment publishes, ordered as the bundle stores them.
+PUBLISHED_ARTIFACT_SUFFIXES = (".jar", "-sources.jar", "-javadoc.jar", ".pom", ".module")
 
 
 def write(path: Path, value: str | bytes) -> None:
@@ -135,14 +137,7 @@ def create_fixture(
 
     version = "4.0.0-rc.1"
     stem = f"cqengine-{version}"
-    names = [
-        f"{stem}.jar",
-        f"{stem}-all.jar",
-        f"{stem}-sources.jar",
-        f"{stem}-javadoc.jar",
-        f"{stem}.pom",
-        f"{stem}.module",
-    ]
+    names = [f"{stem}{suffix}" for suffix in PUBLISHED_ARTIFACT_SUFFIXES]
     version_directory = (
         project / "build/local-repository/io/github/shuaibrao/cqengine" / version
     )
@@ -235,7 +230,10 @@ def main() -> None:
         )
         with zipfile.ZipFile(output) as bundle:
             names = bundle.namelist()
-            require(len(names) == 36, names)
+            # Every published file carries a detached signature and the four Central checksums,
+            # so the bundle size follows the artifact inventory instead of a fixed count.
+            expected_entries = len(PUBLISHED_ARTIFACT_SUFFIXES) * (2 + len(CHECKSUMS))
+            require(len(names) == expected_entries, f"expected {expected_entries} entries: {names}")
             require(names == sorted(names), names)
             require(
                 all(name.startswith("io/github/shuaibrao/cqengine/4.0.0-rc.1/") for name in names),

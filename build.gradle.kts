@@ -10,13 +10,6 @@ import com.github.jk1.license.render.CsvReportRenderer
 import com.github.jk1.license.render.InventoryHtmlReportRenderer
 import com.github.jk1.license.render.JsonReportRenderer
 import com.github.jk1.license.render.ReportRenderer
-import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
-import com.github.jengelman.gradle.plugins.shadow.transformers.CacheableTransformer
-import com.github.jengelman.gradle.plugins.shadow.transformers.ResourceTransformer
-import com.github.jengelman.gradle.plugins.shadow.transformers.TransformerContext
-import org.apache.tools.zip.UnixStat
-import org.apache.tools.zip.ZipEntry
-import org.apache.tools.zip.ZipOutputStream
 import org.gradle.api.Action
 import org.gradle.api.DefaultTask
 import org.gradle.api.GradleException
@@ -138,10 +131,6 @@ abstract class VerifySourceAndLegalProvenance @Inject constructor(
     @get:InputFile
     @get:PathSensitive(PathSensitivity.NONE)
     abstract val thinJar: RegularFileProperty
-
-    @get:InputFile
-    @get:PathSensitive(PathSensitivity.NONE)
-    abstract val allJar: RegularFileProperty
 
     @get:InputFile
     @get:PathSensitive(PathSensitivity.NONE)
@@ -316,7 +305,6 @@ abstract class VerifySourceAndLegalProvenance @Inject constructor(
         )
 
         verifyPackagedLegalResources("thin", thinJar.get().asFile, legalBytes)
-        verifyPackagedLegalResources("all", allJar.get().asFile, legalBytes)
         verifyPackagedLegalResources("sources", sourcesJar.get().asFile, legalBytes)
         verifyPackagedLegalResources("javadoc", javadocJar.get().asFile, legalBytes)
 
@@ -1391,68 +1379,11 @@ abstract class VerifyCoverageEvidence : DefaultTask() {
     }
 }
 
-@CacheableTransformer
-open class SqlDriverServiceTransformer : ResourceTransformer {
-
-    private val providers = linkedSetOf<String>()
-
-    override fun canTransformResource(element: FileTreeElement): Boolean =
-        element.path == SERVICE_PATH
-
-    override fun transform(context: TransformerContext) {
-        context.inputStream.bufferedReader(StandardCharsets.UTF_8).useLines { lines ->
-            lines
-                .map { it.substringBefore('#').trim() }
-                .filter { it.isNotEmpty() }
-                .forEach(providers::add)
-        }
-    }
-
-    override fun hasTransformedResource(): Boolean = providers.isNotEmpty()
-
-    override fun modifyOutputStream(
-        os: ZipOutputStream,
-        preserveFileTimestamps: Boolean,
-    ) {
-        val entry = ZipEntry(SERVICE_PATH).apply {
-            unixMode = UnixStat.FILE_FLAG or FILE_MODE_0644
-            if (!preserveFileTimestamps) {
-                time = ShadowJar.CONSTANT_TIME_FOR_ZIP_ENTRIES
-            }
-        }
-        os.putNextEntry(entry)
-        os.write((providers.joinToString("\n") + "\n").toByteArray(StandardCharsets.UTF_8))
-        os.closeEntry()
-    }
-
-    companion object {
-        private const val SERVICE_PATH = "META-INF/services/java.sql.Driver"
-        private const val FILE_MODE_0644 = 420
-    }
-}
-
-@Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
-class StandaloneShadowManifest(
-    private val delegate: Manifest,
-) : com.github.jengelman.gradle.plugins.shadow.tasks.InheritManifest, Manifest by delegate {
-
-    override fun inheritFrom(
-        inheritPaths: Array<out Any>,
-        action: Action<ManifestMergeSpec>,
-    ) {
-        inheritPaths.forEach { delegate.from(it, action) }
-    }
-}
-
 abstract class VerifyPublishedJars : DefaultTask() {
 
     @get:InputFile
     @get:PathSensitive(PathSensitivity.NONE)
     abstract val thinJar: RegularFileProperty
-
-    @get:InputFile
-    @get:PathSensitive(PathSensitivity.NONE)
-    abstract val allJar: RegularFileProperty
 
     @get:Input
     abstract val expectedBundleVersion: Property<String>
@@ -1460,23 +1391,14 @@ abstract class VerifyPublishedJars : DefaultTask() {
     @get:Input
     abstract val expectedPublicationVersion: Property<String>
 
-    @get:Input
-    abstract val expectedSQLiteVersion: Property<String>
-
-    @get:InputFile
-    @get:PathSensitive(PathSensitivity.RELATIVE)
-    abstract val sqliteNativeChecksums: RegularFileProperty
-
     @get:OutputFile
     abstract val inventoryReport: RegularFileProperty
 
     @TaskAction
     fun verify() {
         val thin = readJar(thinJar.get().asFile)
-        val all = readJar(allJar.get().asFile)
 
         verifyCommonContract("thin", thin)
-        verifyCommonContract("all", all)
         assertValid(
             thin.mainAttributes.keys == EXPECTED_THIN_MAIN_ATTRIBUTES,
             "Thin JAR has an unexpected manifest attribute inventory: ${thin.mainAttributes.keys}",
@@ -1523,13 +1445,6 @@ abstract class VerifyPublishedJars : DefaultTask() {
                 ?.contains("(&(osgi.ee=JavaSE)(version=21))") == true,
             "Thin JAR has the wrong OSGi execution-environment requirement",
         )
-        assertValid(
-            all.mainAttributes == expectedAllMainAttributes(expectedPublicationVersion.get()),
-            "All JAR has unexpected manifest attributes: ${all.mainAttributes}",
-        )
-        assertValid(all.multiRelease == "true", "All JAR must preserve SQLite's multi-release manifest")
-
-        val nativeInventory = verifySQLiteNatives(allJar.get().asFile)
 
         val dependencyPrefixes = listOf(
             "com/esotericsoftware/",
@@ -1544,124 +1459,18 @@ abstract class VerifyPublishedJars : DefaultTask() {
         }
         assertValid(embeddedInThin.isEmpty(), "Thin JAR embeds dependency packages: $embeddedInThin")
 
-        val forbiddenInAll = dependencyPrefixes.dropLast(1).filter { prefix ->
-            all.names.any { it.startsWith(prefix) }
-        }
-        assertValid(forbiddenInAll.isEmpty(), "All JAR contains unrelocated dependency packages: $forbiddenInAll")
-
-        val requiredRelocations = listOf(
-            "com/googlecode/cqengine/lib/com/esotericsoftware/",
-            "com/googlecode/cqengine/lib/com/googlecode/concurrenttrees/",
-            "com/googlecode/cqengine/lib/javassist/",
-            "com/googlecode/cqengine/lib/org/antlr/v4/",
-            "com/googlecode/cqengine/lib/org/objenesis/",
-        )
-        val missingRelocations = requiredRelocations.filterNot { prefix ->
-            all.names.any { it.startsWith(prefix) && it.endsWith(".class") }
-        }
-        assertValid(missingRelocations.isEmpty(), "All JAR is missing relocations: $missingRelocations")
-
-        assertValid("org/sqlite/JDBC.class" in all.names, "All JAR is missing the SQLite JDBC driver")
-        assertValid(
-            all.serviceProviders == listOf("org.sqlite.JDBC"),
-            "Unexpected java.sql.Driver providers: ${all.serviceProviders}",
-        )
-        val requiredEmbeddedLegalResources = listOf(
-            "META-INF/LICENSE",
-            "META-INF/NOTICE",
-            "META-INF/maven/org.xerial/sqlite-jdbc/LICENSE",
-            "META-INF/maven/org.xerial/sqlite-jdbc/LICENSE.zentus",
-        )
-        val missingEmbeddedLegalResources = requiredEmbeddedLegalResources.filterNot(all.names::contains)
-        assertValid(
-            missingEmbeddedLegalResources.isEmpty(),
-            "All JAR is missing embedded dependency legal resources: $missingEmbeddedLegalResources",
-        )
-
         val thinCqengineClasses = thin.names.filterTo(sortedSetOf()) {
             it.startsWith("com/googlecode/cqengine/") && it.endsWith(".class")
         }
-        val allCqengineClasses = all.names.filterTo(sortedSetOf()) {
-            it.startsWith("com/googlecode/cqengine/") &&
-                !it.startsWith("com/googlecode/cqengine/lib/") &&
-                it.endsWith(".class")
-        }
-        assertValid(
-            thinCqengineClasses == allCqengineClasses,
-            "Thin and all JAR CQEngine class inventories differ",
-        )
-
         inventoryReport.get().asFile.apply {
             parentFile.mkdirs()
             writeText(
                 buildString {
                     appendLine("publication.version=${expectedPublicationVersion.get()}")
-                    appendLine("sqlite.version=${expectedSQLiteVersion.get()}")
-                    appendLine("sqlite.native.count=${nativeInventory.size}")
-                    nativeInventory.forEach { (path, checksum) ->
-                        appendLine("sqlite.native.$path=$checksum")
-                    }
+                    thinCqengineClasses.forEach { appendLine("thin.class=$it") }
                 },
                 StandardCharsets.UTF_8,
             )
-        }
-    }
-
-    private fun verifySQLiteNatives(allJar: File): SortedMap<String, String> {
-        val checksumFile = sqliteNativeChecksums.get().asFile
-        val properties = Properties().apply {
-            checksumFile.inputStream().buffered().use(::load)
-        }
-        val configuredVersion = properties.getProperty("sqlite.version")
-        assertValid(
-            configuredVersion == expectedSQLiteVersion.get(),
-            "SQLite native checksum version $configuredVersion differs from ${expectedSQLiteVersion.get()}",
-        )
-        val expected = properties.stringPropertyNames()
-            .filterNot { it == "sqlite.version" }
-            .associateWith { path -> properties.getProperty(path).lowercase(Locale.ROOT) }
-            .toSortedMap()
-        assertValid(
-            expected.size == EXPECTED_SQLITE_NATIVE_COUNT,
-            "SQLite native checksum inventory must contain exactly $EXPECTED_SQLITE_NATIVE_COUNT entries, " +
-                "found ${expected.size}",
-        )
-        expected.forEach { (path, checksum) ->
-            assertValid(
-                checksum.matches(Regex("[0-9a-f]{64}")),
-                "SQLite native checksum is not SHA-256 for $path: $checksum",
-            )
-        }
-
-        return JarFile(allJar).use { jar ->
-            val actualPaths = jar.entries().asSequence()
-                .filterNot { it.isDirectory }
-                .map { it.name }
-                .filter { it.startsWith(SQLITE_NATIVE_PREFIX) }
-                .toSortedSet()
-            assertValid(
-                actualPaths == expected.keys,
-                "SQLite native inventory differs: expected ${expected.keys}, found $actualPaths",
-            )
-            actualPaths.associateWithTo(sortedMapOf()) { path ->
-                val entry = jar.getJarEntry(path)
-                    ?: throw GradleException("SQLite native disappeared while reading all JAR: $path")
-                val actual = jar.getInputStream(entry).buffered().use { stream ->
-                    val digest = MessageDigest.getInstance("SHA-256")
-                    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-                    while (true) {
-                        val count = stream.read(buffer)
-                        if (count < 0) break
-                        digest.update(buffer, 0, count)
-                    }
-                    digest.digest().joinToString("") { byte -> "%02x".format(byte) }
-                }
-                assertValid(
-                    actual == expected.getValue(path),
-                    "SQLite native checksum differs for $path: expected ${expected.getValue(path)}, found $actual",
-                )
-                actual
-            }
         }
     }
 
@@ -1729,8 +1538,6 @@ abstract class VerifyPublishedJars : DefaultTask() {
     )
 
     companion object {
-        private const val EXPECTED_SQLITE_NATIVE_COUNT = 20
-        private const val SQLITE_NATIVE_PREFIX = "org/sqlite/native/"
 
         private val EXPECTED_THIN_MAIN_ATTRIBUTES = setOf(
             "Manifest-Version",
@@ -1747,13 +1554,6 @@ abstract class VerifyPublishedJars : DefaultTask() {
             "Require-Capability",
         )
 
-        private fun expectedAllMainAttributes(version: String) = mapOf(
-            "Manifest-Version" to "1.0",
-            "Automatic-Module-Name" to "cqengine",
-            "Implementation-Title" to "CQEngine",
-            "Implementation-Version" to version,
-            "Multi-Release" to "true",
-        )
     }
 }
 
@@ -1787,10 +1587,6 @@ abstract class VerifyReleaseVersion : DefaultTask() {
     @get:InputFile
     @get:PathSensitive(PathSensitivity.NONE)
     abstract val thinJar: RegularFileProperty
-
-    @get:InputFile
-    @get:PathSensitive(PathSensitivity.NONE)
-    abstract val allJar: RegularFileProperty
 
     @get:InputFile
     @get:PathSensitive(PathSensitivity.NONE)
@@ -1870,7 +1666,6 @@ abstract class VerifyReleaseVersion : DefaultTask() {
 
         val jarEvidence = listOf(
             verifyJar(thinJar.get().asFile, artifact, version, "", JarKind.THIN, osgiVersion),
-            verifyJar(allJar.get().asFile, artifact, version, "-all", JarKind.ALL, osgiVersion),
             verifyJar(sourcesJar.get().asFile, artifact, version, "-sources", JarKind.SOURCES, osgiVersion),
             verifyJar(javadocJar.get().asFile, artifact, version, "-javadoc", JarKind.JAVADOC, osgiVersion),
         )
@@ -1995,17 +1790,6 @@ abstract class VerifyReleaseVersion : DefaultTask() {
                         attributes.getValue("Bundle-Version") == osgiVersion,
                         "Thin JAR has the wrong Bundle-Version",
                     )
-                }
-                JarKind.ALL -> {
-                    requireValid(
-                        attributes.getValue("Automatic-Module-Name") == "cqengine",
-                        "All JAR has the wrong automatic module name",
-                    )
-                    requireValid(
-                        attributes.getValue("Multi-Release") == "true",
-                        "All JAR must retain its multi-release manifest",
-                    )
-                    requireNoOsgiHeaders(kind, attributes)
                 }
                 JarKind.SOURCES, JarKind.JAVADOC -> {
                     requireValid(
@@ -2169,7 +1953,6 @@ abstract class VerifyReleaseVersion : DefaultTask() {
 
     private enum class JarKind(val label: String) {
         THIN("thin"),
-        ALL("all"),
         SOURCES("sources"),
         JAVADOC("javadoc"),
     }
@@ -2229,10 +2012,6 @@ abstract class GenerateDeterministicReleaseEvidence : DefaultTask() {
     @get:PathSensitive(PathSensitivity.NONE)
     abstract val thinJar: RegularFileProperty
 
-    @get:InputFile
-    @get:PathSensitive(PathSensitivity.NONE)
-    abstract val allJar: RegularFileProperty
-
     @get:Input
     abstract val publicationGroup: Property<String>
 
@@ -2286,15 +2065,6 @@ abstract class GenerateDeterministicReleaseEvidence : DefaultTask() {
         val jsonFile = output.resolve(SBOM_JSON)
         val xmlFile = output.resolve(SBOM_XML)
         writeSbom(thinBom, jsonFile, xmlFile)
-
-        val allRootReference = "$canonicalRootReference?classifier=all&type=jar"
-        val allBom = normalizeBom(
-            allRootReference,
-            allJar.get().asFile,
-            distribution = "all",
-            embedded = true,
-        )
-        writeSbom(allBom, output.resolve(SBOM_ALL_JSON), output.resolve(SBOM_ALL_XML))
 
         val licenseInventory = canonicalizeLicenseInventory(rawLicenseInventory.get().asFile)
         output.resolve(LICENSE_INVENTORY).writeText(licenseInventory, StandardCharsets.UTF_8)
@@ -2584,8 +2354,6 @@ abstract class GenerateDeterministicReleaseEvidence : DefaultTask() {
     companion object {
         const val SBOM_JSON = "cqengine.cdx.json"
         const val SBOM_XML = "cqengine.cdx.xml"
-        const val SBOM_ALL_JSON = "cqengine-all.cdx.json"
-        const val SBOM_ALL_XML = "cqengine-all.cdx.xml"
         const val LICENSE_INVENTORY = "dependency-licenses.json"
         const val LICENSE_FILE = "LICENSE.txt"
         const val NOTICES_FILE = "THIRD-PARTY-NOTICES"
@@ -2632,10 +2400,6 @@ abstract class VerifyStagedReleaseEvidence : DefaultTask() {
     @get:InputFile
     @get:PathSensitive(PathSensitivity.NONE)
     abstract val thinJar: RegularFileProperty
-
-    @get:InputFile
-    @get:PathSensitive(PathSensitivity.NONE)
-    abstract val allJar: RegularFileProperty
 
     @get:Input
     abstract val publicationCoordinate: Property<String>
@@ -2703,8 +2467,6 @@ abstract class VerifyStagedReleaseEvidence : DefaultTask() {
         val expectedNames = sortedSetOf(
             GenerateDeterministicReleaseEvidence.SBOM_JSON,
             GenerateDeterministicReleaseEvidence.SBOM_XML,
-            GenerateDeterministicReleaseEvidence.SBOM_ALL_JSON,
-            GenerateDeterministicReleaseEvidence.SBOM_ALL_XML,
             GenerateDeterministicReleaseEvidence.LICENSE_INVENTORY,
             GenerateDeterministicReleaseEvidence.LICENSE_FILE,
             GenerateDeterministicReleaseEvidence.NOTICES_FILE,
@@ -2785,13 +2547,6 @@ abstract class VerifyStagedReleaseEvidence : DefaultTask() {
             thinJar.get().asFile,
             distribution = "thin",
             embedded = false,
-        )
-        verifySbomPair(
-            root.resolve(GenerateDeterministicReleaseEvidence.SBOM_ALL_JSON),
-            root.resolve(GenerateDeterministicReleaseEvidence.SBOM_ALL_XML),
-            allJar.get().asFile,
-            distribution = "all",
-            embedded = true,
         )
     }
 
@@ -3369,10 +3124,6 @@ abstract class VerifyReproducibleRelease : DefaultTask() {
 
     @get:InputFile
     @get:PathSensitive(PathSensitivity.NONE)
-    abstract val canonicalAllJar: RegularFileProperty
-
-    @get:InputFile
-    @get:PathSensitive(PathSensitivity.NONE)
     abstract val canonicalSourcesJar: RegularFileProperty
 
     @get:InputFile
@@ -3510,7 +3261,6 @@ abstract class VerifyReproducibleRelease : DefaultTask() {
         command += listOf(
             "clean",
             "jar",
-            "shadowJar",
             "sourcesJar",
             "javadocJar",
             "generatePomFileForMavenJavaPublication",
@@ -3640,7 +3390,6 @@ abstract class VerifyReproducibleRelease : DefaultTask() {
         val version = publicationVersion.get()
         val fixedFiles = listOf(
             "build/libs/cqengine-$version.jar",
-            "build/libs/cqengine-$version-all.jar",
             "build/libs/cqengine-$version-sources.jar",
             "build/libs/cqengine-$version-javadoc.jar",
             "build/publications/mavenJava/pom-default.xml",
@@ -3674,7 +3423,6 @@ abstract class VerifyReproducibleRelease : DefaultTask() {
         val version = publicationVersion.get()
         val files = sortedMapOf(
             "build/libs/cqengine-$version.jar" to canonicalThinJar.get().asFile,
-            "build/libs/cqengine-$version-all.jar" to canonicalAllJar.get().asFile,
             "build/libs/cqengine-$version-sources.jar" to canonicalSourcesJar.get().asFile,
             "build/libs/cqengine-$version-javadoc.jar" to canonicalJavadocJar.get().asFile,
             "build/publications/mavenJava/pom-default.xml" to canonicalPom.get().asFile,
@@ -3858,10 +3606,6 @@ abstract class VerifyLocalPublication : DefaultTask() {
 
     @get:InputFile
     @get:PathSensitive(PathSensitivity.NONE)
-    abstract val allJar: RegularFileProperty
-
-    @get:InputFile
-    @get:PathSensitive(PathSensitivity.NONE)
     abstract val sourcesJar: RegularFileProperty
 
     @get:InputFile
@@ -3911,7 +3655,6 @@ abstract class VerifyLocalPublication : DefaultTask() {
         }
         val expectedArtifactNames = sortedSetOf(
             "$artifactStem.jar",
-            "$artifactStem-all.jar",
             "$artifactStem-javadoc.jar",
             "$artifactStem-sources.jar",
             "$artifactStem.module",
@@ -4129,7 +3872,6 @@ abstract class VerifyLocalPublication : DefaultTask() {
     private fun verifyStagedArtifacts(versionDirectory: File, artifactStem: String, version: String) {
         val stagedArtifacts = mapOf(
             versionDirectory.resolve("$artifactStem.jar") to thinJar.get().asFile,
-            versionDirectory.resolve("$artifactStem-all.jar") to allJar.get().asFile,
             versionDirectory.resolve("$artifactStem-sources.jar") to sourcesJar.get().asFile,
             versionDirectory.resolve("$artifactStem-javadoc.jar") to javadocJar.get().asFile,
             versionDirectory.resolve("$artifactStem.pom") to generatedPom.get().asFile,
@@ -4146,14 +3888,6 @@ abstract class VerifyLocalPublication : DefaultTask() {
             "thin",
             expectedImplementationVersion = version,
             expectedManifestAttributes = EXPECTED_THIN_MANIFEST_ATTRIBUTES,
-            requiredSuffix = ".class",
-            forbiddenSuffixes = emptySet(),
-        )
-        verifyJar(
-            versionDirectory.resolve("$artifactStem-all.jar"),
-            "all",
-            version,
-            expectedManifestAttributes = EXPECTED_ALL_MANIFEST_ATTRIBUTES,
             requiredSuffix = ".class",
             forbiddenSuffixes = emptySet(),
         )
@@ -4327,20 +4061,6 @@ abstract class VerifyLocalPublication : DefaultTask() {
             expectedFile = "$ARTIFACT_NAME-$version.jar",
             stagedFile = thinStaged,
             expectedDependencies = EXPECTED_DEPENDENCIES,
-            expectedCapabilities = expectedJarCapabilities,
-        )
-        verifyModuleVariant(
-            variantsByName.getValue("shadowRuntimeElements"),
-            expectedAttributes = mapOf(
-                "org.gradle.category" to "library",
-                "org.gradle.dependency.bundling" to "shadowed",
-                "org.gradle.jvm.version" to 21,
-                "org.gradle.libraryelements" to "jar",
-                "org.gradle.usage" to "java-runtime",
-            ),
-            expectedFile = "$ARTIFACT_NAME-$version-all.jar",
-            stagedFile = versionDirectory.resolve("$artifactStem-all.jar"),
-            expectedDependencies = emptyList(),
             expectedCapabilities = expectedJarCapabilities,
         )
         verifyModuleVariant(
@@ -4798,13 +4518,6 @@ abstract class VerifyLocalPublication : DefaultTask() {
             "Import-Package",
             "Require-Capability",
         )
-        private val EXPECTED_ALL_MANIFEST_ATTRIBUTES = setOf(
-            "Manifest-Version",
-            "Automatic-Module-Name",
-            "Implementation-Title",
-            "Implementation-Version",
-            "Multi-Release",
-        )
         private val EXPECTED_DOCUMENTATION_MANIFEST_ATTRIBUTES = setOf(
             "Manifest-Version",
             "Implementation-Title",
@@ -4813,7 +4526,6 @@ abstract class VerifyLocalPublication : DefaultTask() {
         private val EXPECTED_VARIANTS = setOf(
             "apiElements",
             "runtimeElements",
-            "shadowRuntimeElements",
             "sourcesElements",
             "javadocElements",
         )
@@ -4821,7 +4533,6 @@ abstract class VerifyLocalPublication : DefaultTask() {
             SnapshotArtifact(null, "module"),
             SnapshotArtifact("sources", "jar"),
             SnapshotArtifact(null, "jar"),
-            SnapshotArtifact("all", "jar"),
             SnapshotArtifact("javadoc", "jar"),
             SnapshotArtifact(null, "pom"),
         )
@@ -5184,7 +4895,6 @@ plugins {
     alias(libs.plugins.cyclonedx)
     alias(libs.plugins.dependency.check)
     alias(libs.plugins.license.report)
-    alias(libs.plugins.shadow)
     alias(libs.plugins.spotbugs)
 }
 
@@ -6129,52 +5839,6 @@ val bndBaseline = tasks.named<Baseline>("baseline") {
     reportFile.set(layout.buildDirectory.file("reports/osgi-baseline/report.txt"))
 }
 
-val shadowJar by tasks.existing(ShadowJar::class) {
-    archiveClassifier.set("all")
-    failOnDuplicateEntries = true
-    duplicatesStrategy = DuplicatesStrategy.INCLUDE
-    transform(SqlDriverServiceTransformer::class.java)
-    filesNotMatching("META-INF/services/**") {
-        duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-    }
-
-    relocate(
-        "com.googlecode.concurrenttrees",
-        "com.googlecode.cqengine.lib.com.googlecode.concurrenttrees",
-    )
-    relocate(
-        "com.esotericsoftware",
-        "com.googlecode.cqengine.lib.com.esotericsoftware",
-    )
-    relocate(
-        "javassist",
-        "com.googlecode.cqengine.lib.javassist",
-    )
-    relocate(
-        "org.antlr.v4",
-        "com.googlecode.cqengine.lib.org.antlr.v4",
-    )
-    relocate(
-        "org.objenesis",
-        "com.googlecode.cqengine.lib.org.objenesis",
-    )
-
-    exclude("META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA", "META-INF/*.EC")
-    exclude("module-info.class", "META-INF/versions/*/module-info.class")
-
-    setManifest(
-        StandaloneShadowManifest(
-            project.extensions.getByType<JavaPluginExtension>().manifest {
-                attributes(
-                    "Automatic-Module-Name" to "cqengine",
-                    "Implementation-Title" to "CQEngine",
-                    "Implementation-Version" to project.version,
-                )
-            },
-        ),
-    )
-}
-
 tasks.cyclonedxDirectBom {
     includeConfigs = listOf("runtimeClasspath")
     projectType = Component.Type.LIBRARY
@@ -6247,12 +5911,10 @@ configure<DependencyCheckExtension> {
     nvd.validForHours.set(24)
     analyzers.assemblyEnabled = false
     analyzers.ossIndex.enabled.set(false)
-    setScanSet(shadowJar.flatMap { it.archiveFile }.get().asFile)
 }
 
 tasks.named("dependencyCheckAnalyze") {
     dependsOn(verifyNvdApiKey)
-    dependsOn(shadowJar)
     outputs.upToDateWhen { false }
     notCompatibleWithConfigurationCache("Dependency-Check 12.2.2 does not support Gradle's configuration cache")
 }
@@ -6367,11 +6029,7 @@ val verifySecurityInventories by tasks.registering(VerifySecurityInventories::cl
     licenseReport.set(layout.buildDirectory.file("reports/dependency-license/dependencies.json"))
     dependencyCheckReport.set(layout.buildDirectory.file("reports/dependency-check/dependency-check-report.json"))
     expectedCoordinates.set(expectedRuntimeCoordinates)
-    expectedDependencyCheckFiles.set(
-        provider {
-            expectedDependencyCheckArtifactNames + "cqengine-${project.version}-all.jar"
-        },
-    )
+    expectedDependencyCheckFiles.set(expectedDependencyCheckArtifactNames)
 }
 
 tasks.register("securityCheck") {
@@ -6418,8 +6076,6 @@ val reviewedThirdPartyLicenseNames = listOf(
 val expectedDeterministicReleaseEvidencePaths = listOf(
     GenerateDeterministicReleaseEvidence.SBOM_JSON,
     GenerateDeterministicReleaseEvidence.SBOM_XML,
-    GenerateDeterministicReleaseEvidence.SBOM_ALL_JSON,
-    GenerateDeterministicReleaseEvidence.SBOM_ALL_XML,
     GenerateDeterministicReleaseEvidence.LICENSE_INVENTORY,
     GenerateDeterministicReleaseEvidence.LICENSE_FILE,
     GenerateDeterministicReleaseEvidence.NOTICES_FILE,
@@ -6435,7 +6091,7 @@ val expectedDeterministicReleaseEvidencePaths = listOf(
 val generateReleaseEvidence by tasks.registering(GenerateDeterministicReleaseEvidence::class) {
     description = "Generates path- and time-independent release SBOM, licence, legal and provenance evidence."
     group = "publishing"
-    dependsOn(tasks.cyclonedxDirectBom, "generateLicenseReport", "checkLicense", tasks.jar, shadowJar)
+    dependsOn(tasks.cyclonedxDirectBom, "generateLicenseReport", "checkLicense", tasks.jar)
     rawSbomJson.set(layout.buildDirectory.file("reports/sbom/cqengine.cdx.json"))
     rawLicenseInventory.set(layout.buildDirectory.file("reports/dependency-license/dependencies.json"))
     licenseFile.set(layout.projectDirectory.file("LICENSE.txt"))
@@ -6443,7 +6099,6 @@ val generateReleaseEvidence by tasks.registering(GenerateDeterministicReleaseEvi
     thirdPartyLicenseDirectory.set(layout.projectDirectory.dir("third-party-licenses"))
     wrapperProperties.set(layout.projectDirectory.file("gradle/wrapper/gradle-wrapper.properties"))
     thinJar.set(tasks.jar.flatMap { it.archiveFile })
-    allJar.set(shadowJar.flatMap { it.archiveFile })
     publicationGroup.set(provider { project.group.toString() })
     publicationArtifact.set("cqengine")
     publicationVersion.set(provider { project.version.toString() })
@@ -6479,7 +6134,6 @@ val verifyStagedReleaseEvidence by tasks.registering(VerifyStagedReleaseEvidence
     thirdPartyLicenseDirectory.set(layout.projectDirectory.dir("third-party-licenses"))
     wrapperProperties.set(layout.projectDirectory.file("gradle/wrapper/gradle-wrapper.properties"))
     thinJar.set(tasks.jar.flatMap { it.archiveFile })
-    allJar.set(shadowJar.flatMap { it.archiveFile })
     publicationCoordinate.set(
         provider { "${project.group}:cqengine:${project.version}" },
     )
@@ -6516,7 +6170,6 @@ val verifyReproducibleBuild by tasks.registering(VerifyReproducibleRelease::clas
     group = "verification"
     dependsOn(
         tasks.jar,
-        shadowJar,
         tasks.named("sourcesJar"),
         tasks.named("javadocJar"),
         tasks.named("generatePomFileForMavenJavaPublication"),
@@ -6546,7 +6199,6 @@ val verifyReproducibleBuild by tasks.registering(VerifyReproducibleRelease::clas
         ),
     )
     canonicalThinJar.set(tasks.jar.flatMap { it.archiveFile })
-    canonicalAllJar.set(shadowJar.flatMap { it.archiveFile })
     canonicalSourcesJar.set(tasks.named<Jar>("sourcesJar").flatMap { it.archiveFile })
     canonicalJavadocJar.set(tasks.named<Jar>("javadocJar").flatMap { it.archiveFile })
     canonicalPom.set(layout.buildDirectory.file("publications/mavenJava/pom-default.xml"))
@@ -6565,14 +6217,11 @@ val verifyReproducibleBuild by tasks.registering(VerifyReproducibleRelease::clas
 }
 
 val verifyPublishedJars by tasks.registering(VerifyPublishedJars::class) {
-    description = "Verifies the canonical thin JAR, all classifier, and every bundled SQLite native."
+    description = "Verifies the published library JAR's manifest, OSGi headers, legal resources and contents."
     group = "verification"
     thinJar.set(tasks.jar.flatMap { it.archiveFile })
-    allJar.set(shadowJar.flatMap { it.archiveFile })
     expectedBundleVersion.set(osgiVersion(project.version.toString()))
     expectedPublicationVersion.set(provider { project.version.toString() })
-    expectedSQLiteVersion.set(libs.versions.sqlite)
-    sqliteNativeChecksums.set(layout.projectDirectory.file("config/sqlite-native-checksums.properties"))
     inventoryReport.set(layout.buildDirectory.file("reports/publication/jar-inventory.txt"))
 }
 
@@ -6591,7 +6240,7 @@ val formatRatchetCheck by tasks.registering(VerifyFormatRatchet::class) {
 val verifySourceAndLegalProvenance by tasks.registering(VerifySourceAndLegalProvenance::class) {
     description = "Verifies clean source provenance, Gradle-only lineage and byte-identical packaged legal files."
     group = "verification"
-    dependsOn(tasks.jar, shadowJar, tasks.named("sourcesJar"), tasks.named("javadocJar"))
+    dependsOn(tasks.jar, tasks.named("sourcesJar"), tasks.named("javadocJar"))
     sourceDirectory.set(layout.projectDirectory)
     gitExecutable.set(trustedGitExecutable)
     baselineCommit.set("a06923bca69719c51c622543fa0c2d63e71e8fab")
@@ -6609,7 +6258,6 @@ val verifySourceAndLegalProvenance by tasks.registering(VerifySourceAndLegalProv
         ),
     )
     thinJar.set(tasks.jar.flatMap { it.archiveFile })
-    allJar.set(shadowJar.flatMap { it.archiveFile })
     sourcesJar.set(tasks.named<Jar>("sourcesJar").flatMap { it.archiveFile })
     javadocJar.set(tasks.named<Jar>("javadocJar").flatMap { it.archiveFile })
     reportFile.set(layout.buildDirectory.file("reports/qualification/source-legal-provenance.txt"))
@@ -6651,7 +6299,7 @@ tasks.check {
 // (alongside the implicit own-GAV capability, which explicit declarations would otherwise replace)
 // makes Gradle fail resolution when both artifacts meet in one dependency graph instead of
 // silently duplicating every class.
-listOf("apiElements", "runtimeElements", "shadowRuntimeElements").forEach { variantName ->
+listOf("apiElements", "runtimeElements").forEach { variantName ->
     configurations.named(variantName) {
         outgoing.capability("${project.group}:cqengine:${project.version}")
         outgoing.capability("com.googlecode.cqengine:cqengine:${project.version}")
@@ -6745,7 +6393,6 @@ val verifyPublication by tasks.registering(VerifyLocalPublication::class) {
     repositoryDirectory.set(layout.buildDirectory.dir("local-repository"))
     publicationVersion.set(provider { project.version.toString() })
     thinJar.set(tasks.jar.flatMap { it.archiveFile })
-    allJar.set(shadowJar.flatMap { it.archiveFile })
     sourcesJar.set(tasks.named<Jar>("sourcesJar").flatMap { it.archiveFile })
     javadocJar.set(tasks.named<Jar>("javadocJar").flatMap { it.archiveFile })
     generatedPom.set(layout.buildDirectory.file("publications/mavenJava/pom-default.xml"))
@@ -6840,34 +6487,14 @@ val thinConsumerTest by tasks.registering(Exec::class) {
     commandLine(externalConsumerCommand("thin"))
 }
 
-val allConsumerTest by tasks.registering(Exec::class) {
-    description = "Runs the staged all classifier in an external Java 21/25 consumer build."
-    group = "verification"
-    dependsOn(stageExternalConsumerBuild, verifyPublication)
-    configureExternalConsumerEnvironment()
-    mustRunAfter(thinConsumerTest)
-    workingDir(layout.projectDirectory)
-    commandLine(externalConsumerCommand("all"))
-}
-
 val thinPomConsumerTest by tasks.registering(Exec::class) {
     description = "Runs the staged thin artifact from POM metadata in an external Java 21/25 consumer build."
     group = "verification"
     dependsOn(stageExternalConsumerBuild, verifyPublication)
     configureExternalConsumerEnvironment()
-    mustRunAfter(allConsumerTest)
+    mustRunAfter(thinConsumerTest)
     workingDir(layout.projectDirectory)
     commandLine(externalConsumerCommand("thin", pomOnly = true))
-}
-
-val allPomConsumerTest by tasks.registering(Exec::class) {
-    description = "Runs the staged all classifier from POM metadata in an external Java 21/25 consumer build."
-    group = "verification"
-    dependsOn(stageExternalConsumerBuild, verifyPublication)
-    configureExternalConsumerEnvironment()
-    mustRunAfter(thinPomConsumerTest)
-    workingDir(layout.projectDirectory)
-    commandLine(externalConsumerCommand("all", pomOnly = true))
 }
 
 val thinModuleConsumerTest by tasks.registering(Exec::class) {
@@ -6875,19 +6502,9 @@ val thinModuleConsumerTest by tasks.registering(Exec::class) {
     group = "verification"
     dependsOn(stageExternalConsumerBuild, verifyPublication)
     configureExternalConsumerEnvironment()
-    mustRunAfter(allPomConsumerTest)
+    mustRunAfter(thinPomConsumerTest)
     workingDir(layout.projectDirectory)
     commandLine(externalConsumerCommand("thin-module"))
-}
-
-val allModuleConsumerTest by tasks.registering(Exec::class) {
-    description = "Runs the staged all classifier as a named module on Java 21/25."
-    group = "verification"
-    dependsOn(stageExternalConsumerBuild, verifyPublication)
-    configureExternalConsumerEnvironment()
-    mustRunAfter(thinModuleConsumerTest)
-    workingDir(layout.projectDirectory)
-    commandLine(externalConsumerCommand("all-module"))
 }
 
 fun TaskProvider<Exec>.retainConsumerEvidence(
@@ -6919,17 +6536,8 @@ fun TaskProvider<Exec>.retainConsumerEvidence(
             }
             val expectedArtifactMode = projectName.removeSuffix("-module")
             val expectedLaunchMode = if (projectName.endsWith("-module")) "module" else "classpath"
-            val expectedDriverModule = when {
-                expectedLaunchMode == "classpath" -> "unnamed"
-                expectedArtifactMode == "thin" -> "org.xerial.sqlitejdbc"
-                else -> "cqengine"
-            }
-            val expectedDriverArtifact = if (expectedArtifactMode == "thin") {
-                "sqlite-jdbc-$sqliteVersion.jar"
-            }
-            else {
-                "cqengine-$publicationVersion-all.jar"
-            }
+            val expectedDriverModule = if (expectedLaunchMode == "classpath") "unnamed" else "org.xerial.sqlitejdbc"
+            val expectedDriverArtifact = "sqlite-jdbc-$sqliteVersion.jar"
             val reviewedNativeChecksums = Properties().apply {
                 sqliteNativeChecksums.asFile.inputStream().buffered().use(::load)
             }
@@ -7062,22 +6670,16 @@ fun TaskProvider<Exec>.retainConsumerEvidence(
 }
 
 thinConsumerTest.retainConsumerEvidence("thin", "thin-gradle", "gradle")
-allConsumerTest.retainConsumerEvidence("all", "all-gradle", "gradle")
 thinPomConsumerTest.retainConsumerEvidence("thin", "thin-pom", "pom")
-allPomConsumerTest.retainConsumerEvidence("all", "all-pom", "pom")
 thinModuleConsumerTest.retainConsumerEvidence("thin-module", "thin-module", "gradle")
-allModuleConsumerTest.retainConsumerEvidence("all-module", "all-module", "gradle")
 
 tasks.register("consumerTest") {
     description = "Runs isolated thin and all classpath and module-path external consumer suites."
     group = "verification"
     dependsOn(
         thinConsumerTest,
-        allConsumerTest,
         thinPomConsumerTest,
-        allPomConsumerTest,
         thinModuleConsumerTest,
-        allModuleConsumerTest,
     )
 }
 
@@ -7159,7 +6761,6 @@ val releaseVersionCheck by tasks.registering(VerifyReleaseVersion::class) {
     group = "verification"
     dependsOn(
         tasks.jar,
-        shadowJar,
         tasks.named("sourcesJar"),
         tasks.named("javadocJar"),
         tasks.named("generatePomFileForMavenJavaPublication"),
@@ -7184,7 +6785,6 @@ val releaseVersionCheck by tasks.registering(VerifyReleaseVersion::class) {
     configuredVersion.set(provider { project.version.toString() })
     versionOverrideSources.set(releaseVersionOverrideSources)
     thinJar.set(tasks.jar.flatMap { it.archiveFile })
-    allJar.set(shadowJar.flatMap { it.archiveFile })
     sourcesJar.set(tasks.named<Jar>("sourcesJar").flatMap { it.archiveFile })
     javadocJar.set(tasks.named<Jar>("javadocJar").flatMap { it.archiveFile })
     generatedPom.set(layout.buildDirectory.file("publications/mavenJava/pom-default.xml"))
@@ -7228,11 +6828,8 @@ stageLocalReleaseEvidence.configure {
 }
 listOf(
     thinConsumerTest,
-    allConsumerTest,
     thinPomConsumerTest,
-    allPomConsumerTest,
     thinModuleConsumerTest,
-    allModuleConsumerTest,
 ).forEach { consumerTask ->
     consumerTask.configure { mustRunAfter(candidateQualification) }
 }
@@ -7265,11 +6862,8 @@ val localReadinessEvidencePaths = listOf(
     "root:reports/release-evidence/inventory.txt",
     "root:reports/reproducibility/artifact-hashes.txt",
     "root:reports/consumer/thin-gradle.txt",
-    "root:reports/consumer/all-gradle.txt",
     "root:reports/consumer/thin-pom.txt",
-    "root:reports/consumer/all-pom.txt",
     "root:reports/consumer/thin-module.txt",
-    "root:reports/consumer/all-module.txt",
     "root:reports/concurrency/jcstress-java21.txt",
     "root:reports/concurrency/jcstress-java25.txt",
     "root:reports/concurrency/soak.properties",
