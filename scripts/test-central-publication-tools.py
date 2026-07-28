@@ -3,7 +3,11 @@
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
+import importlib.util
+import io
+import json
 import os
 from pathlib import Path
 import stat
@@ -37,6 +41,53 @@ def digest(path: Path, algorithm: str) -> str:
 def require(condition: bool, message: object) -> None:
     if not condition:
         raise RuntimeError(str(message))
+
+
+def load_portal_client():
+    path = Path(__file__).resolve().with_name("central-portal.py")
+    specification = importlib.util.spec_from_file_location("central_portal", path)
+    module = importlib.util.module_from_spec(specification)
+    specification.loader.exec_module(module)
+    return module
+
+
+class RecordingPortal:
+    """Stands in for the Portal so requests can be asserted without reaching the network."""
+
+    def __init__(self) -> None:
+        self.requests: list[dict] = []
+
+    def __call__(self, method: str, url: str, headers: dict, body: bytes | None) -> str:
+        if not url.startswith("https://central.sonatype.com/api/v1/publisher/"):
+            raise AssertionError("unexpected Portal endpoint: " + url)
+        self.requests.append({"method": method, "url": url, "headers": dict(headers), "body": body})
+        if "/upload?" in url:
+            return DEPLOYMENT_ID
+        if "/status?id=" in url:
+            return json.dumps(
+                {
+                    "deploymentId": DEPLOYMENT_ID,
+                    "deploymentState": "VALIDATED",
+                    "purls": ["pkg:maven/io.github.shuaibrao/cqengine@4.0.0-rc.1"],
+                }
+            )
+        if "/deployment/" in url:
+            return ""
+        raise AssertionError("unhandled Portal endpoint: " + url)
+
+
+def run_portal(client, arguments: list[str], transport) -> tuple[int, str]:
+    """Invoke the client with fresh credentials, since a run consumes them from the environment."""
+    os.environ["CENTRAL_TOKEN_USERNAME"] = "token-user"
+    os.environ["CENTRAL_TOKEN_PASSWORD"] = "token-password"
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+    with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+        status = client.main(arguments, transport)
+    # A completed run must leave no credential behind for any later child process to inherit.
+    require("CENTRAL_TOKEN_USERNAME" not in os.environ, "token username survived the run")
+    require("CENTRAL_TOKEN_PASSWORD" not in os.environ, "token password survived the run")
+    return status, stdout.getvalue() + stderr.getvalue()
 
 
 def create_fixture(
@@ -164,41 +215,6 @@ else:
 """,
     )
     fake_gpg.chmod(fake_gpg.stat().st_mode | stat.S_IXUSR)
-    fake_curl = fake_bin / "curl"
-    write(
-        fake_curl,
-        f"""#!/usr/bin/env python3
-import json
-import os
-import pathlib
-import sys
-
-arguments = sys.argv[1:]
-if arguments[0] != "--disable":
-    raise SystemExit("curl configuration was not disabled first")
-if "CENTRAL_TOKEN_USERNAME" in os.environ or "CENTRAL_TOKEN_PASSWORD" in os.environ:
-    raise SystemExit("Central credentials leaked to curl")
-configuration = pathlib.Path(arguments[arguments.index("--config") + 1]).read_text()
-if "Authorization: Bearer dG9rZW4tdXNlcjp0b2tlbi1wYXNzd29yZA==" not in configuration:
-    raise SystemExit("expected bearer token was not supplied through curl config")
-url = arguments[-1]
-if not url.startswith("https://central.sonatype.com/api/v1/publisher/"):
-    raise SystemExit("unexpected Portal endpoint: " + url)
-with pathlib.Path(os.environ["FAKE_CURL_LOG"]).open("a", encoding="utf-8") as log:
-    log.write(json.dumps(arguments) + "\\n")
-if "/upload?" in url:
-    print("{DEPLOYMENT_ID}")
-elif "/status?id=" in url:
-    print(json.dumps({{
-        "deploymentId": "{DEPLOYMENT_ID}",
-        "deploymentState": "VALIDATED",
-        "purls": ["pkg:maven/io.github.shuaibrao/cqengine@4.0.0-rc.1"],
-    }}))
-elif "/deployment/" not in url:
-    raise SystemExit("unhandled Portal endpoint: " + url)
-""",
-    )
-    fake_curl.chmod(fake_curl.stat().st_mode | stat.S_IXUSR)
     return project, version_directory / names[0]
 
 
@@ -279,69 +295,56 @@ def main() -> None:
         require(mismatch.returncode != 0, "a mismatched qualification mode was accepted")
         require("qualification mode" in mismatch.stderr, mismatch.stderr)
 
-        portal = Path(__file__).resolve().with_name("central-portal.sh")
-        portal_environment = environment.copy()
-        portal_environment.update(
-            {
-                "CENTRAL_TOKEN_USERNAME": "token-user",
-                "CENTRAL_TOKEN_PASSWORD": "token-password",
-                "FAKE_CURL_LOG": str(root / "curl.log"),
-            }
+        portal = load_portal_client()
+        recorder = RecordingPortal()
+
+        status, uploaded = run_portal(
+            portal, ["upload", str(output), "cqengine-4.0.0-rc.1", "USER_MANAGED"], recorder
         )
-        uploaded = subprocess.run(
-            [str(portal), "upload", str(output), "cqengine-4.0.0-rc.1", "USER_MANAGED"],
-            check=True,
-            env=portal_environment,
-            stdout=subprocess.PIPE,
-            text=True,
-        ).stdout.strip()
-        require(uploaded == DEPLOYMENT_ID, uploaded)
-        automatic = subprocess.run(
-            [str(portal), "upload", str(output), "cqengine-4.0.0-rc.1", "AUTOMATIC"],
-            check=True,
-            env=portal_environment,
-            stdout=subprocess.PIPE,
-            text=True,
-        ).stdout.strip()
-        require(automatic == DEPLOYMENT_ID, automatic)
-        unsupported = subprocess.run(
-            [str(portal), "upload", str(output), "cqengine-4.0.0-rc.1", "PORTAL_API"],
-            env=portal_environment,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.PIPE,
-            text=True,
+        require(status == 0 and uploaded.strip() == DEPLOYMENT_ID, uploaded)
+        status, automatic = run_portal(
+            portal, ["upload", str(output), "cqengine-4.0.0-rc.1", "AUTOMATIC"], recorder
         )
-        require(unsupported.returncode != 0, "an unsupported Central publishing type was accepted")
-        status_result = subprocess.run(
-            [str(portal), "status", DEPLOYMENT_ID],
-            check=True,
-            env=portal_environment,
-            stdout=subprocess.PIPE,
-            text=True,
-        ).stdout
-        require('"deploymentState": "VALIDATED"' in status_result, status_result)
-        subprocess.run(
-            [str(portal), "publish", DEPLOYMENT_ID, DEPLOYMENT_ID, "4.0.0-rc.1"],
-            check=True,
-            env=portal_environment,
-            stdout=subprocess.DEVNULL,
+        require(status == 0 and automatic.strip() == DEPLOYMENT_ID, automatic)
+        # The uploaded bundle must be transmitted intact rather than by reference.
+        require(output.read_bytes() in recorder.requests[0]["body"], "bundle content was not uploaded")
+
+        status, _ = run_portal(
+            portal, ["upload", str(output), "cqengine-4.0.0-rc.1", "PORTAL_API"], recorder
         )
-        subprocess.run(
-            [str(portal), "drop", DEPLOYMENT_ID, DEPLOYMENT_ID],
-            check=True,
-            env=portal_environment,
-            stdout=subprocess.DEVNULL,
-        )
-        wrong_coordinate = subprocess.run(
-            [str(portal), "publish", DEPLOYMENT_ID, DEPLOYMENT_ID, "4.0.1"],
-            env=portal_environment,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
-        require(wrong_coordinate.returncode != 0, "publish accepted a different coordinate")
-        curl_log = (root / "curl.log").read_text(encoding="utf-8")
-        require("token-user" not in curl_log and "token-password" not in curl_log, curl_log)
+        require(status != 0, "an unsupported Central publishing type was accepted")
+
+        status, status_result = run_portal(portal, ["status", DEPLOYMENT_ID], recorder)
+        require(status == 0 and '"deploymentState": "VALIDATED"' in status_result, status_result)
+
+        status, _ = run_portal(portal, ["publish", DEPLOYMENT_ID, DEPLOYMENT_ID, "4.0.0-rc.1"], recorder)
+        require(status == 0, "publish rejected a validated deployment")
+        status, _ = run_portal(portal, ["drop", DEPLOYMENT_ID, DEPLOYMENT_ID], recorder)
+        require(status == 0, "drop rejected a confirmed deployment")
+
+        status, _ = run_portal(portal, ["publish", DEPLOYMENT_ID, DEPLOYMENT_ID, "4.0.1"], recorder)
+        require(status != 0, "publish accepted a different coordinate")
+        status, _ = run_portal(portal, ["drop", DEPLOYMENT_ID, "87654321-4321-4321-4321-cba987654321"], recorder)
+        require(status != 0, "drop accepted an unconfirmed deployment ID")
+
+        # The token belongs in the Authorization header and must appear in no URL or request body.
+        for request in recorder.requests:
+            require(
+                request["headers"].get("Authorization") == "Bearer dG9rZW4tdXNlcjp0b2tlbi1wYXNzd29yZA==",
+                request["headers"],
+            )
+            require("token-user" not in request["url"] and "token-password" not in request["url"], request["url"])
+            body = request["body"] or b""
+            require(b"token-user" not in body and b"token-password" not in body, "credential reached a request body")
+
+        # Credentials must never be sent anywhere but the Portal over HTTPS.
+        for rejected in ("http://central.sonatype.com/api/v1/publisher/status?id=x", "https://example.invalid/upload"):
+            try:
+                portal._https_transport("POST", rejected, {"Authorization": "Bearer x"}, None)
+            except portal.PortalError as error:
+                require("non-Portal endpoint" in str(error), error)
+            else:
+                raise RuntimeError("a non-Portal endpoint was accepted: " + rejected)
 
         thin_jar.write_bytes(b"tampered\n")
         failed = subprocess.run(

@@ -5287,7 +5287,7 @@ val centralPublicationToolsTest by tasks.registering(Exec::class) {
     commandLine(pythonExecutable.get(), "scripts/test-central-publication-tools.py")
     inputs.files(
         layout.projectDirectory.file("scripts/prepare-central-bundle.py"),
-        layout.projectDirectory.file("scripts/central-portal.sh"),
+        layout.projectDirectory.file("scripts/central-portal.py"),
         layout.projectDirectory.file("scripts/test-central-publication-tools.py"),
     )
     onlyIf("Central publication tooling executes only on the supported Linux release host") {

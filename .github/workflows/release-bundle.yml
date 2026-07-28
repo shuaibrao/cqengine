@@ -195,7 +195,7 @@ jobs:
             *) publishing_type=USER_MANAGED ;;
           esac
           bundle="build/central/cqengine-$RELEASE_VERSION-central-bundle.zip"
-          deployment_id=$(scripts/central-portal.sh upload \
+          deployment_id=$(python3 scripts/central-portal.py upload \
             "$bundle" \
             "cqengine-$RELEASE_VERSION-$GITHUB_RUN_ID" \
             "$publishing_type")
@@ -218,7 +218,7 @@ jobs:
           for attempt in $(seq 1 120); do
             response=$(CENTRAL_TOKEN_USERNAME="$central_username" \
               CENTRAL_TOKEN_PASSWORD="$central_password" \
-              scripts/central-portal.sh status "$DEPLOYMENT_ID")
+              python3 scripts/central-portal.py status "$DEPLOYMENT_ID")
             state=$(python3 -c 'import json,sys; d=json.load(sys.stdin); s=d["deploymentState"]; p=d.get("purls", []); d.get("deploymentId") == sys.argv[1] or sys.exit("different deployment"); (not p or p == [sys.argv[2]]) or sys.exit("different coordinate"); print(s)' "$DEPLOYMENT_ID" "$expected_purl" <<<"$response")
             echo "[$attempt/120] deploymentState=$state"
             case "$state" in
