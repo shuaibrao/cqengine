@@ -103,35 +103,57 @@ CQEngine uses fixed versions, conflict rejection, dependency locking, SHA-256 ch
 Gradle strict mode. A dependency update must review the upstream release and vulnerability evidence and explain every
 new dependency, signing key, ignored signing key or checksum.
 
-Regenerate the main dependency state only in the focused dependency change:
+Regenerate verification metadata before touching locks. A new plugin version cannot be resolved until its own
+artifacts verify, so `--write-locks` fails first with a verification error when the two are run the other way round:
 
 ```bash
-./gradlew dependencies --write-locks
-./gradlew --write-verification-metadata sha256,pgp --export-keys dependencies
+./gradlew --write-verification-metadata sha256,pgp dependencies
 ```
 
 Build-plugin changes must resolve the tasks and metadata variants which actually use the plugins:
 
 ```bash
-./gradlew clean shadowJar generatePomFileForMavenJavaPublication --write-verification-metadata sha256,pgp --export-keys
-./gradlew tasks cyclonedxDirectBom generateLicenseReport checkLicense --no-parallel --write-verification-metadata sha256,pgp --export-keys
+./gradlew clean shadowJar generatePomFileForMavenJavaPublication --write-verification-metadata sha256,pgp
+./gradlew tasks cyclonedxDirectBom generateLicenseReport checkLicense --no-parallel --write-verification-metadata sha256,pgp
 ```
 
 Resolve the isolated benchmark graph separately:
 
 ```bash
-./gradlew :benchmarks:jmhJar --write-locks --write-verification-metadata sha256,pgp --export-keys
+./gradlew :benchmarks:jmhJar --write-locks --write-verification-metadata sha256,pgp
 ```
 
 Resolve the non-published concurrency-tool graph separately:
 
 ```bash
-./gradlew :stress-tests:dependencies --write-locks --write-verification-metadata sha256,pgp --export-keys
+./gradlew :stress-tests:dependencies --write-locks --write-verification-metadata sha256,pgp
 ```
 
-Inspect the lock, verification-metadata and keyring diffs, then rebuild from a fresh Gradle user home without either
-write flag. Write mode records newly observed artifacts and is not verification evidence. Routine builds must never
-use lenient dependency verification.
+Regenerate the locks last, once every graph verifies:
+
+```bash
+./gradlew dependencies --write-locks
+```
+
+Add `--export-keys` only when the keyring genuinely needs new material, and revert both files if it fails. Gradle
+aborts on an unsigned-subpacket key with a `PGPSignature.getHashedSubPackets()` null dereference, and it fails
+part-written: one observed run truncated `verification-metadata.xml` and rewrote `verification-keyring.keys`. Omitting
+the flag records the same checksums and signatures without touching the keyring.
+
+Review the generated diff before trusting it:
+
+- On Windows, Gradle rewrites these files with CRLF. Normalise them back to LF first, or a few genuine additions
+  arrive buried in thousands of phantom line changes.
+- Compare parsed entries rather than reading the raw diff. Confirm that no existing checksum changed, since a
+  changed checksum for an unchanged coordinate means artifact substitution, not an update.
+- Reject proposed trust for any key listed in `ignored-keys`. Key servers that were unreachable when the ignore was
+  recorded may answer later, but a key cannot be both trusted and ignored; the ignore wins and the grant is inert.
+
+Then rebuild from a fresh Gradle user home without either write flag. This step is not a formality. Write mode
+records what the local cache already held, so a warm home hides artifacts a clean resolution needs — a missing Gradle
+module descriptor has reached a reviewed diff this way and only surfaced under a clean-home strict rebuild. Write mode
+records newly observed artifacts and is not verification evidence. Routine builds must never use lenient dependency
+verification.
 
 Gradle's IDE model downloads optional Maven `*-sources.jar` files and Gradle `gradle-*-src.zip` files for navigation.
 Those two filename classes are permanently exempt from checksum and signature verification. They are not compile,
