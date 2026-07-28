@@ -31,15 +31,17 @@ used to rank indexes whose queries return different numbers of objects.
 
 ## Running benchmarks
 
-Candidate evidence is produced only through the authoritative wrapper:
+Candidate evidence is produced by the local qualification:
 
 ```bash
-CQENGINE_JMH_MACHINE_LABEL=<approved-host-label> scripts/qualify-candidate.sh
+CQENGINE_JMH_MACHINE_LABEL=<approved-host-label> ./gradlew clean qualifyLocally
 ```
 
-The wrapper runs from committed source in a detached checkout and fresh Gradle home. It validates benchmark discovery,
-forks, warmup and measurement settings, result counts, JDK launchers, profiler metrics, concurrency progress and strong
-hashes before generating sanitized CSV, Markdown and SVG output.
+The run requires a clean Git worktree, so the measurements belong to a commit rather than to whatever happened to be
+in the working tree. It validates benchmark discovery, forks, warmup and measurement settings, result counts, JDK
+launchers, profiler metrics, concurrency progress and strong hashes before generating sanitized CSV, Markdown and SVG
+output. Published metadata records `qualificationMode`, so a reader can tell the run used shared Gradle and
+vulnerability-database caches rather than a clean-room rebuild.
 
 For development-only feedback, use:
 

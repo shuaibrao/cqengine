@@ -25,7 +25,7 @@ CHECKSUMS = {
 }
 FINGERPRINT = re.compile(r"[0-9A-Fa-f]{40,64}")
 VERSION = re.compile(r"[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z][0-9A-Za-z.-]*)?")
-QUALIFY_COMMANDS = ("scripts/qualify-candidate.sh", "scripts/qualify-candidate.ps1")
+QUALIFY_COMMAND = "./gradlew qualifyLocally"
 EVIDENCE_LINE = re.compile(r"([0-9a-f]{64}) ([0-9a-f]{128})  (root|benchmarks):(.+)")
 INVENTORY_LINE = re.compile(r"([0-9a-f]{64}) ([0-9a-f]{128})  (.+)")
 GPG_PASSPHRASE = os.environ.pop("CQENGINE_GPG_PASSPHRASE", None)
@@ -139,24 +139,20 @@ def verify_qualification(
     project: Path, repository: Path
 ) -> tuple[str, dict[str, tuple[str, str]], str, str]:
     evidence = project / "build/local-release-evidence/qualification"
-    completion_path = evidence / "wrapper-completion.properties"
+    completion_path = evidence / "qualification-completion.properties"
     readiness_path = evidence / "local-readiness-manifest.txt"
     completion = properties(completion_path)
     readiness = properties(readiness_path)
 
+    # The completion record is written only when the whole qualification graph succeeded, so its presence
+    # is the pass record; the hash pairing below stops it being matched with a different evidence set.
     require_property(completion, "formatVersion", "1")
     require_property(completion, "status", "passed")
-    require_property(completion, "validationStatus", "passed")
-    require_property(completion, "wrapperExitCode", "0")
-    if require_property(completion, "repositoryMode") not in {"local", "hosted"}:
-        raise BundleError("qualification completion has an unknown repository mode")
+    qualification_mode = require_property(completion, "qualificationMode")
     require_property(readiness, "formatVersion", "1")
-    qualify_command = require_property(readiness, "command")
-    if qualify_command not in QUALIFY_COMMANDS:
-        raise BundleError(
-            f"qualification evidence names an unknown wrapper: {qualify_command!r}"
-        )
-    require_property(readiness, "phaseIsolation", "separate-fresh-source-and-gradle-homes")
+    require_property(readiness, "command", QUALIFY_COMMAND)
+    if require_property(readiness, "qualificationMode") != qualification_mode:
+        raise BundleError("completion and readiness evidence disagree about the qualification mode")
 
     source_commit = require_property(completion, "sourceCommit")
     if require_property(readiness, "sourceCommit") != source_commit:
@@ -165,9 +161,9 @@ def verify_qualification(
     if require_property(readiness, "sourceTree") != source_tree:
         raise BundleError("qualification completion and readiness evidence identify different source trees")
     if digest(readiness_path, "sha256") != require_property(completion, "readinessManifestSha256"):
-        raise BundleError("readiness manifest SHA-256 does not match the wrapper completion record")
+        raise BundleError("readiness manifest SHA-256 does not match the qualification completion record")
     if digest(readiness_path, "sha512") != require_property(completion, "readinessManifestSha512"):
-        raise BundleError("readiness manifest SHA-512 does not match the wrapper completion record")
+        raise BundleError("readiness manifest SHA-512 does not match the qualification completion record")
 
     version = require_property(readiness, "coordinate").removeprefix(
         "io.github.shuaibrao:cqengine:"
@@ -214,7 +210,7 @@ def verify_qualification(
     return (
         version,
         verify_repository_inventory(project, repository, version),
-        qualify_command,
+        qualification_mode,
         skipped_gates,
     )
 
@@ -370,7 +366,7 @@ def main() -> int:
     if not gpg:
         raise BundleError("gpg is required to create Central signatures")
 
-    version, repository_inventory, qualify_command, skipped_gates = verify_qualification(
+    version, repository_inventory, qualification_mode, skipped_gates = verify_qualification(
         project, repository
     )
     names = primary_names(version)
@@ -437,7 +433,7 @@ def main() -> int:
             [
                 "formatVersion=1",
                 f"coordinate=io.github.shuaibrao:cqengine:{version}",
-                f"qualificationCommand={qualify_command}",
+                f"qualificationMode={qualification_mode}",
                 f"skippedReleaseGates={skipped_gates}",
                 f"signingFingerprint={signer}",
                 f"primarySigningFingerprint={primary_signer}",

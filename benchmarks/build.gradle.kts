@@ -1002,9 +1002,6 @@ abstract class VerifyJmhBaseline : BenchmarkHostAwareTask() {
     abstract val sourceTree: Property<String>
 
     @get:Input
-    abstract val releaseInvocationMarker: Property<String>
-
-    @get:Input
     abstract val publicationCoordinate: Property<String>
 
     @get:Input
@@ -1060,12 +1057,6 @@ abstract class VerifyJmhBaseline : BenchmarkHostAwareTask() {
 
     @TaskAction
     fun verify() {
-        if (releaseInvocationMarker.get() != "1") {
-            throw GradleException(
-                "The authoritative JMH baseline runs only through scripts/qualify-candidate.sh; " +
-                    "use jmhSmoke or an individual JMH lane for direct report-only work",
-            )
-        }
         val label = machineLabel.get()
         if (!label.matches(Regex(MACHINE_LABEL_PATTERN))) {
             throw GradleException(
@@ -2552,9 +2543,15 @@ val inheritedUnsafeBaselineOptions = listOf(
     "JAVA_OPTS",
     "GRADLE_OPTS",
 ).filter(System.getenv()::containsKey)
-val jmhReleaseInvocation = providers.environmentVariable("CQENGINE_RELEASE_INVOCATION")
-    .orElse("")
-val jmhTrustedGit = providers.environmentVariable("CQENGINE_TRUSTED_GIT").orElse("/usr/bin/git")
+// Git for Windows installs no /usr/bin, so the POSIX default cannot be the only fallback.
+val jmhTrustedGit = providers.environmentVariable("CQENGINE_TRUSTED_GIT").orElse(
+    if (System.getProperty("os.name").startsWith("Windows", ignoreCase = true)) {
+        Path.of(System.getenv("ProgramFiles") ?: "C:\\Program Files", "Git", "cmd", "git.exe").toString()
+    }
+    else {
+        "/usr/bin/git"
+    },
+)
 val benchmarkHostApprovalDirectory = rootProject.layout.projectDirectory.dir("config/benchmark-hosts")
 
 val verifyJmhMachineApproval by tasks.registering(VerifyBenchmarkHostApproval::class) {
@@ -2578,21 +2575,15 @@ val jmhMachineApprovalPreflight by tasks.registering(VerifyBenchmarkHostApproval
 }
 
 val verifyJmhBaselinePrerequisites by tasks.registering {
-    description = "Rejects an aggregate JMH baseline outside the authoritative qualification wrapper."
+    description = "Rejects an aggregate JMH baseline with an unusable label or contaminated JVM options."
     group = "verification"
     dependsOn(
-        rootProject.tasks.named("verifyReleaseInvocation"),
+        rootProject.tasks.named("verifyQualificationInvocation"),
         jmhLaneSelectionPreflight,
         jmhMachineApprovalPreflight,
     )
     outputs.upToDateWhen { false }
     doLast {
-        if (jmhReleaseInvocation.get() != "1") {
-            throw GradleException(
-                "The authoritative jmhBaseline task runs only through scripts/qualify-candidate.sh; " +
-                    "use jmhSmoke, jmhJava21, jmhJava25 or an individual lane for direct report-only work",
-            )
-        }
         val label = jmhMachineLabel.get()
         if (!label.matches(Regex("[A-Za-z0-9][A-Za-z0-9._-]{2,63}"))) {
             throw GradleException(
@@ -2662,7 +2653,6 @@ val verifyJmhBaseline by tasks.registering(VerifyJmhBaseline::class) {
     expectedResultsPerJava.set(104)
     sourceCommit.set(gitBaselineEvidence("rev-parse", "HEAD"))
     sourceTree.set(gitBaselineEvidence("rev-parse", "HEAD^{tree}"))
-    releaseInvocationMarker.set(jmhReleaseInvocation)
     publicationCoordinate.set(provider { "${rootProject.group}:cqengine:${rootProject.version}" })
     machineLabel.set(jmhMachineLabel)
     unsafeEnvironmentVariables.set(inheritedUnsafeBaselineOptions)
@@ -2758,7 +2748,7 @@ val syncBenchmarkDocumentation by tasks.registering(Exec::class) {
             .get()
             .asFile
         if (!environmentFile.isFile) {
-            throw GradleException("Run scripts/qualify-candidate.sh before syncing benchmark documentation")
+            throw GradleException("Run ./gradlew qualifyLocally before syncing benchmark documentation")
         }
         val environment = Properties().apply { environmentFile.inputStream().use(::load) }
         val sourceCommit = environment.getProperty("sourceCommit").orEmpty()

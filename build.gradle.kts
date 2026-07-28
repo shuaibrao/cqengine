@@ -527,7 +527,7 @@ abstract class VerifyFormatRatchet @Inject constructor(
     private data class GitResult(val exitCode: Int, val output: String)
 }
 
-abstract class VerifyReleaseInvocation @Inject constructor(
+abstract class VerifyQualificationInvocation @Inject constructor(
     buildFeatures: BuildFeatures,
 ) : DefaultTask() {
 
@@ -536,6 +536,9 @@ abstract class VerifyReleaseInvocation @Inject constructor(
 
     @get:Input
     abstract val excludedTaskNames: ListProperty<String>
+
+    @get:Input
+    abstract val offlineMode: Property<Boolean>
 
     @get:Input
     abstract val buildCacheEnabled: Property<Boolean>
@@ -568,40 +571,7 @@ abstract class VerifyReleaseInvocation @Inject constructor(
     abstract val initScripts: ListProperty<String>
 
     @get:Input
-    abstract val gradleUserHomePath: Property<String>
-
-    @get:Input
-    abstract val environmentGradleUserHomePath: Property<String>
-
-    @get:Input
-    abstract val projectRootPath: Property<String>
-
-    @get:Input
-    abstract val releaseInvocationMarker: Property<String>
-
-    @get:Input
     abstract val unsafeOptionEnvironmentVariables: ListProperty<String>
-
-    @get:Input
-    abstract val gitConfigNoSystem: Property<String>
-
-    @get:Input
-    abstract val gitConfigGlobal: Property<String>
-
-    @get:Input
-    abstract val gitNoReplaceObjects: Property<String>
-
-    @get:Input
-    abstract val gitAttrNoSystem: Property<String>
-
-    @get:Input
-    abstract val trustedPath: Property<String>
-
-    @get:Input
-    abstract val trustedToolBindings: ListProperty<String>
-
-    @get:Input
-    abstract val qualifyCommand: Property<String>
 
     @get:Input
     abstract val releaseEvidenceOverrides: ListProperty<String>
@@ -616,11 +586,11 @@ abstract class VerifyReleaseInvocation @Inject constructor(
     @TaskAction
     fun verify() {
         val errors = mutableListOf<String>()
-        val windows = System.getProperty("os.name").startsWith("Windows", ignoreCase = true)
         if (dependencyVerificationMode.get() != "STRICT") {
             errors += "dependency verification must be strict"
         }
         if (excludedTaskNames.get().isNotEmpty()) errors += "task exclusions are forbidden"
+        if (offlineMode.get()) errors += "offline mode is forbidden"
         if (buildCacheEnabled.get()) errors += "the build cache must be disabled"
         if (parallelEnabled.get()) errors += "parallel project execution must be disabled"
         if (configurationCacheRequested.get()) errors += "the configuration cache must be disabled"
@@ -631,261 +601,28 @@ abstract class VerifyReleaseInvocation @Inject constructor(
         if (refreshKeysEnabled.get() || exportKeysEnabled.get()) errors += "dependency-key mutation is forbidden"
         if (includedBuilds.get().isNotEmpty()) errors += "included builds are forbidden"
         if (initScripts.get().isNotEmpty()) errors += "Gradle init scripts are forbidden"
-        if (releaseInvocationMarker.get() != "1") {
-            errors += if (windows) {
-                "use scripts/qualify-candidate.ps1"
-            }
-            else {
-                "use scripts/qualify-candidate.sh"
-            }
-        }
+        // Ambient JVM options silently change JIT behaviour, which a benchmark reports as a plausible number
+        // rather than a failure. This is the one environmental check worth keeping outside a clean room.
         if (unsafeOptionEnvironmentVariables.get().isNotEmpty()) {
             errors += "unsafe JVM/build option environment variables are set: ${unsafeOptionEnvironmentVariables.get()}"
         }
-        if (gitConfigNoSystem.get() != "1") {
-            errors += "GIT_CONFIG_NOSYSTEM must disable system Git configuration"
-        }
-        val expectedGitConfigGlobal = if (windows) "NUL" else "/dev/null"
-        if (!gitConfigGlobal.get().equals(expectedGitConfigGlobal, ignoreCase = windows)) {
-            errors += if (windows) {
-                "GIT_CONFIG_GLOBAL must disable global Git configuration with NUL"
-            }
-            else {
-                "GIT_CONFIG_GLOBAL must disable global Git configuration"
-            }
-        }
-        if (gitNoReplaceObjects.get() != "1") {
-            errors += "GIT_NO_REPLACE_OBJECTS must disable Git object replacement"
-        }
-        if (gitAttrNoSystem.get() != "1") {
-            errors += "GIT_ATTR_NOSYSTEM must disable system Git attributes"
-        }
-        val trustedPathValue = trustedPath.get()
-        val processPath = System.getenv("PATH") ?: ""
-        if (trustedPathValue.isBlank() || processPath != trustedPathValue) {
-            errors += if (windows) {
-                "PATH must match the wrapper's fixed trusted Windows tool path"
-            }
-            else {
-                "PATH must be the wrapper's fixed /usr/bin:/bin tool path"
-            }
-        }
-        else if (!windows && trustedPathValue != "/usr/bin:/bin") {
-            errors += "PATH must be the wrapper's fixed /usr/bin:/bin tool path"
-        }
-        else if (windows) {
-            verifyWindowsTrustedPath(trustedPathValue, errors)
-        }
-        val expectedCommand = if (windows) "scripts/qualify-candidate.ps1" else "scripts/qualify-candidate.sh"
-        if (qualifyCommand.get() != expectedCommand) {
-            errors += "CQENGINE_QUALIFY_COMMAND must be $expectedCommand on this platform"
-        }
-        val verifiedTools = verifyTrustedTools(errors, windows, trustedPathValue)
         if (releaseEvidenceOverrides.get().isNotEmpty()) {
             errors += "release evidence overrides are reserved for nested archive builds: " +
                 releaseEvidenceOverrides.get()
         }
 
-        val root = Path.of(projectRootPath.get()).toRealPath()
-        val gradleHome = Path.of(gradleUserHomePath.get()).toRealPath()
-        val environmentHome = environmentGradleUserHomePath.orNull
-            ?.takeIf(String::isNotBlank)
-            ?.let { Path.of(it) }
-            ?.toRealPath()
-        if (environmentHome == null || environmentHome != gradleHome) {
-            errors += "GRADLE_USER_HOME must name the active isolated Gradle home"
-        }
-        if (gradleHome.startsWith(root)) errors += "release GRADLE_USER_HOME must be outside the source checkout"
-        if (gradleHome == Path.of(System.getProperty("user.home"), ".gradle").toAbsolutePath().normalize()) {
-            errors += "the shared user Gradle home is forbidden"
-        }
-        val marker = gradleHome.resolve(CLEAN_HOME_MARKER)
-        val expectedMarker = "project=$root\nstate=created-empty\n"
-        if (!Files.isRegularFile(marker) || Files.readString(marker, StandardCharsets.UTF_8) != expectedMarker) {
-            errors += "isolated Gradle home has no valid clean-home marker"
-        }
-
         if (errors.isNotEmpty()) {
-            throw GradleException("Invalid release qualification invocation:\n - ${errors.joinToString("\n - ")}")
+            throw GradleException("Invalid qualification invocation:\n - ${errors.joinToString("\n - ")}")
         }
         reportFile.get().asFile.apply {
             parentFile.mkdirs()
             writeText(
                 "status=verified\ndependencyVerification=strict\ntaskExclusions=none\n" +
-                    "buildCache=disabled\nparallel=disabled\nconfigurationCache=disabled\n" +
-                    "gradleUserHome=isolated-clean\njavaOptionEnvironment=sanitized\n" +
-                    "gitConfigGlobal=disabled\ngitConfigSystem=disabled\ngitObjectReplacement=disabled\n" +
-                    "gitSystemAttributes=disabled\n" +
-                    "qualifyCommand=${qualifyCommand.get()}\n" +
-                    "trustedPath=${trustedPath.get()}\n" +
-                    verifiedTools.toSortedMap().entries.joinToString("") { (name, binding) ->
-                        "tool.$name.path=${binding.path}\ntool.$name.sha256=${binding.sha256}\n"
-                    },
+                    "buildCache=disabled\nconfigurationCache=disabled\nparallelExecution=disabled\n" +
+                    "javaOptionEnvironment=sanitized\n",
                 StandardCharsets.UTF_8,
             )
         }
-    }
-
-    private fun verifyWindowsTrustedPath(trustedPathValue: String, errors: MutableList<String>) {
-        val entries = trustedPathValue.split(';').filter(String::isNotEmpty)
-        if (entries.isEmpty()) {
-            errors += "trusted Windows PATH is empty"
-            return
-        }
-        entries.forEach { entry ->
-            val path = try {
-                Path.of(entry)
-            }
-            catch (_: RuntimeException) {
-                errors += "trusted Windows PATH entry is malformed: $entry"
-                return@forEach
-            }
-            if (!path.isAbsolute) {
-                errors += "trusted Windows PATH entry is not absolute: $entry"
-                return@forEach
-            }
-            val realPath = try {
-                path.toRealPath()
-            }
-            catch (_: IOException) {
-                errors += "trusted Windows PATH entry does not resolve: $entry"
-                return@forEach
-            }
-            if (realPath != path.normalize() || !Files.isDirectory(realPath)) {
-                errors += "trusted Windows PATH entry is not one canonical directory: $entry"
-            }
-        }
-    }
-
-    private fun verifyTrustedTools(
-        errors: MutableList<String>,
-        windows: Boolean,
-        trustedPathValue: String,
-    ): Map<String, ToolBinding> {
-        val expectedNames = setOf("bash", "git", "java", "nproc", "shell", "tar")
-        val pathRoots = if (windows) {
-            trustedPathValue.split(';').filter(String::isNotEmpty).mapNotNull { entry ->
-                try {
-                    Path.of(entry).toRealPath()
-                }
-                catch (_: IOException) {
-                    null
-                }
-            }
-        }
-        else {
-            listOf(Path.of("/usr/bin"))
-        }
-        val bindings = linkedMapOf<String, ToolBinding>()
-        trustedToolBindings.get().forEach { encoded ->
-            val fields = encoded.split('|')
-            if (fields.size != 3 || fields.any(String::isBlank)) {
-                errors += "malformed trusted-tool binding"
-                return@forEach
-            }
-            val (name, pathValue, expectedSha256) = fields
-            if (name !in expectedNames || bindings.containsKey(name)) {
-                errors += "unexpected or duplicate trusted-tool binding: $name"
-                return@forEach
-            }
-            if (!expectedSha256.matches(Regex("[0-9a-f]{64}"))) {
-                errors += "trusted-tool SHA-256 is malformed: $name"
-                return@forEach
-            }
-            val configuredPath = try {
-                Path.of(pathValue)
-            }
-            catch (_: RuntimeException) {
-                errors += "trusted-tool path is malformed: $name"
-                return@forEach
-            }
-            if (!configuredPath.isAbsolute) {
-                errors += "trusted-tool path is not absolute: $name"
-                return@forEach
-            }
-            val realPath = try {
-                configuredPath.toRealPath()
-            }
-            catch (_: IOException) {
-                errors += "trusted-tool path does not resolve: $name"
-                return@forEach
-            }
-            if (realPath != configuredPath.normalize() || !Files.isRegularFile(realPath) ||
-                !realPath.toFile().canExecute()
-            ) {
-                errors += "trusted-tool path is not one canonical executable: $name"
-                return@forEach
-            }
-            val actualSha256 = sha256(realPath)
-            if (actualSha256 != expectedSha256) {
-                errors += "trusted-tool SHA-256 changed after wrapper binding: $name"
-                return@forEach
-            }
-            if (name != "java") {
-                val underTrustedPath = pathRoots.any { root ->
-                    if (windows) {
-                        realPath.startsWith(root) ||
-                            realPath.toString().startsWith(root.toString() + "\\", ignoreCase = true) ||
-                            realPath.toString().equals(root.toString(), ignoreCase = true)
-                    }
-                    else {
-                        realPath.startsWith(root)
-                    }
-                }
-                if (!underTrustedPath || Files.isWritable(realPath) || Files.isWritable(realPath.parent)) {
-                    errors += if (windows) {
-                        "trusted system tool is outside non-writable trusted PATH directories: $name"
-                    }
-                    else {
-                        "trusted system tool is outside non-writable /usr/bin: $name"
-                    }
-                    return@forEach
-                }
-            }
-            bindings[name] = ToolBinding(realPath, expectedSha256)
-        }
-        if (bindings.keys != expectedNames) {
-            errors += "trusted-tool inventory differs: expected $expectedNames, found ${bindings.keys}"
-        }
-
-        val javaBinding = bindings["java"]
-        if (javaBinding != null) {
-            val javaExecutable = if (windows) {
-                "java.exe"
-            }
-            else {
-                "java"
-            }
-            val runningJava = try {
-                Path.of(System.getProperty("java.home"), "bin", javaExecutable).toRealPath()
-            }
-            catch (_: IOException) {
-                null
-            }
-            if (runningJava != javaBinding.path) {
-                errors += "trusted Java binding differs from the Gradle runtime: $runningJava"
-            }
-        }
-        return bindings
-    }
-
-    private fun sha256(path: Path): String {
-        val digest = MessageDigest.getInstance("SHA-256")
-        Files.newInputStream(path).use { input ->
-            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-            while (true) {
-                val read = input.read(buffer)
-                if (read < 0) break
-                digest.update(buffer, 0, read)
-            }
-        }
-        return digest.digest().joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }
-    }
-
-    private data class ToolBinding(val path: Path, val sha256: String)
-
-    companion object {
-        const val CLEAN_HOME_MARKER = ".cqengine-clean-release-home"
     }
 }
 
@@ -4065,7 +3802,10 @@ abstract class GenerateLocalReadinessManifest : DefaultTask() {
                     appendLine("os=${operatingSystem.get()}")
                     appendLine("architecture=${architecture.get()}")
                     appendLine("command=${qualifyCommand.get()}")
-                    appendLine("phaseIsolation=separate-fresh-source-and-gradle-homes")
+                    // The reader has to be able to tell how much the numbers and artifacts are worth: this runs
+                    // against the working checkout with shared Gradle and vulnerability-database caches, not a
+                    // detached copy in an empty Gradle home.
+                    appendLine("qualificationMode=local-checkout-shared-caches")
                     appendLine(
                         "skippedReleaseGates=" + skippedReleaseGates.get()
                             .sorted()
@@ -4073,13 +3813,8 @@ abstract class GenerateLocalReadinessManifest : DefaultTask() {
                             .ifEmpty { "none" },
                     )
                     appendLine(
-                        "preflightGradleArguments=--no-daemon --no-build-cache --no-configuration-cache " +
-                            "--no-parallel --dependency-verification strict --console=plain " +
-                            ":benchmarks:jmhLaneSelectionPreflight :stress-tests:compileJava",
-                    )
-                    appendLine(
                         "gradleArguments=--no-daemon --no-build-cache --no-configuration-cache --no-parallel " +
-                            "--dependency-verification strict --console=plain clean releaseCheck",
+                            "--dependency-verification strict --console=plain clean qualifyLocally",
                     )
                     appendLine("evidenceFiles=${evidence.size}")
                     evidence.toSortedMap().forEach { (label, file) ->
@@ -5888,22 +5623,8 @@ val unsafeJavaOptionEnvironmentVariables = listOf(
     "JDK_JAVA_OPTIONS",
     "_JAVA_OPTIONS",
 )
-val requiredGitIsolationEnvironmentVariables = setOf(
-    "GIT_ATTR_NOSYSTEM",
-    "GIT_CONFIG_GLOBAL",
-    "GIT_CONFIG_NOSYSTEM",
-    "GIT_NO_REPLACE_OBJECTS",
-)
-val trustedToolEnvironmentNames = linkedMapOf(
-    "bash" to "BASH",
-    "git" to "GIT",
-    "java" to "JAVA",
-    "nproc" to "NPROC",
-    "shell" to "SH",
-    "tar" to "TAR",
-)
-// Outside the qualification wrapper these fall back to the platform's own tool location. A bare "/usr/bin/git"
-// would resolve against the project directory on Windows and fail task-input validation before anything runs.
+// A bare "/usr/bin/git" would resolve against the project directory on Windows and fail task-input validation
+// before anything runs, so each tool falls back to the platform's own location.
 val gitForWindowsRoot = Path.of(System.getenv("ProgramFiles") ?: "C:\\Program Files", "Git")
 fun defaultTrustedTool(posixPath: String, windowsPath: String): File =
     if (System.getProperty("os.name").startsWith("Windows", ignoreCase = true)) {
@@ -5931,12 +5652,23 @@ val explicitlyRequestedJmhTask = gradle.startParameter.taskNames.any { requested
     requestedTask.substringAfterLast(':').startsWith("jmh")
 }
 val inheritedUnsafeJavaOptions = unsafeJavaOptionEnvironmentVariables.filter(System.getenv()::containsKey)
+// Only variables that change what the build produces or measures. A blanket GIT_* sweep belonged to the wrapper,
+// which scrubbed the whole Git environment; an ordinary GIT_EDITOR or GIT_PAGER cannot affect an artifact or a
+// benchmark. GIT_DIR and its relatives stay listed because they redirect the repository the build inspects.
+val redirectingGitEnvironmentVariables = setOf(
+    "GIT_DIR",
+    "GIT_WORK_TREE",
+    "GIT_INDEX_FILE",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_COMMON_DIR",
+    "GIT_CEILING_DIRECTORIES",
+)
 val unsafeReleaseOptionEnvironmentVariables =
     unsafeJavaOptionEnvironmentVariables +
         listOf("JAVA_OPTS", "GRADLE_OPTS") +
         System.getenv().keys.filter { name ->
-            (name.startsWith("GIT_") && name !in requiredGitIsolationEnvironmentVariables) ||
-                name.startsWith("ORG_GRADLE_PROJECT_")
+            name in redirectingGitEnvironmentVariables || name.startsWith("ORG_GRADLE_PROJECT_")
         }.sorted()
 val inheritedUnsafeReleaseOptions = unsafeReleaseOptionEnvironmentVariables.filter(System.getenv()::containsKey)
 if (explicitlyRequestedJmhTask && inheritedUnsafeJavaOptions.isNotEmpty()) {
@@ -6851,49 +6583,7 @@ val formatRatchetCheck by tasks.registering(VerifyFormatRatchet::class) {
     outputs.upToDateWhen { false }
 }
 
-val qualifyCandidateEarlyFailureTest by tasks.registering(Exec::class) {
-    description = "Verifies that early qualification failures invalidate stale success evidence safely."
-    group = "verification"
-    commandLine(
-        trustedBashExecutable.get().asFile.absolutePath,
-        "-p",
-        layout.projectDirectory.file("scripts/test-qualify-candidate-early-failures.sh"),
-    )
-    environment("JAVA_HOME", System.getProperty("java.home"))
-    inputs.files(
-        layout.projectDirectory.file("scripts/qualify-candidate.sh"),
-        layout.projectDirectory.file("scripts/test-qualify-candidate-early-failures.sh"),
-    )
-    onlyIf("qualify-candidate early-failure suite requires Linux privileged Bash") {
-        System.getProperty("os.name").lowercase(Locale.ROOT).contains("linux")
-    }
-    outputs.upToDateWhen { false }
-}
 
-val qualifyCandidateWindowsEarlyFailureTest by tasks.registering(Exec::class) {
-    description = "Verifies that early Windows qualification failures invalidate stale success evidence safely."
-    group = "verification"
-    commandLine(
-        Path.of(System.getenv("SystemRoot") ?: "C:\\Windows")
-            .resolve("System32/WindowsPowerShell/v1.0/powershell.exe")
-            .toString(),
-        "-NoProfile",
-        "-NonInteractive",
-        "-ExecutionPolicy",
-        "Bypass",
-        "-File",
-        layout.projectDirectory.file("scripts/test-qualify-candidate-early-failures.ps1").asFile.absolutePath,
-    )
-    environment("JAVA_HOME", System.getProperty("java.home"))
-    inputs.files(
-        layout.projectDirectory.file("scripts/qualify-candidate.ps1"),
-        layout.projectDirectory.file("scripts/test-qualify-candidate-early-failures.ps1"),
-    )
-    onlyIf("Windows qualify-candidate early-failure suite requires Windows PowerShell") {
-        System.getProperty("os.name").startsWith("Windows", ignoreCase = true)
-    }
-    outputs.upToDateWhen { false }
-}
 
 val verifySourceAndLegalProvenance by tasks.registering(VerifySourceAndLegalProvenance::class) {
     description = "Verifies clean source provenance, Gradle-only lineage and byte-identical packaged legal files."
@@ -6923,11 +6613,12 @@ val verifySourceAndLegalProvenance by tasks.registering(VerifySourceAndLegalProv
     outputs.upToDateWhen { false }
 }
 
-val verifyReleaseInvocation by tasks.registering(VerifyReleaseInvocation::class) {
-    description = "Rejects non-hermetic release qualification invocation settings."
+val verifyQualificationInvocation by tasks.registering(VerifyQualificationInvocation::class) {
+    description = "Rejects qualification invocation settings that would weaken or stale the result."
     group = "verification"
     dependencyVerificationMode.set(gradle.startParameter.dependencyVerificationMode.name)
     excludedTaskNames.set(gradle.startParameter.excludedTaskNames.sorted())
+    offlineMode.set(gradle.startParameter.isOffline)
     buildCacheEnabled.set(gradle.startParameter.isBuildCacheEnabled)
     parallelEnabled.set(gradle.startParameter.isParallelProjectExecutionEnabled)
     writeDependencyVerification.set(gradle.startParameter.writeDependencyVerifications)
@@ -6937,45 +6628,19 @@ val verifyReleaseInvocation by tasks.registering(VerifyReleaseInvocation::class)
     exportKeysEnabled.set(gradle.startParameter.isExportKeys)
     includedBuilds.set(gradle.startParameter.includedBuilds.map { it.absoluteFile.normalize().path }.sorted())
     initScripts.set(gradle.startParameter.allInitScripts.map { it.absoluteFile.normalize().path }.sorted())
-    gradleUserHomePath.set(gradle.startParameter.gradleUserHomeDir.absoluteFile.normalize().path)
-    environmentGradleUserHomePath.set(System.getenv("GRADLE_USER_HOME") ?: "")
-    projectRootPath.set(layout.projectDirectory.asFile.absoluteFile.normalize().path)
-    releaseInvocationMarker.set(System.getenv("CQENGINE_RELEASE_INVOCATION") ?: "")
-    unsafeOptionEnvironmentVariables.set(
-        inheritedUnsafeReleaseOptions,
-    )
-    gitConfigNoSystem.set(System.getenv("GIT_CONFIG_NOSYSTEM") ?: "")
-    gitConfigGlobal.set(System.getenv("GIT_CONFIG_GLOBAL") ?: "")
-    gitNoReplaceObjects.set(System.getenv("GIT_NO_REPLACE_OBJECTS") ?: "")
-    gitAttrNoSystem.set(System.getenv("GIT_ATTR_NOSYSTEM") ?: "")
-    trustedPath.set(System.getenv("CQENGINE_TRUSTED_PATH") ?: "")
-    trustedToolBindings.set(
-        trustedToolEnvironmentNames.map { (name, environmentSuffix) ->
-            val path = System.getenv("CQENGINE_TRUSTED_$environmentSuffix") ?: ""
-            val sha256 = System.getenv("CQENGINE_TRUSTED_${environmentSuffix}_SHA256") ?: ""
-            "$name|$path|$sha256"
-        },
-    )
-    qualifyCommand.set(
-        System.getenv("CQENGINE_QUALIFY_COMMAND") ?: "scripts/qualify-candidate.sh",
-    )
+    unsafeOptionEnvironmentVariables.set(inheritedUnsafeReleaseOptions)
     releaseEvidenceOverrides.set(
         releaseEvidencePropertyNames.filter { propertyName ->
             providers.gradleProperty(propertyName).isPresent
         },
     )
-    reportFile.set(layout.buildDirectory.file("reports/qualification/release-invocation.txt"))
+    reportFile.set(layout.buildDirectory.file("reports/qualification/invocation.txt"))
     outputs.upToDateWhen { false }
     mustRunAfter(tasks.clean)
 }
 
 tasks.check {
-    dependsOn(
-        formatRatchetCheck,
-        qualifyCandidateEarlyFailureTest,
-        qualifyCandidateWindowsEarlyFailureTest,
-        verifyPublishedJars,
-    )
+    dependsOn(formatRatchetCheck, verifyPublishedJars)
 }
 
 // The fork ships the same classes, JPMS module and OSGi bundle as the original
@@ -7125,7 +6790,14 @@ val stageExternalConsumerBuild by tasks.registering(Sync::class) {
 }
 
 fun externalConsumerCommand(projectName: String, pomOnly: Boolean = false): List<String> = buildList {
-    add(layout.projectDirectory.file("gradlew").asFile.absolutePath)
+    // The POSIX wrapper script is not executable on Windows; the batch wrapper is the entry point there.
+    val wrapperScript = if (System.getProperty("os.name").startsWith("Windows", ignoreCase = true)) {
+        "gradlew.bat"
+    }
+    else {
+        "gradlew"
+    }
+    add(layout.projectDirectory.file(wrapperScript).asFile.absolutePath)
     add("-p")
     add(externalConsumerBuildDirectory.get().asFile.absolutePath)
     add("--no-daemon")
@@ -7534,7 +7206,7 @@ val candidateQualification by tasks.registering {
         verifyReproducibleBuild,
         "verifySourceAndLegalProvenance",
         "formatRatchetCheck",
-        "verifyReleaseInvocation",
+        "verifyQualificationInvocation",
     )
 }
 
@@ -7660,7 +7332,7 @@ val generateLocalReadinessManifest by tasks.registering(GenerateLocalReadinessMa
     operatingSystem.set(providers.systemProperty("os.name"))
     architecture.set(providers.systemProperty("os.arch"))
     qualifyCommand.set(
-        System.getenv("CQENGINE_QUALIFY_COMMAND") ?: "scripts/qualify-candidate.sh",
+        "./gradlew qualifyLocally",
     )
     // Some gates cannot run on every platform, so the manifest records the ones this run did not execute.
     skippedReleaseGates.set(
@@ -7669,7 +7341,7 @@ val generateLocalReadinessManifest by tasks.registering(GenerateLocalReadinessMa
                 emptyList()
             }
             else {
-                listOf("centralPublicationToolsTest", "qualifyCandidateEarlyFailureTest")
+                listOf("centralPublicationToolsTest")
             }
         },
     )
@@ -7686,10 +7358,123 @@ tasks.register("releaseCheck") {
     dependsOn(generateLocalReadinessManifest)
 }
 
+abstract class VerifyQualificationSource : DefaultTask() {
+
+    @get:Input
+    abstract val worktreeStatus: Property<String>
+
+    @get:OutputFile
+    abstract val reportFile: RegularFileProperty
+
+    @TaskAction
+    fun verify() {
+        // Results are published against a commit, so measuring anything other than the committed tree would
+        // attribute numbers and artifacts to source that does not contain them.
+        val status = worktreeStatus.get().trim()
+        if (status.isNotEmpty()) {
+            throw GradleException(
+                "Qualification requires a clean Git worktree; commit or stash first:\n$status",
+            )
+        }
+        reportFile.get().asFile.apply {
+            parentFile.mkdirs()
+            writeText("status=clean\n", StandardCharsets.UTF_8)
+        }
+    }
+}
+
+val verifyQualificationSource by tasks.registering(VerifyQualificationSource::class) {
+    description = "Requires a clean Git worktree before qualification measures or publishes anything."
+    group = "verification"
+    worktreeStatus.set(
+        providers.exec {
+            commandLine(trustedGitExecutable.get().asFile.absolutePath, "status", "--porcelain=v1", "--untracked-files=all")
+            workingDir(layout.projectDirectory.asFile)
+        }.standardOutput.asText,
+    )
+    reportFile.set(layout.buildDirectory.file("reports/qualification/source.txt"))
+    outputs.upToDateWhen { false }
+}
+
+abstract class GenerateQualificationCompletion : DefaultTask() {
+
+    @get:InputFile
+    @get:PathSensitive(PathSensitivity.NONE)
+    abstract val readinessManifest: RegularFileProperty
+
+    @get:Input
+    abstract val sourceCommit: Property<String>
+
+    @get:Input
+    abstract val sourceTree: Property<String>
+
+    @get:OutputFile
+    abstract val completionFile: RegularFileProperty
+
+    @TaskAction
+    fun generate() {
+        // Written only when the whole graph succeeded, so its presence is the pass record. It binds the readiness
+        // manifest by hash so a later publication cannot pair this completion with a different evidence set.
+        val manifest = readinessManifest.get().asFile
+        completionFile.get().asFile.apply {
+            parentFile.mkdirs()
+            writeText(
+                buildString {
+                    appendLine("formatVersion=1")
+                    appendLine("status=passed")
+                    appendLine("qualificationMode=local-checkout-shared-caches")
+                    appendLine("sourceCommit=${sourceCommit.get()}")
+                    appendLine("sourceTree=${sourceTree.get()}")
+                    appendLine("completedAt=${Instant.now()}")
+                    appendLine("readinessManifestSha256=${digest(manifest, "SHA-256")}")
+                    appendLine("readinessManifestSha512=${digest(manifest, "SHA-512")}")
+                },
+                StandardCharsets.UTF_8,
+            )
+        }
+    }
+
+    private fun digest(file: File, algorithm: String): String {
+        val digest = MessageDigest.getInstance(algorithm)
+        file.inputStream().use { input ->
+            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+            while (true) {
+                val read = input.read(buffer)
+                if (read < 0) break
+                digest.update(buffer, 0, read)
+            }
+        }
+        return digest.digest().joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }
+    }
+}
+
+val generateQualificationCompletion by tasks.registering(GenerateQualificationCompletion::class) {
+    description = "Records that the complete local qualification passed and binds its readiness manifest."
+    group = "verification"
+    dependsOn(tasks.named("releaseCheck"))
+    readinessManifest.set(generateLocalReadinessManifest.flatMap { it.manifestFile })
+    sourceCommit.set(releaseSourceCommit)
+    sourceTree.set(releaseSourceTree)
+    completionFile.set(
+        layout.buildDirectory.file("local-release-evidence/qualification/qualification-completion.properties"),
+    )
+    outputs.upToDateWhen { false }
+}
+
+tasks.register("qualifyLocally") {
+    description = "Runs the complete local qualification against this checkout; see RELEASING.md."
+    group = "verification"
+    dependsOn(verifyQualificationSource, generateQualificationCompletion)
+}
+
 allprojects {
     tasks.configureEach {
-        if (path != ":verifyReleaseInvocation" && !name.startsWith("clean")) {
-            mustRunAfter(rootProject.tasks.named("verifyReleaseInvocation"))
+        // Both gates decide whether qualifying is meaningful at all, so nothing may precede them.
+        if (path !in setOf(":verifyQualificationInvocation", ":verifyQualificationSource") &&
+            !name.startsWith("clean")
+        ) {
+            mustRunAfter(rootProject.tasks.named("verifyQualificationInvocation"))
+            mustRunAfter(rootProject.tasks.named("verifyQualificationSource"))
         }
     }
 }

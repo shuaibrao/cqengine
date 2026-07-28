@@ -38,17 +38,16 @@ Never use dependency-verification write mode as passing evidence. Never add `--a
 
 ## Authoritative release qualification
 
-Only run the qualification wrapper when the user explicitly approves the long-running final qualification:
-`scripts/qualify-candidate.sh` on Linux, `scripts/qualify-candidate.ps1` on Windows. It rebuilds committed source in
-isolated homes and is the only command that creates authoritative release evidence. A focused or direct
-`releaseCheck` invocation is not equivalent.
+Only run `./gradlew clean qualifyLocally` when the user explicitly approves the long-running final qualification. It
+requires a clean worktree and an approved `CQENGINE_JMH_MACHINE_LABEL`, and writes
+`qualification-completion.properties` only when the whole graph passed. A direct `releaseCheck` invocation skips the
+clean-worktree gate and leaves no completion record, so it is not equivalent.
 
-Linux is the reference platform. A Windows qualification does not execute `centralPublicationToolsTest` or
-`qualifyCandidateEarlyFailureTest`; the readiness manifest names them in `skippedReleaseGates`. Report that a Windows
-run is the narrower claim rather than treating the two as interchangeable.
+The run uses the working checkout with shared Gradle and vulnerability-database caches, which the evidence records as
+`qualificationMode=local-checkout-shared-caches`. Do not describe it as a clean-room rebuild: that property comes from
+CI, which checks out fresh and proves byte-identical output before signing. State which one a given claim rests on.
 
-Changing either wrapper requires running its own regression suite: `qualifyCandidateEarlyFailureTest` for the shell
-wrapper, `qualifyCandidateWindowsEarlyFailureTest` for the PowerShell wrapper. Each runs only on its own platform, so
-a change made on one platform leaves the other wrapper unverified until it is checked there.
+`centralPublicationToolsTest` is Linux-only, so a Windows run names it in `skippedReleaseGates`. Report that rather
+than implying the platforms produce the same claim.
 
 Report the commands, runtime, test counts, failures/skips, and whether evidence applies to the exact current commit.

@@ -10,6 +10,7 @@ alwaysApply: false
 - Do not assume POSIX permissions, `/proc`, symlinks or `python3` without a documented platform boundary.
 - Close persistence, streams and native handles before deleting or renaming their files. POSIX unlinks an open file happily, so a leaked handle stays invisible on Linux and surfaces on Windows as a failed delete.
 - Build executable paths through a platform-aware name. JDK and wrapper tools need the `.exe` or `.bat` suffix on Windows, and a hardcoded POSIX default such as `/usr/bin/git` silently resolves against the project directory, so both forms fail Gradle task-input validation before the task can report anything useful.
+- An `orElse` default behind an environment variable that something always sets is untested code. Removing whatever set it makes every such default live at once, so audit them in the same change rather than discovering them one failed run at a time.
 - Shared hook command strings use `python3`; Windows setup must provide a real `python3` shim because JSON cannot select an interpreter by OS.
 - Keep platform-native tests explicit and report unsupported platforms rather than silently skipping claimed behavior.
 

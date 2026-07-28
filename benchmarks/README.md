@@ -9,18 +9,16 @@ Run the short discovery and correctness gate on both supported JDKs:
 ./gradlew jmhSmoke
 ```
 
-The authoritative dual-JDK baseline runs only inside the detached release qualification:
+The authoritative dual-JDK baseline runs as part of the local qualification:
 
 ```bash
-CQENGINE_JMH_MACHINE_LABEL=host-purpose-id scripts/qualify-candidate.sh
+CQENGINE_JMH_MACHINE_LABEL=host-purpose-id ./gradlew clean qualifyLocally
 ```
 
-On Windows:
-
-```powershell
-$env:CQENGINE_JMH_MACHINE_LABEL = 'host-purpose-id'
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts\qualify-candidate.ps1
-```
+`jmhBaseline` also runs on its own, but what makes a result publishable is the host approval record, not the way the
+task was invoked. A label with no reviewed record under `config/benchmark-hosts/` produces evidence marked
+`machineApproval=unapproved`, which the report generator renders as report-only and which must not be presented as a
+machine baseline.
 
 ## Host approval and declared hardware
 

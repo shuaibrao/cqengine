@@ -23,41 +23,40 @@ metadata.
 
 ## Authoritative command
 
-On Linux, run this command from the repository checkout:
+Run this from the repository checkout, on any supported platform:
 
 ```bash
-scripts/qualify-candidate.sh
+CQENGINE_JMH_MACHINE_LABEL=<approved-host-label> NVD_API_KEY=<key> ./gradlew clean qualifyLocally
 ```
 
-On Windows (Git for Windows required), run:
+The label must name a record under `config/benchmark-hosts/`, and every characteristic in that record is compared
+against a live observation of the machine. `JAVA_HOME` must point at an installed JDK; Java 21 and Java 25 must both
+be discoverable by Gradle toolchains.
 
-```powershell
-$env:JAVA_HOME = 'C:\absolute\path\to\jdk'
-$env:NVD_API_KEY = '...'
-$env:CQENGINE_JMH_MACHINE_LABEL = 'win11-i7-10750h-12c-01'  # example; must match config/benchmark-hosts/
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts\qualify-candidate.ps1
-```
+`qualifyLocally` refuses to start unless the Git worktree is clean, because results are published against a commit
+and measuring anything else would attribute numbers and artifacts to source that does not contain them. It then runs
+the complete `releaseCheck` graph and, only if everything passed, writes
+`build/local-release-evidence/qualification/qualification-completion.properties`. That file's existence is the pass
+record, and it binds the readiness manifest by hash so a later publication cannot pair it with different evidence.
 
-Do not invoke `releaseCheck` directly. The wrapper first invalidates retained output, verifies its tools and the Git
-source identity, materializes the exact committed tree into a detached checkout, performs a no-execution benchmark
-selection and stress-test dependency preflight, and then runs the complete release graph from a second detached
-checkout and empty Gradle user home. It disables build and configuration caches, parallel execution, ambient Gradle
-options and dependency-verification write mode for qualification.
+The invocation gate rejects settings that would weaken or stale the result: non-strict dependency verification, task
+exclusions, offline mode, the build or configuration cache, parallel execution, dependency-lock or key mutation,
+included builds, init scripts, and ambient `JAVA_TOOL_OPTIONS`-style variables. That last one matters most for
+benchmarks: an injected JVM flag does not fail the build, it silently changes the numbers.
 
-`-NoProfile` is required, not cosmetic: a PowerShell profile can replace the cmdlets the wrapper's gates are built
-from, so the wrapper refuses to run when any name it depends on no longer resolves to its shipped cmdlet.
+### What this run does and does not prove
 
-The Windows wrapper binds Git for Windows tools by absolute path and SHA-256 under a fixed `PATH`, and sets
-`GIT_CONFIG_GLOBAL=NUL` in place of `/dev/null`. It observes the host exactly as the Linux wrapper does and never
-substitutes a declared CPU model for a measured one.
+It runs against your working checkout with shared Gradle and vulnerability-database caches, so it is not a clean-room
+rebuild. The readiness manifest and completion record both state `qualificationMode=local-checkout-shared-caches`, and
+that mode reaches the Central bundle inventory, so no downstream reader has to guess.
 
-A Windows qualification is a narrower claim than a Linux one. `centralPublicationToolsTest` and
-`qualifyCandidateEarlyFailureTest` are Linux-only, so they do not execute; the readiness manifest names them in
-`skippedReleaseGates` rather than implying parity. `qualifyCandidateWindowsEarlyFailureTest` covers the Windows
-wrapper's own fail-closed gates and runs under `./gradlew check` on Windows.
+The clean-room property comes from CI instead, which is a stronger source for it: `ci.yml` builds a fresh checkout on
+a pristine runner, and `release-bundle.yml` rebuilds the qualified commit and proves the rebuilt publication is
+byte-identical to the committed inventory before signing anything. What this local run uniquely provides is JMH,
+JCStress and the soak on a known, approved host, which hosted runners are too noisy to measure.
 
-The wrapper is intentionally long-running. Use focused tasks during development and reserve this command for a
-reviewed release commit.
+The run is intentionally long. Use focused tasks during development and reserve this command for a reviewed release
+commit.
 
 ## Qualification contract
 

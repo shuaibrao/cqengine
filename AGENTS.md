@@ -63,7 +63,7 @@ python3 scripts/sync-agent-config.py --check
 | `./gradlew apiCompatibility baseline` | Java API and exported-package baselines |
 | `./gradlew jmhSmoke` | Short benchmark discovery/correctness gate |
 | `./gradlew concurrencySmoke` | Short JCStress discovery and concurrent read/write soak gate |
-| `scripts/qualify-candidate.sh` / `scripts/qualify-candidate.ps1` | Long-running authoritative local qualification; run only with explicit user approval |
+| `./gradlew qualifyLocally` | Long-running authoritative local qualification; run only with explicit user approval |
 
 Do not treat dependency-verification write mode, a stale build report, or direct `releaseCheck` as release evidence.
 

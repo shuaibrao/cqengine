@@ -42,7 +42,7 @@ def require(condition: bool, message: object) -> None:
 def create_fixture(
     root: Path,
     tool: Path,
-    qualify_command: str = "scripts/qualify-candidate.sh",
+    qualification_mode: str = "local-checkout-shared-caches",
     skipped_release_gates: str = "none",
 ) -> tuple[Path, Path]:
     project = root / "project"
@@ -120,8 +120,8 @@ def create_fixture(
                 f"coordinate=io.github.shuaibrao:cqengine:{version}",
                 f"sourceCommit={commit}",
                 f"sourceTree={tree}",
-                f"command={qualify_command}",
-                "phaseIsolation=separate-fresh-source-and-gradle-homes",
+                "command=./gradlew qualifyLocally",
+                f"qualificationMode={qualification_mode}",
                 f"skippedReleaseGates={skipped_release_gates}",
                 f"{digest(publication_inventory, 'sha256')} "
                 f"{digest(publication_inventory, 'sha512')}  root:reports/publication/inventory.txt",
@@ -130,14 +130,12 @@ def create_fixture(
         ),
     )
     write(
-        readiness.with_name("wrapper-completion.properties"),
+        readiness.with_name("qualification-completion.properties"),
         "\n".join(
             [
                 "formatVersion=1",
                 "status=passed",
-                "validationStatus=passed",
-                "wrapperExitCode=0",
-                "repositoryMode=local",
+                f"qualificationMode={qualification_mode}",
                 f"sourceCommit={commit}",
                 f"sourceTree={tree}",
                 f"readinessManifestSha256={digest(readiness, 'sha256')}",
@@ -231,54 +229,55 @@ def main() -> None:
         inventory = output.with_suffix(".zip.inventory.txt").read_text(encoding="utf-8")
         require(f"signingFingerprint={FINGERPRINT}" in inventory, inventory)
         require(f"bundleSha256={digest(output, 'sha256')}" in inventory, inventory)
-        require("qualificationCommand=scripts/qualify-candidate.sh" in inventory, inventory)
+        require("qualificationMode=local-checkout-shared-caches" in inventory, inventory)
         require("skippedReleaseGates=none" in inventory, inventory)
 
-        # A Windows qualification must reach Central, and the bundle must disclose which gates it lost.
-        windows_root = root / "windows"
-        windows_root.mkdir()
-        windows_project, _ = create_fixture(
-            windows_root,
-            tool,
-            qualify_command="scripts/qualify-candidate.ps1",
-            skipped_release_gates="centralPublicationToolsTest,qualifyCandidateEarlyFailureTest",
+        # Skipped gates must reach the bundle inventory rather than being silently dropped.
+        partial_root = root / "partial-gates"
+        partial_root.mkdir()
+        partial_project, _ = create_fixture(
+            partial_root, tool, skipped_release_gates="centralPublicationToolsTest"
         )
-        windows_output = windows_root / "candidate.zip"
-        windows_environment = environment.copy()
-        windows_environment["PATH"] = f"{windows_root / 'bin'}:{os.environ['PATH']}"
+        partial_output = partial_root / "candidate.zip"
+        partial_environment = environment.copy()
+        partial_environment["PATH"] = f"{partial_root / 'bin'}:{os.environ['PATH']}"
         subprocess.run(
-            [str(tool), "--project", str(windows_project), "--output", str(windows_output)],
+            [str(tool), "--project", str(partial_project), "--output", str(partial_output)],
             check=True,
-            env=windows_environment,
+            env=partial_environment,
             stdout=subprocess.DEVNULL,
         )
-        windows_inventory = windows_output.with_suffix(".zip.inventory.txt").read_text(encoding="utf-8")
+        partial_inventory = partial_output.with_suffix(".zip.inventory.txt").read_text(encoding="utf-8")
         require(
-            "qualificationCommand=scripts/qualify-candidate.ps1" in windows_inventory,
-            windows_inventory,
-        )
-        require(
-            "skippedReleaseGates=centralPublicationToolsTest,qualifyCandidateEarlyFailureTest"
-            in windows_inventory,
-            windows_inventory,
+            "skippedReleaseGates=centralPublicationToolsTest" in partial_inventory, partial_inventory
         )
 
-        unknown_root = root / "unknown-wrapper"
-        unknown_root.mkdir()
-        unknown_project, _ = create_fixture(
-            unknown_root, tool, qualify_command="scripts/attacker-wrapper.sh"
+        # A completion record must not be pairable with readiness evidence from a different qualification.
+        mismatch_root = root / "mode-mismatch"
+        mismatch_root.mkdir()
+        mismatch_project, _ = create_fixture(mismatch_root, tool)
+        completion = (
+            mismatch_project
+            / "build/local-release-evidence/qualification/qualification-completion.properties"
         )
-        unknown_environment = environment.copy()
-        unknown_environment["PATH"] = f"{unknown_root / 'bin'}:{os.environ['PATH']}"
-        unknown = subprocess.run(
-            [str(tool), "--project", str(unknown_project), "--output", str(unknown_root / "x.zip")],
-            env=unknown_environment,
+        completion.write_text(
+            completion.read_text(encoding="utf-8").replace(
+                "qualificationMode=local-checkout-shared-caches",
+                "qualificationMode=detached-clean-room",
+            ),
+            encoding="utf-8",
+        )
+        mismatch_environment = environment.copy()
+        mismatch_environment["PATH"] = f"{mismatch_root / 'bin'}:{os.environ['PATH']}"
+        mismatch = subprocess.run(
+            [str(tool), "--project", str(mismatch_project), "--output", str(mismatch_root / "x.zip")],
+            env=mismatch_environment,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE,
             text=True,
         )
-        require(unknown.returncode != 0, "an unknown qualification wrapper was accepted")
-        require("unknown wrapper" in unknown.stderr, unknown.stderr)
+        require(mismatch.returncode != 0, "a mismatched qualification mode was accepted")
+        require("qualification mode" in mismatch.stderr, mismatch.stderr)
 
         portal = Path(__file__).resolve().with_name("central-portal.sh")
         portal_environment = environment.copy()
