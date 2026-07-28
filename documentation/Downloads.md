@@ -12,7 +12,7 @@ repositories {
 }
 
 dependencies {
-    implementation("io.github.shuaibrao:cqengine:4.0.0-rc.1")
+    implementation("io.github.shuaibrao:cqengine:4.0.0")
 }
 ```
 
@@ -22,7 +22,7 @@ The equivalent Maven dependency is:
 <dependency>
     <groupId>io.github.shuaibrao</groupId>
     <artifactId>cqengine</artifactId>
-    <version>4.0.0-rc.1</version>
+    <version>4.0.0</version>
 </dependency>
 ```
 

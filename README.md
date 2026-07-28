@@ -605,7 +605,7 @@ often return database entities in Java collections, so CQEngine can provide inde
 ## Using CQEngine artifacts ##
 
 The unreleased 4.0 final will use the `io.github.shuaibrao:cqengine` coordinate shown below. The current local release
-candidate is `4.0.0-rc.1`; use that version when consuming artifacts staged by this checkout.
+release is `4.0.0`; use that version when consuming artifacts staged by this checkout.
 
 ```kotlin
 dependencies {

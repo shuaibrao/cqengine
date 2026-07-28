@@ -19,7 +19,7 @@ CQEngine 4.0 continues Niall Gallagher's CQEngine project from upstream commit
 | Repository | `https://github.com/shuaibrao/cqengine` |
 | Java packages | `com.googlecode.cqengine.*` |
 | Publication | `io.github.shuaibrao:cqengine` |
-| Candidate | `4.0.0-rc.1` |
+| Version | `4.0.0` |
 | Bytecode | Java 21 |
 | Verified runtimes | Java 21 and Java 25 |
 | Build | Gradle Kotlin DSL only |

@@ -56,7 +56,7 @@ metadata. To run a Gradle-metadata fixture directly after staging and publicatio
   --dependency-verification strict \
   -PcqengineRepository="$PWD/build/local-repository" \
   -PproducerRoot="$PWD" \
-  -PcqengineVersion=4.0.0-rc.1
+  -PcqengineVersion=4.0.0
 ```
 
 Add `-PpomOnly=true` to run the same fixture from Maven POM metadata only.
