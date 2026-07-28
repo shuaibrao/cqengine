@@ -81,7 +81,7 @@ jobs:
           completion="$evidence/wrapper-completion.properties"
           readiness="$evidence/local-readiness-manifest.txt"
           if [ ! -f "$completion" ] || [ ! -f "$readiness" ]; then
-            echo "::error::committed qualification evidence is missing under $evidence/ - run scripts/qualify-candidate.sh locally, commit its wrapper-completion.properties and local-readiness-manifest.txt there, then tag."
+            echo "::error::committed qualification evidence is missing under $evidence/ - run scripts/qualify-candidate.sh (or scripts/qualify-candidate.ps1 on Windows) locally, commit its wrapper-completion.properties and local-readiness-manifest.txt there, then tag."
             exit 1
           fi
           grep -Fxq 'status=passed' "$completion" || { echo "::error::qualification completion record is not successful"; exit 1; }

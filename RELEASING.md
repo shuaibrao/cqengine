@@ -23,10 +23,19 @@ metadata.
 
 ## Authoritative command
 
-Run this command from the repository checkout:
+On Linux, run this command from the repository checkout:
 
 ```bash
 scripts/qualify-candidate.sh
+```
+
+On Windows (Git for Windows required), run:
+
+```powershell
+$env:JAVA_HOME = 'C:\absolute\path\to\jdk'
+$env:NVD_API_KEY = '...'
+$env:CQENGINE_JMH_MACHINE_LABEL = 'win11-i7-10750h-12c-01'  # example; must match config/benchmark-hosts/
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\qualify-candidate.ps1
 ```
 
 Do not invoke `releaseCheck` directly. The wrapper first invalidates retained output, verifies its tools and the Git
@@ -34,6 +43,18 @@ source identity, materializes the exact committed tree into a detached checkout,
 selection and stress-test dependency preflight, and then runs the complete release graph from a second detached
 checkout and empty Gradle user home. It disables build and configuration caches, parallel execution, ambient Gradle
 options and dependency-verification write mode for qualification.
+
+`-NoProfile` is required, not cosmetic: a PowerShell profile can replace the cmdlets the wrapper's gates are built
+from, so the wrapper refuses to run when any name it depends on no longer resolves to its shipped cmdlet.
+
+The Windows wrapper binds Git for Windows tools by absolute path and SHA-256 under a fixed `PATH`, and sets
+`GIT_CONFIG_GLOBAL=NUL` in place of `/dev/null`. It observes the host exactly as the Linux wrapper does and never
+substitutes a declared CPU model for a measured one.
+
+A Windows qualification is a narrower claim than a Linux one. `centralPublicationToolsTest` and
+`qualifyCandidateEarlyFailureTest` are Linux-only, so they do not execute; the readiness manifest names them in
+`skippedReleaseGates` rather than implying parity. `qualifyCandidateWindowsEarlyFailureTest` covers the Windows
+wrapper's own fail-closed gates and runs under `./gradlew check` on Windows.
 
 The wrapper is intentionally long-running. Use focused tasks during development and reserve this command for a
 reviewed release commit.
@@ -136,8 +157,9 @@ The workflow never re-runs the multi-hour qualification; it proves the runner's 
 bytes by hashing the rebuilt publication inventory against the committed readiness manifest, and refuses to sign
 on any mismatch.
 
-1. Qualify the release commit locally (`scripts/qualify-candidate.sh`, above). The commit qualified is the commit
-   whose bytes are published.
+1. Qualify the release commit locally with the wrapper for your platform (above). The commit qualified is the commit
+   whose bytes are published. The bundle inventory records which wrapper produced the evidence in
+   `qualificationCommand`, and the gates that run did not execute in `skippedReleaseGates`.
 2. Commit the qualification evidence so the workflow can verify it:
 
    ```bash

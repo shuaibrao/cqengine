@@ -41,6 +41,7 @@ import java.util.Locale
 import java.util.Properties
 import java.util.SortedSet
 import java.util.TimeZone
+import java.util.concurrent.TimeUnit
 import java.util.regex.Pattern
 import javax.inject.Inject
 
@@ -709,6 +710,8 @@ data class BenchmarkHostApproval(
     val numericReadmeClaims: String,
     val record: String,
     val recordSha256: String,
+    val declaredPhysicalCpuModel: String = "none",
+    val declaredCpuModelEvidence: String = "none",
 )
 
 protected fun readBenchmarkTextIfPresent(path: Path): String = if (Files.isRegularFile(path)) {
@@ -718,7 +721,62 @@ else {
     ""
 }
 
+protected fun readWindowsProbe(command: List<String>): String {
+    return try {
+        val process = ProcessBuilder(command).redirectErrorStream(true).start()
+        process.outputStream.close()
+        val output = process.inputStream.bufferedReader(StandardCharsets.UTF_8).readText()
+        if (!process.waitFor(30, TimeUnit.SECONDS)) {
+            process.destroyForcibly()
+            return ""
+        }
+        if (process.exitValue() == 0) output else ""
+    }
+    catch (_: Exception) {
+        ""
+    }
+}
+
+protected fun readWindowsCpuName(): String {
+    // Resolve by absolute path: release qualification narrows PATH to the wrapper's bound tool directories.
+    val system32 = Path.of(System.getenv("SystemRoot")?.takeIf(String::isNotEmpty) ?: "C:\\Windows", "System32")
+    val registryName = readWindowsProbe(
+        listOf(
+            system32.resolve("reg.exe").toString(),
+            "query",
+            "HKLM\\HARDWARE\\DESCRIPTION\\System\\CentralProcessor\\0",
+            "/v",
+            "ProcessorNameString",
+        ),
+    )
+        .lineSequence()
+        .map(String::trim)
+        .firstOrNull { it.startsWith("ProcessorNameString", ignoreCase = true) }
+        ?.substringAfter("REG_SZ")
+        ?.trim()
+        ?.takeIf(String::isNotEmpty)
+    if (registryName != null) {
+        return registryName
+    }
+    // WMIC is deprecated and absent from recent Windows images; it only backs hosts without the registry entry.
+    return readWindowsProbe(
+        listOf(system32.resolve("wbem").resolve("WMIC.exe").toString(), "cpu", "get", "name", "/value"),
+    )
+        .lineSequence()
+        .map(String::trim)
+        .firstOrNull { it.startsWith("Name=", ignoreCase = true) }
+        ?.substringAfter('=')
+        ?.trim()
+        .orEmpty()
+}
+
+protected fun looksLikeVirtualCpu(name: String): Boolean {
+    val lower = name.lowercase(Locale.ROOT)
+    return listOf("qemu", "virtual", "hypervisor", "hyper-v", "kvm", "vmware", "xen").any { it in lower }
+}
+
 protected fun observeBenchmarkHost(projectRoot: Path, temporaryRoot: Path): BenchmarkHostObservation {
+    val windows = System.getProperty("os.name").startsWith("Windows", ignoreCase = true)
     val kernel = readBenchmarkTextIfPresent(Path.of("/proc/sys/kernel/osrelease"))
         .lineSequence()
         .firstOrNull()
@@ -728,11 +786,12 @@ protected fun observeBenchmarkHost(projectRoot: Path, temporaryRoot: Path): Benc
     val kernelLower = kernel.lowercase(Locale.ROOT)
     val wslVersion = when {
         "wsl2" in kernelLower -> "2"
-        "microsoft" in kernelLower -> "1"
+        "microsoft" in kernelLower && !windows -> "1"
         else -> "none"
     }
     val cgroup = readBenchmarkTextIfPresent(Path.of("/proc/1/cgroup"))
     val cpuInfo = readBenchmarkTextIfPresent(Path.of("/proc/cpuinfo"))
+    val windowsCpuName = if (windows) readWindowsCpuName() else ""
     val virtualization = when {
         wslVersion == "2" -> "wsl2"
         wslVersion == "1" -> "wsl1"
@@ -740,6 +799,7 @@ protected fun observeBenchmarkHost(projectRoot: Path, temporaryRoot: Path): Benc
         listOf("docker", "containerd", "kubepods", "lxc").any { cgroup.contains(it, ignoreCase = true) } ->
             "container"
         cpuInfo.contains(" hypervisor ", ignoreCase = true) -> "virtual-machine-or-hypervisor"
+        windows && looksLikeVirtualCpu(windowsCpuName) -> "virtual-machine-or-hypervisor"
         else -> "not-detected"
     }
     val operatingSystem = readBenchmarkTextIfPresent(Path.of("/etc/os-release")).lineSequence()
@@ -753,6 +813,7 @@ protected fun observeBenchmarkHost(projectRoot: Path, temporaryRoot: Path): Benc
         ?.substringAfter(':')
         ?.trim()
         ?.takeIf(String::isNotEmpty)
+        ?: windowsCpuName.takeIf(String::isNotEmpty)
         ?: "unavailable"
     val logicalProcessors = cpuInfo.lineSequence()
         .count { it.startsWith("processor") }
@@ -806,11 +867,16 @@ protected fun evaluateBenchmarkHostApproval(
         "evidenceUse",
         "numericReadmeClaims",
     )
-    if (properties.stringPropertyNames() != requiredKeys) {
+    val declarationKeys = setOf("declaredPhysicalCpuModel", "declaredCpuModelEvidence")
+    val presentKeys = properties.stringPropertyNames()
+    if (presentKeys - declarationKeys != requiredKeys) {
         throw GradleException(
-            "JMH machine approval keys differ; missing=${requiredKeys - properties.stringPropertyNames()}, " +
-                "unexpected=${properties.stringPropertyNames() - requiredKeys}",
+            "JMH machine approval keys differ; missing=${requiredKeys - presentKeys}, " +
+                "unexpected=${presentKeys - requiredKeys - declarationKeys}",
         )
+    }
+    if (presentKeys.intersect(declarationKeys).size !in setOf(0, declarationKeys.size)) {
+        throw GradleException("JMH machine approval declares a physical CPU model without its evidence basis")
     }
     fun required(key: String): String = properties.getProperty(key)?.trim()?.takeIf(String::isNotEmpty)
         ?: throw GradleException("JMH machine approval has no value for $key")
@@ -852,6 +918,17 @@ protected fun evaluateBenchmarkHostApproval(
     if (evidenceUse != "machine-specific-development-baseline" || numericReadmeClaims != "machine-specific-only") {
         throw GradleException("JMH machine approval grants an unsupported evidence scope")
     }
+    // A declared physical model is an operator claim, never a measurement, so it is only meaningful where a
+    // hypervisor can mask the guest-visible model. It never participates in the approval comparison above.
+    val declaresPhysicalCpu = presentKeys.containsAll(declarationKeys)
+    if (declaresPhysicalCpu && required("declaredCpuModelEvidence") != "operator-declared") {
+        throw GradleException("JMH machine approval supports only operator-declared physical CPU models")
+    }
+    if (declaresPhysicalCpu && observation.virtualization == "not-detected") {
+        throw GradleException(
+            "JMH machine approval declares a physical CPU model on a host reporting no virtualization",
+        )
+    }
     val sha256 = MessageDigest.getInstance("SHA-256")
         .digest(Files.readAllBytes(approvalFile))
         .joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }
@@ -861,6 +938,8 @@ protected fun evaluateBenchmarkHostApproval(
         numericReadmeClaims = numericReadmeClaims,
         record = "config/benchmark-hosts/${approvalFile.fileName}",
         recordSha256 = sha256,
+        declaredPhysicalCpuModel = if (declaresPhysicalCpu) required("declaredPhysicalCpuModel") else "none",
+        declaredCpuModelEvidence = if (declaresPhysicalCpu) required("declaredCpuModelEvidence") else "none",
     )
 }
 
@@ -1308,6 +1387,8 @@ abstract class VerifyJmhBaseline : BenchmarkHostAwareTask() {
             "architecture" to observation.architecture,
             "virtualization" to observation.virtualization,
             "cpuModel" to observation.cpuModel,
+            "declaredPhysicalCpuModel" to approval.declaredPhysicalCpuModel,
+            "declaredCpuModelEvidence" to approval.declaredCpuModelEvidence,
             "cpuLogicalProcessors" to observation.cpuLogicalProcessors.toString(),
             "processAvailableProcessors" to availableProcessors.toString(),
             "memoryTotalKiB" to memoryTotalKiB,

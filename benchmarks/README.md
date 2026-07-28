@@ -15,6 +15,27 @@ The authoritative dual-JDK baseline runs only inside the detached release qualif
 CQENGINE_JMH_MACHINE_LABEL=host-purpose-id scripts/qualify-candidate.sh
 ```
 
+On Windows:
+
+```powershell
+$env:CQENGINE_JMH_MACHINE_LABEL = 'host-purpose-id'
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\qualify-candidate.ps1
+```
+
+## Host approval and declared hardware
+
+`config/benchmark-hosts/<label>.properties` records what the build must observe on that machine: operating system,
+kernel, architecture, virtualization, WSL version, CPU model, logical processors and both filesystem types. Every one
+of those is compared against a live observation, and a mismatch fails qualification.
+
+`cpuModel` is always the model the benchmark host itself reports. On a virtual machine that is the guest-visible
+model, which a hypervisor may mask — a QEMU guest commonly reports `QEMU Virtual CPU version 2.5+` rather than the
+processor underneath it. A record may therefore also carry the optional pair `declaredPhysicalCpuModel` and
+`declaredCpuModelEvidence=operator-declared`. That pair identifies the underlying hardware, is accepted only when the
+observation already reports virtualization, and never participates in the approval comparison. Published evidence
+keeps the two apart: `cpuModel` is labelled measured, the declaration is labelled operator-declared and not measured.
+Do not use the declaration to make a masked host look like bare metal.
+
 Do not invoke `jmhBaseline` directly: it depends on the hermetic release-invocation gate and rejects ordinary Gradle
 sessions before any raw benchmark lane runs. `jmhJava21`, `jmhJava25` and the individual `jmhQuery*`, `jmhMutation*`,
 `jmhPersistence*`, `jmhConcurrency*` and `jmhLatency*` tasks remain useful direct report-only suites, but none is

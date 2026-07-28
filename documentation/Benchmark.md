@@ -67,6 +67,18 @@ The approved development host is described publicly by its operating system, pro
 filesystem. Lower-level kernel and virtualization fields remain in the evidence so another run can determine whether
 the environments are genuinely comparable.
 
+### Measured host against declared hardware
+
+Publishable numbers require a reviewed host record under `config/benchmark-hosts/`, and every characteristic in that
+record is compared against a live observation of the machine running the benchmarks. `cpuModel` is therefore always
+what the benchmark host reported about itself.
+
+On a virtual machine that is the guest-visible model, and a hypervisor may mask the processor underneath it. A record
+may add the optional pair `declaredPhysicalCpuModel` and `declaredCpuModelEvidence=operator-declared` to identify
+that underlying hardware. The pair is accepted only where the observation already reports virtualization, it is never
+compared against anything, and published output labels it as an operator declaration that no part of the build
+measured. Read a declared model as context for the environment, never as a measured characteristic of the run.
+
 ## Historical material
 
 The original CQEngine benchmark spreadsheets and charts remain under `documentation/documents/benchmark-history/`

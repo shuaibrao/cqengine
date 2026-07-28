@@ -75,7 +75,7 @@ public class AbstractAttributeTest {
         }
     };
 
-    @SuppressWarnings("deprecation") // The deprecated overridable hash calculation is the behavior under test.
+    @SuppressWarnings({"deprecation", "removal"}) // The deprecated overridable hash calculation is the behavior under test.
     static class ConstructorSafeAttribute extends SimpleAttribute<Integer, String> {
         boolean initialized;
 
@@ -158,7 +158,7 @@ public class AbstractAttributeTest {
     }
 
     @Test
-    @SuppressWarnings("deprecation") // Verifies the deprecated method still agrees with the cached hash code.
+    @SuppressWarnings({"deprecation", "removal"}) // Verifies the deprecated method still agrees with the cached hash code.
     public void testConstructorDoesNotInvokeOverridableHashCode() {
         ConstructorSafeAttribute attribute = new ConstructorSafeAttribute();
         TestAssertions.assertEquals(attribute.calcHashCode(), attribute.hashCode());

@@ -123,6 +123,7 @@ export CQENGINE_TRUSTED_NPROC="$trusted_nproc"
 export CQENGINE_TRUSTED_NPROC_SHA256="$trusted_nproc_sha256"
 export CQENGINE_TRUSTED_JAVA="$bootstrap_java"
 export CQENGINE_TRUSTED_JAVA_SHA256="$bootstrap_java_sha256"
+export CQENGINE_QUALIFY_COMMAND=scripts/qualify-candidate.sh
 
 temporary_root="${TMPDIR:-/tmp}"
 preflight_gradle_user_home="$(mktemp -d "$temporary_root/cqengine-release-gradle-home.XXXXXXXX")"
@@ -386,6 +387,7 @@ run_gradle() {
         -u JAVA_OPTS \
         -u GRADLE_OPTS \
         CQENGINE_RELEASE_INVOCATION=1 \
+        CQENGINE_QUALIFY_COMMAND=scripts/qualify-candidate.sh \
         CQENGINE_JMH_MACHINE_LABEL="$machine_label" \
         GRADLE_USER_HOME="$isolated_gradle_home" \
         "$candidate_root/gradlew" \

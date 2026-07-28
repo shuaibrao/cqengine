@@ -39,7 +39,12 @@ def require(condition: bool, message: object) -> None:
         raise RuntimeError(str(message))
 
 
-def create_fixture(root: Path, tool: Path) -> tuple[Path, Path]:
+def create_fixture(
+    root: Path,
+    tool: Path,
+    qualify_command: str = "scripts/qualify-candidate.sh",
+    skipped_release_gates: str = "none",
+) -> tuple[Path, Path]:
     project = root / "project"
     project.mkdir()
     subprocess.run(["git", "init", "--quiet", "--initial-branch=main", str(project)], check=True)
@@ -115,8 +120,9 @@ def create_fixture(root: Path, tool: Path) -> tuple[Path, Path]:
                 f"coordinate=io.github.shuaibrao:cqengine:{version}",
                 f"sourceCommit={commit}",
                 f"sourceTree={tree}",
-                "command=scripts/qualify-candidate.sh",
+                f"command={qualify_command}",
                 "phaseIsolation=separate-fresh-source-and-gradle-homes",
+                f"skippedReleaseGates={skipped_release_gates}",
                 f"{digest(publication_inventory, 'sha256')} "
                 f"{digest(publication_inventory, 'sha512')}  root:reports/publication/inventory.txt",
                 "",
@@ -225,6 +231,54 @@ def main() -> None:
         inventory = output.with_suffix(".zip.inventory.txt").read_text(encoding="utf-8")
         require(f"signingFingerprint={FINGERPRINT}" in inventory, inventory)
         require(f"bundleSha256={digest(output, 'sha256')}" in inventory, inventory)
+        require("qualificationCommand=scripts/qualify-candidate.sh" in inventory, inventory)
+        require("skippedReleaseGates=none" in inventory, inventory)
+
+        # A Windows qualification must reach Central, and the bundle must disclose which gates it lost.
+        windows_root = root / "windows"
+        windows_root.mkdir()
+        windows_project, _ = create_fixture(
+            windows_root,
+            tool,
+            qualify_command="scripts/qualify-candidate.ps1",
+            skipped_release_gates="centralPublicationToolsTest,qualifyCandidateEarlyFailureTest",
+        )
+        windows_output = windows_root / "candidate.zip"
+        windows_environment = environment.copy()
+        windows_environment["PATH"] = f"{windows_root / 'bin'}:{os.environ['PATH']}"
+        subprocess.run(
+            [str(tool), "--project", str(windows_project), "--output", str(windows_output)],
+            check=True,
+            env=windows_environment,
+            stdout=subprocess.DEVNULL,
+        )
+        windows_inventory = windows_output.with_suffix(".zip.inventory.txt").read_text(encoding="utf-8")
+        require(
+            "qualificationCommand=scripts/qualify-candidate.ps1" in windows_inventory,
+            windows_inventory,
+        )
+        require(
+            "skippedReleaseGates=centralPublicationToolsTest,qualifyCandidateEarlyFailureTest"
+            in windows_inventory,
+            windows_inventory,
+        )
+
+        unknown_root = root / "unknown-wrapper"
+        unknown_root.mkdir()
+        unknown_project, _ = create_fixture(
+            unknown_root, tool, qualify_command="scripts/attacker-wrapper.sh"
+        )
+        unknown_environment = environment.copy()
+        unknown_environment["PATH"] = f"{unknown_root / 'bin'}:{os.environ['PATH']}"
+        unknown = subprocess.run(
+            [str(tool), "--project", str(unknown_project), "--output", str(unknown_root / "x.zip")],
+            env=unknown_environment,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        require(unknown.returncode != 0, "an unknown qualification wrapper was accepted")
+        require("unknown wrapper" in unknown.stderr, unknown.stderr)
 
         portal = Path(__file__).resolve().with_name("central-portal.sh")
         portal_environment = environment.copy()

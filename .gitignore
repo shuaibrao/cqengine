@@ -6,6 +6,8 @@ build/
 **/build/
 target/
 **/target/
+bin/
+**/bin/
 
 *.log
 hs_err_pid*

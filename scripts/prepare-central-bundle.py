@@ -25,6 +25,7 @@ CHECKSUMS = {
 }
 FINGERPRINT = re.compile(r"[0-9A-Fa-f]{40,64}")
 VERSION = re.compile(r"[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z][0-9A-Za-z.-]*)?")
+QUALIFY_COMMANDS = ("scripts/qualify-candidate.sh", "scripts/qualify-candidate.ps1")
 EVIDENCE_LINE = re.compile(r"([0-9a-f]{64}) ([0-9a-f]{128})  (root|benchmarks):(.+)")
 INVENTORY_LINE = re.compile(r"([0-9a-f]{64}) ([0-9a-f]{128})  (.+)")
 GPG_PASSPHRASE = os.environ.pop("CQENGINE_GPG_PASSPHRASE", None)
@@ -134,7 +135,9 @@ def verify_repository_inventory(project: Path, repository: Path, version: str) -
     return recorded
 
 
-def verify_qualification(project: Path, repository: Path) -> tuple[str, dict[str, tuple[str, str]]]:
+def verify_qualification(
+    project: Path, repository: Path
+) -> tuple[str, dict[str, tuple[str, str]], str, str]:
     evidence = project / "build/local-release-evidence/qualification"
     completion_path = evidence / "wrapper-completion.properties"
     readiness_path = evidence / "local-readiness-manifest.txt"
@@ -148,7 +151,11 @@ def verify_qualification(project: Path, repository: Path) -> tuple[str, dict[str
     if require_property(completion, "repositoryMode") not in {"local", "hosted"}:
         raise BundleError("qualification completion has an unknown repository mode")
     require_property(readiness, "formatVersion", "1")
-    require_property(readiness, "command", "scripts/qualify-candidate.sh")
+    qualify_command = require_property(readiness, "command")
+    if qualify_command not in QUALIFY_COMMANDS:
+        raise BundleError(
+            f"qualification evidence names an unknown wrapper: {qualify_command!r}"
+        )
     require_property(readiness, "phaseIsolation", "separate-fresh-source-and-gradle-homes")
 
     source_commit = require_property(completion, "sourceCommit")
@@ -202,7 +209,14 @@ def verify_qualification(project: Path, repository: Path) -> tuple[str, dict[str
     ).stdout.strip()
     if actual_tree != source_tree:
         raise BundleError(f"qualified tree {source_tree} does not match checkout tree {actual_tree}")
-    return version, verify_repository_inventory(project, repository, version)
+    # Older evidence predates the skipped-gate record; absent means the reference Linux run skipped nothing.
+    skipped_gates = readiness.get("skippedReleaseGates", "none")
+    return (
+        version,
+        verify_repository_inventory(project, repository, version),
+        qualify_command,
+        skipped_gates,
+    )
 
 
 def primary_names(version: str) -> list[str]:
@@ -356,7 +370,9 @@ def main() -> int:
     if not gpg:
         raise BundleError("gpg is required to create Central signatures")
 
-    version, repository_inventory = verify_qualification(project, repository)
+    version, repository_inventory, qualify_command, skipped_gates = verify_qualification(
+        project, repository
+    )
     names = primary_names(version)
     version_directory = repository / GROUP_PATH / ARTIFACT / version
     if not version_directory.is_dir() or version_directory.is_symlink():
@@ -421,6 +437,8 @@ def main() -> int:
             [
                 "formatVersion=1",
                 f"coordinate=io.github.shuaibrao:cqengine:{version}",
+                f"qualificationCommand={qualify_command}",
+                f"skippedReleaseGates={skipped_gates}",
                 f"signingFingerprint={signer}",
                 f"primarySigningFingerprint={primary_signer}",
                 f"bundleSha256={bundle_sha256}",

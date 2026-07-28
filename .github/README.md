@@ -32,8 +32,9 @@ Before enabling these workflows:
   vulnerability reporting in repository settings. Restrict `security-scan` to protected `main` without reviewers so
   scheduled scans do not stall.
 
-No self-hosted runner is required: the authoritative multi-hour qualification (`scripts/qualify-candidate.sh`) runs
-locally before tagging, and `release-bundle.yml` verifies its committed evidence on a GitHub-hosted runner.
+No self-hosted runner is required: the authoritative multi-hour qualification (`scripts/qualify-candidate.sh`, or
+`scripts/qualify-candidate.ps1` on Windows) runs locally before tagging, and `release-bundle.yml` verifies its
+committed evidence on a GitHub-hosted runner.
 
 Repository rules remain server-side controls and must be enabled after the repository exists. Protect `main` with
 pull requests, CODEOWNERS review, conversation resolution, linear history, the stable `CI / Java 21 and 25` check,

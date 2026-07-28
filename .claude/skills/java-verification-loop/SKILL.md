@@ -38,8 +38,17 @@ Never use dependency-verification write mode as passing evidence. Never add `--a
 
 ## Authoritative release qualification
 
-Only run `scripts/qualify-candidate.sh` when the user explicitly approves the long-running final qualification. It
-rebuilds committed source in isolated homes and is the only command that creates authoritative release evidence. A
-focused or direct `releaseCheck` invocation is not equivalent.
+Only run the qualification wrapper when the user explicitly approves the long-running final qualification:
+`scripts/qualify-candidate.sh` on Linux, `scripts/qualify-candidate.ps1` on Windows. It rebuilds committed source in
+isolated homes and is the only command that creates authoritative release evidence. A focused or direct
+`releaseCheck` invocation is not equivalent.
+
+Linux is the reference platform. A Windows qualification does not execute `centralPublicationToolsTest` or
+`qualifyCandidateEarlyFailureTest`; the readiness manifest names them in `skippedReleaseGates`. Report that a Windows
+run is the narrower claim rather than treating the two as interchangeable.
+
+Changing either wrapper requires running its own regression suite: `qualifyCandidateEarlyFailureTest` for the shell
+wrapper, `qualifyCandidateWindowsEarlyFailureTest` for the PowerShell wrapper. Each runs only on its own platform, so
+a change made on one platform leaves the other wrapper unverified until it is checked there.
 
 Report the commands, runtime, test counts, failures/skips, and whether evidence applies to the exact current commit.

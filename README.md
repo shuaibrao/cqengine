@@ -240,7 +240,7 @@ Note: CQEngine also supports complex queries via **`and`**, **`or`**, **`not`**,
 | [<sub>PartialOffHeap</sub>](src/main/java/com/googlecode/cqengine/index/offheap/PartialOffHeapIndex.java) | ✓      | ✓      | ✓      | ✓      | ✓      | ✓      |        |        |        |        |        | ✓      |        |        |
 | [<sub>Disk</sub>](src/main/java/com/googlecode/cqengine/index/disk/DiskIndex.java) | ✓      | ✓      | ✓      | ✓      | ✓      | ✓      |        |        |        |        |        | ✓<sup>[1]</sup>      |        |        |
 | [<sub>PartialDisk</sub>](src/main/java/com/googlecode/cqengine/index/disk/PartialDiskIndex.java) | ✓      | ✓      | ✓      | ✓      | ✓      | ✓      |        |        |        |        |        | ✓      |        |        |
-<sup>[1]</sup> See: [forStandingQuery()](src/main/java/com/googlecode/cqengine/query/QueryFactory.java-com.googlecode.cqengine.query.Query-)
+<sup>[1]</sup> See: [forStandingQuery()](src/main/java/com/googlecode/cqengine/query/QueryFactory.java)
 
 The [benchmark guide](documentation/Benchmark.md) contains the current JMH methodology and the original CQEngine
 results retained as project history.

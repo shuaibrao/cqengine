@@ -60,6 +60,7 @@ Run the checks which match the code being changed:
 | Performance-sensitive code | `./gradlew jmhSmoke`; retain workload and environment evidence for any numerical claim |
 | Concurrent collection or index behavior | `./gradlew concurrencySmoke`; reserve full JCStress and soak execution for candidate qualification |
 | Static-analysis disposition | `./gradlew verifySpotBugsMain verifySpotBugsReview --rerun-tasks` |
+| Qualification wrapper or its Gradle trust gates | `./gradlew qualifyCandidateEarlyFailureTest` on Linux, `./gradlew qualifyCandidateWindowsEarlyFailureTest` on Windows; each suite runs only on its own platform |
 
 `./gradlew check` is the developer aggregate. The authoritative release qualification is intentionally separate and
 long-running; see [RELEASING.md](RELEASING.md).
@@ -71,7 +72,7 @@ performance measurements. `./gradlew concurrencySmoke` checks JCStress discovery
 development, `./gradlew :stress-tests:soak` accepts the documented `cqengine.soak.*` Gradle properties for a longer
 local investigation.
 
-Only `scripts/qualify-candidate.sh` runs the authoritative contract: OpenJDK JCStress 0.16 in default mode with three
+Only the qualification wrapper runs the authoritative contract: OpenJDK JCStress 0.16 in default mode with three
 forks on both Java 21 and Java 25, followed by the fixed 15-minute deterministic-seed soak. Do not present a smoke or
 duration-overridden development run as candidate evidence.
 

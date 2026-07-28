@@ -63,6 +63,8 @@ class ApprovalDecision:
     display_host: str
     record_identity: str
     record_sha256: str
+    declared_physical_cpu_model: str = "none"
+    declared_cpu_model_evidence: str = "none"
 
 
 INPUT_SPECS = (
@@ -501,7 +503,7 @@ def validate_approval_record(
     approval_path: Path,
     capture: CaptureMetadata,
     display_host: str,
-) -> tuple[str, str]:
+) -> tuple[str, str, str, str]:
     root = repository_root()
     try:
         resolved = approval_path.resolve(strict=True)
@@ -527,12 +529,16 @@ def validate_approval_record(
         "evidenceUse",
         "numericReadmeClaims",
     }
-    if set(properties) != required_keys:
+    declaration_keys = {"declaredPhysicalCpuModel", "declaredCpuModelEvidence"}
+    present_keys = set(properties)
+    if present_keys - declaration_keys != required_keys:
         raise ReportError(
             "approval record keys differ; "
-            f"missing={sorted(required_keys - set(properties))}, "
-            f"unexpected={sorted(set(properties) - required_keys)}"
+            f"missing={sorted(required_keys - present_keys)}, "
+            f"unexpected={sorted(present_keys - required_keys - declaration_keys)}"
         )
+    if len(present_keys & declaration_keys) not in (0, len(declaration_keys)):
+        raise ReportError("approval record declares a physical CPU model without its evidence basis")
     require_property(properties, "formatVersion", "1")
     label = require_property(properties, "machineLabel")
     if MACHINE_LABEL.fullmatch(label) is None:
@@ -580,7 +586,28 @@ def validate_approval_record(
         raise ReportError("approval record does not match captured host: " + "; ".join(mismatches))
     require_property(properties, "evidenceUse", "machine-specific-development-baseline")
     require_property(properties, "numericReadmeClaims", "machine-specific-only")
-    return identity, sha256_file(resolved)
+    # A declared physical model is an operator claim about the hypervisor host, never a captured measurement,
+    # so it stays out of the exact-match comparison above and is only accepted where the guest reports a hypervisor.
+    declared_model = "none"
+    declared_evidence = "none"
+    if present_keys >= declaration_keys:
+        declared_model = require_property(properties, "declaredPhysicalCpuModel")
+        declared_evidence = require_property(
+            properties, "declaredCpuModelEvidence", "operator-declared"
+        )
+        if exact_fields["virtualization"] == "not-detected":
+            raise ReportError(
+                "approval record declares a physical CPU model for a capture reporting no virtualization"
+            )
+    captured_model = environment.get("declaredPhysicalCpuModel", "none")
+    captured_evidence = environment.get("declaredCpuModelEvidence", "none")
+    if captured_model != declared_model or captured_evidence != declared_evidence:
+        raise ReportError(
+            "approval record physical CPU declaration does not match the captured declaration: "
+            f"record {declared_model!r}/{declared_evidence!r}, "
+            f"captured {captured_model!r}/{captured_evidence!r}"
+        )
+    return identity, sha256_file(resolved), declared_model, declared_evidence
 
 
 def resolve_approval(
@@ -606,7 +633,9 @@ def resolve_approval(
             record_sha256="none",
         )
 
-    identity, record_hash = validate_approval_record(effective_record, capture, display_host)
+    identity, record_hash, declared_model, declared_evidence = validate_approval_record(
+        effective_record, capture, display_host
+    )
     if capture.machine_approval == "approved":
         captured_identity = require_property(capture.environment, "machineApprovalRecord")
         captured_hash = require_property(capture.environment, "machineApprovalRecordSha256")
@@ -621,6 +650,8 @@ def resolve_approval(
         display_host=display_host,
         record_identity=identity,
         record_sha256=record_hash,
+        declared_physical_cpu_model=declared_model,
+        declared_cpu_model_evidence=declared_evidence,
     )
 
 
@@ -1056,7 +1087,8 @@ def representative_markdown(
         "the validated Java 21 and Java 25 qualification evidence. The public tables and charts focus",
         "on the current Java 25 runtime rather than presenting a cross-JDK comparison.",
         "",
-        f"Measured host: {public_host_description(capture)}. Measured commit: `{capture.source_commit}`.",
+        f"Measured host: {public_host_description(capture, approval)}. "
+        f"Measured commit: `{capture.source_commit}`.",
         "They are not performance thresholds, cross-machine guarantees or universal CQEngine claims.",
         "",
         "## Indexed query scenarios",
@@ -1141,14 +1173,20 @@ def file_store_type(value: str) -> str:
     return value.rsplit("(", 1)[1][:-1]
 
 
-def public_host_description(capture: CaptureMetadata) -> str:
+def public_host_description(capture: CaptureMetadata, approval: ApprovalDecision) -> str:
     environment = capture.environment
-    return (
+    description = (
         f"{require_property(environment, 'operatingSystem')}, "
-        f"{require_property(environment, 'cpuModel')}, "
+        f"{require_property(environment, 'cpuModel')} (measured), "
         f"{require_property(environment, 'cpuLogicalProcessors')} logical processors, "
         f"{file_store_type(require_property(environment, 'projectFileStore'))} storage"
     )
+    if approval.declared_physical_cpu_model != "none":
+        description += (
+            f"; underlying physical CPU {approval.declared_physical_cpu_model} "
+            f"({approval.declared_cpu_model_evidence}, not measured)"
+        )
+    return description
 
 
 def sanitized_environment(capture: CaptureMetadata, approval: ApprovalDecision) -> bytes:
@@ -1164,6 +1202,9 @@ def sanitized_environment(capture: CaptureMetadata, approval: ApprovalDecision) 
         "benchmarkNamespaceNormalization": BENCHMARK_NAMESPACE.removesuffix("."),
         "cpuLogicalProcessors": require_property(environment, "cpuLogicalProcessors"),
         "cpuModel": require_property(environment, "cpuModel"),
+        "cpuModelBasis": "measured-on-the-benchmark-host",
+        "declaredCpuModelEvidence": approval.declared_cpu_model_evidence,
+        "declaredPhysicalCpuModel": approval.declared_physical_cpu_model,
         "evidenceClassification": (
             "approved-machine-specific-development-baseline"
             if approval.approved
@@ -1244,14 +1285,17 @@ def readme(capture: CaptureMetadata, approval: ApprovalDecision) -> bytes:
         f"- Report publication coordinate: `{publication_coordinate()}`",
         f"- Capture status: `{capture.status}` (`machineApproval={capture.machine_approval}`)",
         f"- Benchmark host: `{approval.display_host}`",
-        f"- Host characteristics: {public_host_description(capture)}",
+        f"- Host characteristics: {public_host_description(capture, approval)}",
         f"- {approval_description}",
         "- Qualification evidence: Java 21 and Java 25, 104 unique results each",
         "- Published tables and charts: Java 25",
         "- Thresholds: none",
         "",
         "The host approval checks the captured operating system, kernel, architecture, CPU, processor count and",
-        "filesystems against a reviewed record. The report preserves the measured source commit, source tree, input",
+        "filesystems against a reviewed record. `cpuModel` is always the model the benchmark host reported; where a",
+        "record also carries `declaredPhysicalCpuModel`, that value identifies the hypervisor's underlying processor",
+        "and is an operator declaration that no part of this build measured or verified.",
+        "The report preserves the measured source commit, source tree, input",
         "hashes and every value from both supported runtimes. Its public views use Java 25 so the charts describe",
         "the current runtime without turning runtime-version differences into a performance claim.",
         "",

@@ -51,31 +51,37 @@ public class DiskSharedCacheConcurrencyTest {
         File tempFile = DiskPersistence.createTempFile();
 
         // Create a collection of TestPojo objects which persists to the temp file...
-        IndexedCollection<TestPojo> collection = new ConcurrentIndexedCollection<>(
-                DiskPersistence.onPrimaryKeyInFileWithProperties(primaryKey, tempFile, properties)
-        );
+        DiskPersistence<TestPojo, Integer> persistence =
+                DiskPersistence.onPrimaryKeyInFileWithProperties(primaryKey, tempFile, properties);
+        try {
+            IndexedCollection<TestPojo> collection = new ConcurrentIndexedCollection<>(persistence);
 
-        // Prepare a latch which will tell us when all background threads have finished executing...
-        final CountDownLatch latch = new CountDownLatch(NUM_BACKGROUND_THREADS);
+            // Prepare a latch which will tell us when all background threads have finished executing...
+            final CountDownLatch latch = new CountDownLatch(NUM_BACKGROUND_THREADS);
 
-        // Start the background threads...
-        for (int i = 0; i < NUM_BACKGROUND_THREADS; i++) {
-            new Thread(() -> {
-                // In each background thread, add one new object to the collection...
-                try {
-                    collection.add(new TestPojo());
-                }
-                catch (Exception ignore) { }
-                finally {
-                    latch.countDown();
-                }
-            }).start();
+            // Start the background threads...
+            for (int i = 0; i < NUM_BACKGROUND_THREADS; i++) {
+                new Thread(() -> {
+                    // In each background thread, add one new object to the collection...
+                    try {
+                        collection.add(new TestPojo());
+                    }
+                    catch (Exception ignore) { }
+                    finally {
+                        latch.countDown();
+                    }
+                }).start();
+            }
+            // Wait for all background threads to finish...
+            latch.await(20, SECONDS);
+
+            // Assert that the same number of objects were inserted as there were background threads...
+            TestAssertions.assertEquals(NUM_BACKGROUND_THREADS, collection.size());
         }
-        // Wait for all background threads to finish...
-        latch.await(20, SECONDS);
-
-        // Assert that the same number of objects were inserted as there were background threads...
-        TestAssertions.assertEquals(NUM_BACKGROUND_THREADS, collection.size());
+        finally {
+            // Windows refuses to delete a file while the persistence still holds it open.
+            persistence.close();
+        }
 
         // Delete the temp file...
         TestAssertions.assertEquals(true, tempFile.delete());
