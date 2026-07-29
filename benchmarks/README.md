@@ -12,7 +12,9 @@ Run the short discovery and correctness gate on both supported JDKs:
 The authoritative dual-JDK baseline runs as part of the local qualification:
 
 ```bash
-CQENGINE_JMH_MACHINE_LABEL=host-purpose-id ./gradlew clean qualifyLocally
+CQENGINE_JMH_MACHINE_LABEL=host-purpose-id ./gradlew \
+  --no-daemon --no-build-cache --no-configuration-cache --no-parallel \
+  --dependency-verification strict --console=plain clean qualifyLocally
 ```
 
 `jmhBaseline` also runs on its own, but what makes a result publishable is the host approval record, not the way the

@@ -42,7 +42,7 @@ atomicity.
 ## SQLite lock waits
 
 Disk persistence waits up to 3,000 milliseconds by default when another connection holds a conflicting database lock.
-This is an explicit CQEngine default and matches sqlite-jdbc 3.53.2.0; it does not inherit an unbounded driver value.
+This is an explicit CQEngine default and matches sqlite-jdbc 3.53.2.1; it does not inherit an unbounded driver value.
 
 Override `busy_timeout` through `DiskPersistence.onPrimaryKeyInFileWithProperties(...)`. The value is an integer
 number of milliseconds from `0` through `Integer.MAX_VALUE`:

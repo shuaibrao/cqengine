@@ -13,14 +13,14 @@ javassist = "3.32.0-GA"
 jcstress = "0.16"
 jmh = "1.37"
 jmhPlugin = "0.7.3"
-junitPlatform = "6.0.3"
+junitPlatform = "6.1.2"
 kryo = "5.6.2"
 licenseReport = "3.1.4"
 mockito = "5.23.0"
-objenesis = { strictly = "3.5" }
+objenesis = { strictly = "3.4" }
 spotbugs = "4.10.2"
-spotbugsPlugin = "6.5.8"
-sqlite = "3.53.2.0"
+spotbugsPlugin = "6.5.9"
+sqlite = "3.53.2.1"
 
 [libraries]
 antlr-runtime = { module = "org.antlr:antlr4-runtime", version.ref = "antlr" }

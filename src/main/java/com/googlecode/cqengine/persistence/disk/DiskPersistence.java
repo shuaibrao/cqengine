@@ -101,7 +101,7 @@ public class DiskPersistence<O, A extends Comparable<A>> implements SQLitePersis
     /** SQLite connection property which bounds waits for conflicting database locks. */
     public static final String BUSY_TIMEOUT_PROPERTY = "busy_timeout";
 
-    /** Explicit library default, matching sqlite-jdbc 3.53.2.0. */
+    /** Explicit library default, matching sqlite-jdbc 3.53.2.1. */
     public static final int DEFAULT_BUSY_TIMEOUT_MILLIS = 3000;
 
     final SimpleAttribute<O, A> primaryKeyAttribute;

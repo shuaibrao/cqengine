@@ -85,7 +85,7 @@ distribution under its Apache License 2.0 option. The complete Apache License
 Objenesis 3.4 is Apache License 2.0. Its upstream `META-INF/LICENSE` and
 `META-INF/NOTICE` resources are retained in the `all` artifact.
 
-SQLite JDBC 3.53.2.0 is Apache License 2.0 and includes code derived from the
+SQLite JDBC 3.53.2.1 is Apache License 2.0 and includes code derived from the
 Zentus SQLite JDBC driver under a BSD licence. Its upstream
 `META-INF/maven/org.xerial/sqlite-jdbc/LICENSE` and `LICENSE.zentus` resources
 are retained in the `all` artifact. The bundled SQLite native library is in

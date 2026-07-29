@@ -26,8 +26,15 @@ metadata.
 Run this from the repository checkout, on any supported platform:
 
 ```bash
-CQENGINE_JMH_MACHINE_LABEL=<approved-host-label> NVD_API_KEY=<key> ./gradlew clean qualifyLocally
+CQENGINE_JMH_MACHINE_LABEL=<approved-host-label> NVD_API_KEY=<key> ./gradlew \
+  --no-daemon --no-build-cache --no-configuration-cache --no-parallel \
+  --dependency-verification strict --console=plain clean qualifyLocally
 ```
+
+The flags are not optional. Tracked `gradle.properties` turns the build cache, configuration cache and parallel
+execution on for ordinary development, and the invocation gate rejects all three, so the bare task name fails before
+any work starts. This is the same argument list the readiness manifest records as `gradleArguments`, which is what
+makes the published evidence describe the run that produced it.
 
 The label must name a record under `config/benchmark-hosts/`, and every characteristic in that record is compared
 against a live observation of the machine. `JAVA_HOME` must point at an installed JDK; Java 21 and Java 25 must both

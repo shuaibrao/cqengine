@@ -60,7 +60,7 @@ Run the checks which match the code being changed:
 | Performance-sensitive code | `./gradlew jmhSmoke`; retain workload and environment evidence for any numerical claim |
 | Concurrent collection or index behavior | `./gradlew concurrencySmoke`; reserve full JCStress and soak execution for candidate qualification |
 | Static-analysis disposition | `./gradlew verifySpotBugsMain verifySpotBugsReview --rerun-tasks` |
-| Qualification gates | `./gradlew verifyQualificationInvocation verifyQualificationSource`; the complete run is `./gradlew clean qualifyLocally` |
+| Qualification gates | `./gradlew verifyQualificationInvocation verifyQualificationSource`; the complete run needs the flag set in `RELEASING.md`, because the gate rejects the cache and parallel settings tracked `gradle.properties` enables |
 | GitHub Actions workflow | `actionlint` with `shellcheck` on `PATH`, at the versions `security.yml` pins; CI fails on findings that never appear in a Gradle build |
 
 `./gradlew check` is the developer aggregate. The authoritative release qualification is intentionally separate and
@@ -108,6 +108,15 @@ artifacts verify, so `--write-locks` fails first with a verification error when 
 
 ```bash
 ./gradlew --write-verification-metadata sha256,pgp dependencies
+```
+
+That ordering holds for plugins, whose artifacts must verify before the plugin resolves at all. A library version
+bump is the mirror image: the locks still pin the old version, so resolution fails before metadata can be written for
+the new one. Write both together for those, as the benchmark and stress-test commands below already do:
+
+```bash
+./gradlew clean jar generatePomFileForMavenJavaPublication \
+  --write-locks --write-verification-metadata sha256,pgp --no-configuration-cache
 ```
 
 Build-plugin changes must resolve the tasks and metadata variants which actually use the plugins:

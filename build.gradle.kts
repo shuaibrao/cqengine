@@ -4502,7 +4502,7 @@ abstract class VerifyLocalPublication : DefaultTask() {
             PomDependency("com.googlecode.concurrent-trees", "concurrent-trees", "2.6.1", "compile"),
             PomDependency("org.javassist", "javassist", "3.32.0-GA", "compile"),
             PomDependency("com.esotericsoftware", "kryo", "5.6.2", "compile"),
-            PomDependency("org.xerial", "sqlite-jdbc", "3.53.2.0", "compile"),
+            PomDependency("org.xerial", "sqlite-jdbc", "3.53.2.1", "compile"),
         )
         private val EXPECTED_THIN_MANIFEST_ATTRIBUTES = setOf(
             "Manifest-Version",
@@ -4978,6 +4978,8 @@ dependencies {
         testImplementation(libs.byte.buddy) {
             because("EqualsVerifier and Mockito require one converged Byte Buddy version")
         }
+        // Kryo's own transitive version is the one that ships, so tests hold EqualsVerifier and Mockito to it
+        // rather than diverging from what consumers resolve.
         testImplementation(libs.objenesis) {
             because("Kryo, EqualsVerifier and Mockito require one converged Objenesis version in tests")
         }
@@ -5942,14 +5944,14 @@ val expectedRuntimeCoordinates = listOf(
     "org.antlr:antlr4-runtime:4.13.2",
     "org.javassist:javassist:3.32.0-GA",
     "org.objenesis:objenesis:3.4",
-    "org.xerial:sqlite-jdbc:3.53.2.0",
+    "org.xerial:sqlite-jdbc:3.53.2.1",
 )
 val expectedDirectRuntimeDependencyCoordinates = listOf(
     "com.esotericsoftware:kryo:5.6.2",
     "com.googlecode.concurrent-trees:concurrent-trees:2.6.1",
     "org.antlr:antlr4-runtime:4.13.2",
     "org.javassist:javassist:3.32.0-GA",
-    "org.xerial:sqlite-jdbc:3.53.2.0",
+    "org.xerial:sqlite-jdbc:3.53.2.1",
 )
 val expectedRuntimeDependencyEdges = listOf(
     "com.esotericsoftware:kryo:5.6.2 -> com.esotericsoftware:minlog:1.3.1",
@@ -5965,7 +5967,7 @@ val expectedRuntimeArtifactNameByCoordinate = linkedMapOf(
     "org.antlr:antlr4-runtime:4.13.2" to "antlr4-runtime-4.13.2.jar",
     "org.javassist:javassist:3.32.0-GA" to "javassist-3.32.0-GA.jar",
     "org.objenesis:objenesis:3.4" to "objenesis-3.4.jar",
-    "org.xerial:sqlite-jdbc:3.53.2.0" to "sqlite-jdbc-3.53.2.0.jar",
+    "org.xerial:sqlite-jdbc:3.53.2.1" to "sqlite-jdbc-3.53.2.1.jar",
 )
 val expectedDependencyCheckArtifactNames = expectedRuntimeArtifactNameByCoordinate.values.toList()
 val expectedRuntimeLicenseIdsByCoordinate = linkedMapOf(
@@ -5976,7 +5978,7 @@ val expectedRuntimeLicenseIdsByCoordinate = linkedMapOf(
     "org.antlr:antlr4-runtime:4.13.2" to "BSD-3-Clause",
     "org.javassist:javassist:3.32.0-GA" to "Apache-2.0,LGPL-2.1-only,MPL-1.1",
     "org.objenesis:objenesis:3.4" to "Apache-2.0",
-    "org.xerial:sqlite-jdbc:3.53.2.0" to "Apache-2.0",
+    "org.xerial:sqlite-jdbc:3.53.2.1" to "Apache-2.0",
 )
 
 val osvScannerVersion = "2.3.8"

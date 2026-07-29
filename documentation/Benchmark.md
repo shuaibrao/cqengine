@@ -34,8 +34,12 @@ used to rank indexes whose queries return different numbers of objects.
 Candidate evidence is produced by the local qualification:
 
 ```bash
-CQENGINE_JMH_MACHINE_LABEL=<approved-host-label> ./gradlew clean qualifyLocally
+CQENGINE_JMH_MACHINE_LABEL=<approved-host-label> ./gradlew \
+  --no-daemon --no-build-cache --no-configuration-cache --no-parallel \
+  --dependency-verification strict --console=plain clean qualifyLocally
 ```
+
+`RELEASING.md` explains why the invocation gate requires those flags.
 
 The run requires a clean Git worktree, so the measurements belong to a commit rather than to whatever happened to be
 in the working tree. It validates benchmark discovery, forks, warmup and measurement settings, result counts, JDK

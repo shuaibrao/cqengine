@@ -87,7 +87,7 @@ Gradle build and additional correctness, resource-safety and security controls. 
   * Disk persistence now waits at most 3,000 milliseconds by default for a conflicting SQLite lock. The value can be
     overridden through `DiskPersistence.onPrimaryKeyInFileWithProperties(...)`; busy failures expose their base and
     extended SQLite codes through `SQLiteBusyException`.
-  * SQLite JDBC is upgraded to 3.53.2.0. Collection mutations acquire the writer slot before schema reads so the
+  * SQLite JDBC is upgraded to 3.53.2.1. Collection mutations acquire the writer slot before schema reads so the
     configured busy timeout also governs deferred-to-write transaction contention.
   * External consumers on Java 21 and Java 25 extract and load the sqlite-jdbc native selected for the current OS
     and architecture, compare its extracted bytes with the resolved artifact, and execute version, integrity and

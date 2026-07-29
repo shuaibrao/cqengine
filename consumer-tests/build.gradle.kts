@@ -182,7 +182,7 @@ subprojects {
                 "org.antlr:antlr4-runtime:4.13.2",
                 "org.javassist:javassist:3.32.0-GA",
                 "org.objenesis:objenesis:3.4",
-                "org.xerial:sqlite-jdbc:3.53.2.0",
+                "org.xerial:sqlite-jdbc:3.53.2.1",
             )
             check(modules == expectedThinModules) {
                 "Unexpected $artifactMode consumer modules. Expected $expectedThinModules, resolved $modules"

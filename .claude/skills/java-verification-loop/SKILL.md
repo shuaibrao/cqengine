@@ -26,6 +26,8 @@ python3 scripts/test-agent-harness.py
 
 For dependency, parser, serialization or persistence changes, also run the corresponding focused security, compatibility, fuzz, recovery or consumer tasks defined by `./gradlew tasks` and the documentation index.
 
+Any version that reaches the published POM needs `consumerTest`, not just `test` and `verifyPublication`. The consumer projects carry their own expected-coordinate inventories and a probe asserting the resolved SQLite driver version, so a bumped coordinate has to be updated there as well as in the root build. Neither root-build gate reads those lists, which is why a stale one reaches CI green-looking.
+
 ## Broader local gates
 
 ```bash
@@ -38,7 +40,9 @@ Never use dependency-verification write mode as passing evidence. Never add `--a
 
 ## Authoritative release qualification
 
-Only run `./gradlew clean qualifyLocally` when the user explicitly approves the long-running final qualification. It
+Only run the qualification, whose full argument list `RELEASING.md` records, when the user explicitly approves the
+long-running final run. The bare task name fails the invocation gate, because tracked `gradle.properties` enables the
+caches and parallel execution the gate rejects. It
 requires a clean worktree and an approved `CQENGINE_JMH_MACHINE_LABEL`, and writes
 `qualification-completion.properties` only when the whole graph passed. A direct `releaseCheck` invocation skips the
 clean-worktree gate and leaves no completion record, so it is not equivalent.

@@ -110,8 +110,8 @@ public final class PersistenceConsumerProbe {
                 sqliteClassLoader,
                 "org.sqlite.SQLiteJDBCLoader",
                 "getVersion");
-        ConsumerAssertions.require("3.53.2.0".equals(driverVersion),
-                "Expected sqlite-jdbc 3.53.2.0, found " + driverVersion);
+        ConsumerAssertions.require("3.53.2.1".equals(driverVersion),
+                "Expected sqlite-jdbc 3.53.2.1, found " + driverVersion);
 
         List<URL> nativeResources = new ArrayList<URL>();
         Enumeration<URL> resourceEnumeration = sqliteClassLoader.getResources(nativeResource);
