@@ -6839,7 +6839,7 @@ listOf(
 val localReadinessEvidencePaths = listOf(
     "root:reports/qualification/source-legal-provenance.txt",
     "root:reports/qualification/format-ratchet.txt",
-    "root:reports/qualification/release-invocation.txt",
+    "root:reports/qualification/invocation.txt",
     "root:reports/qualification/release-version.txt",
     "root:reports/osgi-baseline/report.txt",
     "root:reports/test-inventory/test.txt",
