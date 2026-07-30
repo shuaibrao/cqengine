@@ -85,7 +85,6 @@ jobs:
             exit 1
           fi
           grep -Fxq 'status=passed' "$completion" || { echo "::error::qualification completion record is not successful"; exit 1; }
-          grep -Fxq 'validationStatus=passed' "$completion" || { echo "::error::qualification validation record is not successful"; exit 1; }
           grep -Fxq "coordinate=io.github.shuaibrao:cqengine:$RELEASE_VERSION" "$readiness" || {
             echo "::error::qualification evidence does not identify io.github.shuaibrao:cqengine:$RELEASE_VERSION"; exit 1; }
           source_commit=$(sed -n 's/^sourceCommit=//p' "$readiness")

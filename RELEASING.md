@@ -169,7 +169,7 @@ on any mismatch.
 
    ```bash
    mkdir -p release-evidence/<version>
-   cp build/local-release-evidence/qualification/wrapper-completion.properties \
+   cp build/local-release-evidence/qualification/qualification-completion.properties \
       build/local-release-evidence/qualification/local-readiness-manifest.txt \
       release-evidence/<version>/
    git add release-evidence/<version> && git commit
