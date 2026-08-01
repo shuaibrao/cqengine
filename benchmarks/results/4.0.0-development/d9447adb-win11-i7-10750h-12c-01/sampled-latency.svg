@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1160 526" role="img">
+  <title>Representative sampled latency on Java 25</title>
+  <desc>Sample-time p50/p99; lookups return one record, iterations deliver 2,500. Lower is better.</desc>
+  <style>
+    text { font-family: system-ui, -apple-system, sans-serif; fill: #172033; }
+    .title { font-size: 24px; font-weight: 700; }
+    .subtitle { font-size: 13px; fill: #526071; }
+    .category { font-size: 13px; font-weight: 600; }
+    .series { font-size: 11px; fill: #526071; }
+    .value { font-size: 11px; font-variant-numeric: tabular-nums; }
+    .axis { font-size: 11px; fill: #657386; }
+    .grid { stroke: #d8dee8; stroke-width: 1; }
+  </style>
+  <rect width="1160" height="526" fill="#ffffff"/>
+  <text class="title" x="24" y="34">Representative sampled latency on Java 25</text>
+  <text class="subtitle" x="24" y="58">Sample-time p50/p99; lookups return one record, iterations deliver 2,500. Lower is better.</text>
+  <text class="subtitle" x="24" y="78">Logarithmic scale; labels show measured us/op.</text>
+  <rect x="24" y="91" width="14" height="10" rx="2" fill="#2563eb"/>
+  <text class="series" x="44" y="100">Java 25 p50</text>
+  <rect x="204" y="91" width="14" height="10" rx="2" fill="#60a5fa"/>
+  <text class="series" x="224" y="100">Java 25 p99</text>
+  <line class="grid" x1="300.00" y1="112" x2="300.00" y2="478"/>
+  <text class="axis" text-anchor="middle" x="300.00" y="498">0.1</text>
+  <line class="grid" x1="463.75" y1="112" x2="463.75" y2="478"/>
+  <text class="axis" text-anchor="middle" x="463.75" y="498">1</text>
+  <line class="grid" x1="627.50" y1="112" x2="627.50" y2="478"/>
+  <text class="axis" text-anchor="middle" x="627.50" y="498">10</text>
+  <line class="grid" x1="791.25" y1="112" x2="791.25" y2="478"/>
+  <text class="axis" text-anchor="middle" x="791.25" y="498">100</text>
+  <line class="grid" x1="955.00" y1="112" x2="955.00" y2="478"/>
+  <text class="axis" text-anchor="middle" x="955.00" y="498">1,000</text>
+  <text class="axis" text-anchor="middle" x="627.50" y="517">us/op</text>
+  <text class="category" text-anchor="end" x="286" y="134">lookup: on heap</text>
+  <rect x="300" y="120" width="49.29" height="14" rx="2" fill="#2563eb"/>
+  <text class="value" x="355.29" y="131">0.2</text>
+  <rect x="300" y="139" width="114.46" height="14" rx="2" fill="#60a5fa"/>
+  <text class="value" x="420.46" y="150">0.5</text>
+  <text class="category" text-anchor="end" x="286" y="189">lookup: off heap</text>
+  <rect x="300" y="175" width="456.16" height="14" rx="2" fill="#2563eb"/>
+  <text class="value" x="762.16" y="186">61.06</text>
+  <rect x="300" y="194" width="505.28" height="14" rx="2" fill="#60a5fa"/>
+  <text class="value" x="811.28" y="205">121.8</text>
+  <text class="category" text-anchor="end" x="286" y="244">lookup: disk WAL</text>
+  <rect x="300" y="230" width="655.00" height="14" rx="2" fill="#2563eb"/>
+  <text class="value" x="961.00" y="241">3,178</text>
+  <rect x="300" y="249" width="655.00" height="14" rx="2" fill="#60a5fa"/>
+  <text class="value" x="961.00" y="260">6,255</text>
+  <text class="category" text-anchor="end" x="286" y="299">first: hash large</text>
+  <rect x="300" y="285" width="114.46" height="14" rx="2" fill="#2563eb"/>
+  <text class="value" x="420.46" y="296">0.5</text>
+  <rect x="300" y="304" width="156.26" height="14" rx="2" fill="#60a5fa"/>
+  <text class="value" x="462.26" y="315">0.9</text>
+  <text class="category" text-anchor="end" x="286" y="354">iterate: hash large</text>
+  <rect x="300" y="340" width="371.97" height="14" rx="2" fill="#2563eb"/>
+  <text class="value" x="677.97" y="351">18.69</text>
+  <rect x="300" y="359" width="422.95" height="14" rx="2" fill="#60a5fa"/>
+  <text class="value" x="728.95" y="370">38.27</text>
+  <text class="category" text-anchor="end" x="286" y="409">iterate: fallback large</text>
+  <rect x="300" y="395" width="509.51" height="14" rx="2" fill="#2563eb"/>
+  <text class="value" x="815.51" y="406">129.3</text>
+  <rect x="300" y="414" width="554.60" height="14" rx="2" fill="#60a5fa"/>
+  <text class="value" x="860.60" y="425">243.7</text>
+</svg>

@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1160 412" role="img">
+  <title>Query lifecycle on Java 25</title>
+  <desc>One compound Ford price-range query returning 751 of 10,000 records; lower is better.</desc>
+  <style>
+    text { font-family: system-ui, -apple-system, sans-serif; fill: #172033; }
+    .title { font-size: 24px; font-weight: 700; }
+    .subtitle { font-size: 13px; fill: #526071; }
+    .category { font-size: 13px; font-weight: 600; }
+    .series { font-size: 11px; fill: #526071; }
+    .value { font-size: 11px; font-variant-numeric: tabular-nums; }
+    .axis { font-size: 11px; fill: #657386; }
+    .grid { stroke: #d8dee8; stroke-width: 1; }
+  </style>
+  <rect width="1160" height="412" fill="#ffffff"/>
+  <text class="title" x="24" y="34">Query lifecycle on Java 25</text>
+  <text class="subtitle" x="24" y="58">One compound Ford price-range query returning 751 of 10,000 records; lower is better.</text>
+  <text class="subtitle" x="24" y="78">Logarithmic scale; labels show measured ns/op.</text>
+  <rect x="24" y="91" width="14" height="10" rx="2" fill="#2563eb"/>
+  <text class="series" x="44" y="100">Java 25</text>
+  <line class="grid" x1="300.00" y1="112" x2="300.00" y2="364"/>
+  <text class="axis" text-anchor="middle" x="300.00" y="384">10</text>
+  <line class="grid" x1="463.75" y1="112" x2="463.75" y2="364"/>
+  <text class="axis" text-anchor="middle" x="463.75" y="384">100</text>
+  <line class="grid" x1="627.50" y1="112" x2="627.50" y2="364"/>
+  <text class="axis" text-anchor="middle" x="627.50" y="384">1,000</text>
+  <line class="grid" x1="791.25" y1="112" x2="791.25" y2="364"/>
+  <text class="axis" text-anchor="middle" x="791.25" y="384">10,000</text>
+  <line class="grid" x1="955.00" y1="112" x2="955.00" y2="364"/>
+  <text class="axis" text-anchor="middle" x="955.00" y="384">100,000</text>
+  <text class="axis" text-anchor="middle" x="627.50" y="403">ns/op</text>
+  <text class="category" text-anchor="end" x="286" y="134">construct query</text>
+  <rect x="300" y="120" width="132.50" height="14" rx="2" fill="#2563eb"/>
+  <text class="value" x="438.50" y="131">64.44</text>
+  <text class="category" text-anchor="end" x="286" y="170">create/read/close</text>
+  <rect x="300" y="156" width="628.50" height="14" rx="2" fill="#2563eb"/>
+  <text class="value" x="934.50" y="167">68,900</text>
+  <text class="category" text-anchor="end" x="286" y="206">first result/close</text>
+  <rect x="300" y="192" width="644.22" height="14" rx="2" fill="#2563eb"/>
+  <text class="value" x="950.22" y="203">85,930</text>
+  <text class="category" text-anchor="end" x="286" y="242">iterate/close</text>
+  <rect x="300" y="228" width="655.00" height="14" rx="2" fill="#2563eb"/>
+  <text class="value" x="961.00" y="239">127,300</text>
+  <text class="category" text-anchor="end" x="286" y="278">size/close</text>
+  <rect x="300" y="264" width="655.00" height="14" rx="2" fill="#2563eb"/>
+  <text class="value" x="961.00" y="275">126,000</text>
+  <text class="category" text-anchor="end" x="286" y="314">unindexed iterate/close</text>
+  <rect x="300" y="300" width="655.00" height="14" rx="2" fill="#2563eb"/>
+  <text class="value" x="961.00" y="311">139,400</text>
+</svg>

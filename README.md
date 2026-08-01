@@ -23,12 +23,6 @@ A full scan performs O(_n_ _t_) predicate work, where _n_ is collection size and
 indexes can reduce that work for suitable query shapes, but their value depends on lookup selectivity, result
 consumption and update cost. [Read more: The Limits of Iteration](documentation/TheLimitsOfIteration.md)
 
-The JMH suite measures query lifecycle, indexed query scenarios, mutation, persistence, concurrency, sampled latency
-and JVM allocation as distinct workloads. See the [benchmark guide](documentation/Benchmark.md) for the methodology,
-machine boundary and interpretation rules. The current-machine preview is regenerated from a complete qualified run;
-it is not a universal performance guarantee.
-
-
 ---
 
 
@@ -59,6 +53,40 @@ Several implementations of CQEngine's `IndexedCollection` are provided, supporti
   * [TransactionalIndexedCollection](src/main/java/com/googlecode/cqengine/TransactionalIndexedCollection.java)  - lock-free concurrent reads, and sequential writes for full [transaction isolation](documentation/TransactionIsolation.md) using Multi-Version Concurrency Control
 
 For more details see [TransactionIsolation](documentation/TransactionIsolation.md).
+
+---
+
+## Benchmarks ##
+
+The JMH suite measures query lifecycle, indexed query scenarios, mutation, persistence, concurrency, sampled latency
+and JVM allocation as distinct workloads on Java 21 and Java 25. The charts below come from the latest full
+benchmark run, measured on a Windows 11 virtual machine with 12 logical CPU cores on an Intel Core i7-10750H.
+The numbers describe that machine only. Headlines from that run:
+
+  * An indexed unique lookup answers in about 225 ns. The same equality shape without an index takes about 7× as
+    long as its indexed equivalent at the same match count, because it scans the whole collection.
+  * Delivering results dominates large queries: once an index has located 2,500 matching records, iterating them
+    costs about 8 ns per record, which is why hash, compound and string indexes land in one band below.
+  * Results stream lazily: on a 2,500-match query the first record arrives in about 0.5 µs at p50, long before
+    full iteration completes.
+  * Query allocation is per result-set lifecycle, not per record: consuming 0 or all 751 results of the lifecycle
+    query allocates the same ~99 KB, and a single indexed record replacement runs in about 0.5 µs allocating 804 B.
+
+![Indexed query scenarios on Java 25](benchmarks/results/4.0.0-development/d9447adb-win11-i7-10750h-12c-01/query-scenarios.svg)
+
+![Query lifecycle on Java 25](benchmarks/results/4.0.0-development/d9447adb-win11-i7-10750h-12c-01/query-lifecycle.svg)
+
+![Representative sampled latency on Java 25](benchmarks/results/4.0.0-development/d9447adb-win11-i7-10750h-12c-01/sampled-latency.svg)
+
+![Normalized allocation on Java 25](benchmarks/results/4.0.0-development/d9447adb-win11-i7-10750h-12c-01/allocation.svg)
+
+Drill down:
+
+  * [Representative results](benchmarks/results/4.0.0-development/d9447adb-win11-i7-10750h-12c-01/representative-results.md) —
+    the full tables behind these charts, with the indexes, queries, exact match counts and how to read each number
+  * [How the benchmarks are constructed](benchmarks/results/README.md) — the dataset, the query shapes, the
+    measurement contract and how a run becomes committed evidence
+  * [Benchmark guide](documentation/Benchmark.md) — methodology, machine boundary and interpretation rules
 
 ---
 

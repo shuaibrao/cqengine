@@ -112,18 +112,45 @@ LANE_ORDER = {
     "concurrency": 6,
 }
 
+# Index, query and match-count descriptions restate QueryScenarioBenchmark's fixture. The dataset is
+# deterministic, so the counts are exact; the benchmark setup verifies the retrieved set matches them
+# and that each scenario uses its declared index or fallback path.
 QUERY_SCENARIOS = (
-    ("Unique lookup: no match", "UNIQUE_ZERO"),
-    ("Unique lookup: one match", "UNIQUE_ONE"),
-    ("Hash equality", "HASH_LARGE"),
-    ("Navigable range", "NAVIGABLE_SMALL"),
-    ("Compound lookup", "COMPOUND_LARGE"),
-    ("Standing query", "STANDING_MEDIUM"),
-    ("Radix prefix", "RADIX_LARGE"),
-    ("Reversed radix suffix", "REVERSED_RADIX_LARGE"),
-    ("Inverted radix prefix", "INVERTED_RADIX_LARGE"),
-    ("Suffix contains", "SUFFIX_LARGE"),
-    ("Unindexed fallback", "FALLBACK_LARGE"),
+    ("Unique lookup: no match", "UNIQUE_ZERO", "`UniqueIndex` on id", "`equal(ID, <absent id>)`", "0"),
+    ("Unique lookup: one match", "UNIQUE_ONE", "`UniqueIndex` on id", "`equal(ID, ...)`", "1"),
+    ("Hash equality", "HASH_LARGE", "`HashIndex` on manufacturer", '`equal(MANUFACTURER, "Ford")`', "2,500"),
+    ("Navigable range", "NAVIGABLE_SMALL", "`NavigableIndex` on price", "`between(PRICE, 2500, 2507)`", "16"),
+    (
+        "Compound lookup",
+        "COMPOUND_LARGE",
+        "`CompoundIndex` on manufacturer, model",
+        '`and(equal("Toyota"), equal("Prius"))`',
+        "2,500",
+    ),
+    (
+        "Standing query",
+        "STANDING_MEDIUM",
+        "`StandingQueryIndex`",
+        "precomputed Toyota with id below the midpoint",
+        "1,250",
+    ),
+    ("Radix prefix", "RADIX_LARGE", "`RadixTreeIndex` on model", '`startsWith(MODEL, "Fo")`', "2,500"),
+    (
+        "Reversed radix suffix",
+        "REVERSED_RADIX_LARGE",
+        "`ReversedRadixTreeIndex` on model",
+        '`endsWith(MODEL, "vic")`',
+        "2,500",
+    ),
+    (
+        "Inverted radix prefix",
+        "INVERTED_RADIX_LARGE",
+        "`InvertedRadixTreeIndex` on model",
+        '`longestPrefix(MODEL, "Prius-Prime")`',
+        "2,500",
+    ),
+    ("Suffix contains", "SUFFIX_LARGE", "`SuffixTreeIndex` on model", '`contains(MODEL, "6")`', "2,500"),
+    ("Unindexed fallback", "FALLBACK_LARGE", "none — full collection scan", '`equal(MODEL, "M6")`', "2,500"),
 )
 
 MANAGED_OUTPUTS = (
@@ -662,7 +689,11 @@ def canonical_number(value: Any) -> str:
 
 
 def display_number(value: float, significant_digits: int = 4) -> str:
-    return format(value, f".{significant_digits}g")
+    rounded = float(format(value, f".{significant_digits}g"))
+    if rounded.is_integer():
+        return format(int(rounded), ",d")
+    decimals = max(0, significant_digits - 1 - math.floor(math.log10(abs(rounded))))
+    return format(rounded, f",.{decimals}f").rstrip("0").rstrip(".")
 
 
 def generate_csv(rows: Sequence[Mapping[str, Any]]) -> bytes:
@@ -859,7 +890,7 @@ def query_chart(rows: Sequence[Mapping[str, Any]]) -> bytes:
         categories.append((label, values))
     return grouped_log_chart(
         "Query lifecycle on Java 25",
-        "Current machine-specific measurements; lower is better. No regression thresholds are inferred.",
+        "One compound Ford price-range query returning 751 of 10,000 records; lower is better.",
         categories,
         (("Java 25", "#2563eb"),),
         "ns/op",
@@ -870,7 +901,7 @@ def query_chart(rows: Sequence[Mapping[str, Any]]) -> bytes:
 
 def query_scenario_chart(rows: Sequence[Mapping[str, Any]]) -> bytes:
     categories = []
-    for label, scenario in QUERY_SCENARIOS:
+    for label, scenario, _, _, matches in QUERY_SCENARIOS:
         row = find_row(
             rows,
             25,
@@ -878,10 +909,10 @@ def query_scenario_chart(rows: Sequence[Mapping[str, Any]]) -> bytes:
             "QueryScenarioBenchmark.fullIterationAndClose",
             {"datasetSize": "10000", "scenario": scenario},
         )
-        categories.append((label, {"Java 25": float(row["score"])}))
+        categories.append((f"{label} ({matches})", {"Java 25": float(row["score"])}))
     return grouped_log_chart(
         "Indexed query scenarios on Java 25",
-        "Full result iteration over 10,000 records; lower is better. Result cardinality varies by scenario.",
+        "Full result iteration over 10,000 records; parentheses show matches delivered per operation. Lower is better.",
         categories,
         (("Java 25", "#2563eb"),),
         "ns/op",
@@ -933,7 +964,7 @@ def sampled_latency_chart(rows: Sequence[Mapping[str, Any]]) -> bytes:
         categories.append((label, values))
     return grouped_log_chart(
         "Representative sampled latency on Java 25",
-        "Current-machine p50 and p99 observations from the sample-time lane; lower is better.",
+        "Sample-time p50/p99; lookups return one record, iterations deliver 2,500. Lower is better.",
         categories,
         (
             ("Java 25 p50", "#2563eb"),
@@ -1000,26 +1031,59 @@ def representative_markdown(
     approval: ApprovalDecision,
 ) -> bytes:
     query_methods = (
-        ("Construct compound query", "QueryLifecycleBenchmark.constructCompoundQuery"),
-        ("Create/read/close", "QueryLifecycleBenchmark.createResultSetReadCostAndClose"),
-        ("First result/close", "QueryLifecycleBenchmark.firstResultAndClose"),
-        ("Full iteration/close", "QueryLifecycleBenchmark.fullIterationAndClose"),
-        ("Size/close", "QueryLifecycleBenchmark.sizeAndClose"),
-        ("Unindexed iteration/close", "QueryLifecycleBenchmark.unindexedFullIterationAndClose"),
+        (
+            "Construct compound query",
+            "QueryLifecycleBenchmark.constructCompoundQuery",
+            "build the `and(...)` query object; nothing is retrieved",
+            "—",
+        ),
+        (
+            "Create/read/close",
+            "QueryLifecycleBenchmark.createResultSetReadCostAndClose",
+            "`retrieve(...)`, read the retrieval cost, close",
+            "0 of 751",
+        ),
+        (
+            "First result/close",
+            "QueryLifecycleBenchmark.firstResultAndClose",
+            "retrieve, take the first record, close",
+            "1 of 751",
+        ),
+        (
+            "Full iteration/close",
+            "QueryLifecycleBenchmark.fullIterationAndClose",
+            "retrieve, iterate every record, close",
+            "751",
+        ),
+        (
+            "Size/close",
+            "QueryLifecycleBenchmark.sizeAndClose",
+            "retrieve, count via `size()`, close",
+            "751 counted",
+        ),
+        (
+            "Unindexed iteration/close",
+            "QueryLifecycleBenchmark.unindexedFullIterationAndClose",
+            "full-scan filter with no usable index, iterate, close",
+            "2,500",
+        ),
     )
     query_table = []
-    for label, suffix in query_methods:
+    query_scores = {}
+    query_allocations = {}
+    for label, suffix, work, results in query_methods:
         selected = find_row(rows, 25, "query", suffix, {"datasetSize": "10000"})
+        score = float(selected["score"])
+        allocation_bytes = float(selected["allocation_bytes_per_op"])
+        query_scores[suffix] = score
+        query_allocations[suffix] = allocation_bytes
         query_table.append(
-            (
-                label,
-                display_number(float(selected["score"])),
-                display_number(float(selected["allocation_bytes_per_op"])),
-            )
+            (label, work, results, display_number(score), display_number(allocation_bytes))
         )
 
     scenario_table = []
-    for label, scenario in QUERY_SCENARIOS:
+    scenario_scores = {}
+    for label, scenario, index_description, query_description, matches in QUERY_SCENARIOS:
         selected = find_row(
             rows,
             25,
@@ -1027,47 +1091,68 @@ def representative_markdown(
             "QueryScenarioBenchmark.fullIterationAndClose",
             {"datasetSize": "10000", "scenario": scenario},
         )
-        scenario_table.append((label, display_number(float(selected["score"]))))
+        score = float(selected["score"])
+        scenario_scores[scenario] = score
+        scenario_table.append(
+            (label, index_description, query_description, matches, display_number(score))
+        )
 
     latency_selections = (
         (
             "Persistence lookup, on heap",
             "PersistenceLifecycleBenchmark.pointLookupAndClose",
             {"datasetSize": "10000", "persistenceMode": "ON_HEAP"},
+            "on-heap collection, `UniqueIndex` on id",
+            "1",
         ),
         (
             "Persistence lookup, off heap",
             "PersistenceLifecycleBenchmark.pointLookupAndClose",
             {"datasetSize": "10000", "persistenceMode": "OFF_HEAP"},
+            "`OffHeapPersistence` (off-heap SQLite), `OffHeapIndex`",
+            "1",
         ),
         (
             "Persistence lookup, disk WAL",
             "PersistenceLifecycleBenchmark.pointLookupAndClose",
             {"datasetSize": "10000", "persistenceMode": "DISK_WAL"},
+            "`DiskPersistence` (SQLite file, WAL), `DiskIndex`",
+            "1",
         ),
         (
             "First result, hash large",
             "QueryScenarioBenchmark.firstResultAndClose",
             {"datasetSize": "10000", "scenario": "HASH_LARGE"},
+            "`HashIndex` on manufacturer",
+            "1 of 2,500",
         ),
         (
             "Full iteration, hash large",
             "QueryScenarioBenchmark.fullIterationAndClose",
             {"datasetSize": "10000", "scenario": "HASH_LARGE"},
+            "`HashIndex` on manufacturer",
+            "2,500",
         ),
         (
             "Full iteration, fallback large",
             "QueryScenarioBenchmark.fullIterationAndClose",
             {"datasetSize": "10000", "scenario": "FALLBACK_LARGE"},
+            "none — full collection scan",
+            "2,500",
         ),
     )
     latency_table = []
-    for label, suffix, params in latency_selections:
+    latency_p50 = {}
+    for label, suffix, params, storage, results in latency_selections:
         selected = find_row(rows, 25, "latency", suffix, params)
+        p50 = float(selected["p50"])
+        latency_p50[label] = p50
         latency_table.append(
             (
                 label,
-                display_number(float(selected["p50"])),
+                storage,
+                results,
+                display_number(p50),
                 display_number(float(selected["p99"])),
             )
         )
@@ -1079,6 +1164,24 @@ def representative_markdown(
         "MutationAllocationBenchmark.replaceWithSingletonInputs",
         {"datasetSize": "1000"},
     )
+
+    unique_one_ns = scenario_scores["UNIQUE_ONE"]
+    hash_ns = scenario_scores["HASH_LARGE"]
+    scenario_fallback_ns = scenario_scores["FALLBACK_LARGE"]
+    create_ns = query_scores["QueryLifecycleBenchmark.createResultSetReadCostAndClose"]
+    full_ns = query_scores["QueryLifecycleBenchmark.fullIterationAndClose"]
+    construct_alloc = query_allocations["QueryLifecycleBenchmark.constructCompoundQuery"]
+    create_alloc = query_allocations["QueryLifecycleBenchmark.createResultSetReadCostAndClose"]
+    full_alloc = query_allocations["QueryLifecycleBenchmark.fullIterationAndClose"]
+    unindexed_alloc = query_allocations["QueryLifecycleBenchmark.unindexedFullIterationAndClose"]
+    heap_p50 = latency_p50["Persistence lookup, on heap"]
+    off_heap_p50 = latency_p50["Persistence lookup, off heap"]
+    disk_p50 = latency_p50["Persistence lookup, disk WAL"]
+    first_p50 = latency_p50["First result, hash large"]
+    iterate_p50 = latency_p50["Full iteration, hash large"]
+    fallback_p50 = latency_p50["Full iteration, fallback large"]
+    mutation_ns = float(allocation["score"])
+    mutation_alloc = float(allocation["allocation_bytes_per_op"])
 
     lines = [
         "# Representative benchmark results",
@@ -1093,25 +1196,48 @@ def representative_markdown(
         "",
         "## Indexed query scenarios",
         "",
-        "Dataset size: 10,000. Values are average nanoseconds for full result iteration and close.",
-        "Result cardinality differs by scenario, so compare only equivalent workloads. Lower is better.",
+        "Dataset size: 10,000. Each value is the average time to run the query, iterate every matching",
+        "record and close the result set, so a row's time includes delivering all of its matches. Match",
+        "counts are exact for the deterministic dataset and verified by the benchmark setup. Lower is",
+        "better at the same match count.",
         "",
     ]
-    lines.extend(markdown_table(("Scenario", "Java 25 ns/op"), scenario_table))
+    lines.extend(
+        markdown_table(("Scenario", "Index", "Query", "Matches", "Java 25 ns/op"), scenario_table)
+    )
     lines.extend(
         [
             "",
             "![Indexed query scenarios on Java 25](query-scenarios.svg)",
             "",
+            "How to read these numbers:",
+            "",
+            "- The unique lookups return at most one record straight from the index; their",
+            f"  {display_number(unique_one_ns)} ns is this run's floor for answering a query, not a typical cost.",
+            "- The 2,500-match rows are not slow indexes: delivering 2,500 of the 10,000 records dominates",
+            "  the time, which is why the hash, compound and string indexes land in one band. Hash equality",
+            f"  spends about {display_number(hash_ns / 2500, 2)} ns per record delivered.",
+            "- The standing query answers a compound query from a result set maintained at insert time, so",
+            "  retrieval does not evaluate the query's branches at all.",
+            "- The unindexed fallback is the control: the same equality shape without an index scans the",
+            f"  whole collection and takes about {display_number(scenario_fallback_ns / hash_ns, 2)}× as",
+            "  long as the indexed hash equality at the same match count. That multiple is what the index",
+            "  contributes to this workload.",
+            "- These comparisons hold within this run on this host; they are not cross-machine ratios.",
+            "",
             "## Query lifecycle",
             "",
-            "Dataset size: 10,000. Average-time score is in ns/op; normalized allocation is in B/op. Lower is better.",
+            "Dataset size: 10,000. Every row runs the same compound query — Ford with price 4,000–6,000,",
+            "answered by a `HashIndex` and a `NavigableIndex` and matching 751 records — except the",
+            "unindexed row, which filters on the model attribute without an index and matches 2,500.",
+            "Average-time score is in ns/op; normalized allocation is in B/op, heap bytes allocated per",
+            "operation from the JMH GC profiler. Lower is better.",
             "",
         ]
     )
     lines.extend(
         markdown_table(
-            ("Operation", "Java 25 ns/op", "Java 25 B/op"),
+            ("Operation", "Work measured", "Results consumed", "Java 25 ns/op", "Java 25 B/op"),
             query_table,
         )
     )
@@ -1120,15 +1246,35 @@ def representative_markdown(
             "",
             "![Query lifecycle on Java 25](query-lifecycle.svg)",
             "",
+            "How to read these numbers:",
+            "",
+            f"- Query objects are cheap: {display_number(construct_alloc)} B and well under a microsecond",
+            "  to build, so constructing a query per call is not a meaningful cost.",
+            f"- Allocation is nearly flat from create-only ({display_number(create_alloc)} B) to full",
+            f"  iteration ({display_number(full_alloc)} B): composing the indexed result set at",
+            "  `retrieve(...)` accounts for almost all of it, and consuming the results adds almost",
+            "  nothing. B/op here is per result-set lifecycle, not per record delivered.",
+            "- Time, not allocation, scales with consumption: full iteration adds about",
+            f"  {display_number((full_ns - create_ns) / 751, 2)} ns per record on top of creating and",
+            "  closing the result set.",
+            "- `size()` costs the same as full iteration on this query shape because counting a compound",
+            "  result set walks its matches.",
+            f"- The unindexed row allocates only {display_number(unindexed_alloc)} B — a filtering scan",
+            "  composes no index result sets — but pays the full-collection scan time no matter how",
+            "  many records match.",
+            "",
             "## Sampled latency",
             "",
-            "Dataset size: 10,000. Values are microseconds per operation from the sample-time lane. Lower is better.",
+            "Dataset size: 10,000. Values are microseconds per operation observed by the sample-time",
+            "lane; p50 and p99 describe this run's sample distribution, not service guarantees. The",
+            "three persistence rows are the identical single-record primary-key lookup against three",
+            "storage engines. Lower is better.",
             "",
         ]
     )
     lines.extend(
         markdown_table(
-            ("Operation", "Java 25 p50", "Java 25 p99"),
+            ("Operation", "Storage / index", "Results", "Java 25 p50 µs", "Java 25 p99 µs"),
             latency_table,
         )
     )
@@ -1137,9 +1283,26 @@ def representative_markdown(
             "",
             "![Representative sampled latency](sampled-latency.svg)",
             "",
+            "How to read these numbers:",
+            "",
+            f"- The storage medium dominates the persistence rows: the same lookup costs",
+            f"  {display_number(heap_p50)} µs on heap, {display_number(off_heap_p50)} µs in off-heap",
+            f"  SQLite and {display_number(disk_p50)} µs (about {display_number(disk_p50 / 1000, 2)} ms)",
+            "  in the disk WAL store at p50. Persistence is chosen for durability and dataset size",
+            "  beyond heap capacity, not for lookup speed.",
+            "- Results stream lazily: on the same 2,500-match hash query the first record arrives in",
+            f"  {display_number(first_p50)} µs at p50, about {display_number(iterate_p50 / first_p50, 2)}×",
+            f"  sooner than iterating all matches ({display_number(iterate_p50)} µs, about",
+            f"  {display_number(iterate_p50 * 1000 / 2500, 2)} ns per record).",
+            f"- Without an index, the same full iteration takes about",
+            f"  {display_number(fallback_p50 / iterate_p50, 2)}× longer at p50.",
+            "",
             "## Mutation allocation",
             "",
-            "`replaceWithSingletonInputs`, dataset size 1,000. Average-time score is in ns/op; allocation is in B/op.",
+            "`replaceWithSingletonInputs`, dataset size 1,000: each operation is one `update(...)` call",
+            "that atomically replaces one record with another in a `HashIndex`-indexed collection; the",
+            "benchmark verifies afterwards that the collection and index are consistent. Average-time",
+            "score is in ns/op; allocation is in B/op.",
             "",
         ]
     )
@@ -1149,8 +1312,8 @@ def representative_markdown(
             (
                 (
                     "Java 25",
-                    display_number(float(allocation["score"])),
-                    display_number(float(allocation["allocation_bytes_per_op"])),
+                    display_number(mutation_ns),
+                    display_number(mutation_alloc),
                 ),
             ),
         )
@@ -1159,6 +1322,9 @@ def representative_markdown(
         [
             "",
             "![Normalized allocation](allocation.svg)",
+            "",
+            f"A steady-state replace through the collection and its index costs {display_number(mutation_ns)} ns",
+            f"and {display_number(mutation_alloc)} B of allocation per operation on this host.",
             "",
             "The complete CSV retains score error, confidence bounds, percentiles and available GC profiler metrics for every row.",
             "",

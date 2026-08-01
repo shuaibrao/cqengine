@@ -10,8 +10,13 @@ The authoritative release qualification runs the complete benchmark inventory on
 208 validated rows in CSV. Public tables and charts present the Java 25 measurements from that same run rather than
 turning runtime-version differences into a performance claim.
 
-The next reviewed result package will be linked here after qualification of the current CQEngine 4.0 source. A result
-is publishable only when it identifies the measured commit, tree, benchmark JAR, JDKs and approved host record.
+The current reviewed result package is
+[`benchmarks/results/4.0.0-development/d9447adb-win11-i7-10750h-12c-01/`](../benchmarks/results/4.0.0-development/d9447adb-win11-i7-10750h-12c-01/README.md);
+its [representative results](../benchmarks/results/4.0.0-development/d9447adb-win11-i7-10750h-12c-01/representative-results.md)
+present the selected views and how to read them, and
+[`benchmarks/results/README.md`](../benchmarks/results/README.md) describes the dataset, query shapes and
+measurement contract behind every baseline. A result is publishable only when it identifies the measured commit,
+tree, benchmark JAR, JDKs and approved host record.
 
 ## Workloads
 
@@ -64,7 +69,8 @@ After reviewing a successful qualification, copy its generated report into the t
 - `ns/op`, `us/op` and `ms/op` are latency measures; lower is better for the same workload.
 - `ops/s` is throughput; higher is better for the same workload and thread configuration.
 - p50 and p99 describe the observed sample distribution from this run, not service-level guarantees.
-- `B/op` is normalized JVM allocation. CQEngine is not allocation-free.
+- `B/op` is normalized JVM allocation: heap bytes allocated per benchmark operation, from the JMH GC profiler.
+  CQEngine is not allocation-free.
 - Results are machine-specific and do not establish capacity, universal latency or numerical regression thresholds.
 - Host load, firmware, kernel, JVM, dataset, index selection, result cardinality and consumption depth can materially
   change measurements.
