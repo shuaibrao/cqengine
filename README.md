@@ -1,20 +1,54 @@
 # CQEngine - Collection Query Engine #
 
-CQEngine 4.0 continues Niall Gallagher's original CQEngine project, keeping it current and maintained for modern
-Java applications. It preserves the `com.googlecode.cqengine` API and module identity, compiles to Java 21 bytecode,
-and is verified on Java 21 and Java 25.
+[![CI](https://github.com/shuaibrao/cqengine/actions/workflows/ci.yml/badge.svg)](https://github.com/shuaibrao/cqengine/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/shuaibrao/cqengine/actions/workflows/codeql.yml/badge.svg)](https://github.com/shuaibrao/cqengine/actions/workflows/codeql.yml)
+[![Dependency security](https://github.com/shuaibrao/cqengine/actions/workflows/security.yml/badge.svg)](https://github.com/shuaibrao/cqengine/actions/workflows/security.yml)
+[![Performance](https://github.com/shuaibrao/cqengine/actions/workflows/performance.yml/badge.svg)](https://github.com/shuaibrao/cqengine/actions/workflows/performance.yml)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE.txt)
 
-CQEngine is an indexed Java collection with SQL-like and programmatic query APIs. Suitable indexes can reduce the
-work required for selective queries and can avoid repeated database lookups. Actual latency, throughput, allocation
-and memory use depend on the data, query, indexes, result cardinality, persistence mode and how fully callers consume
-and close each `ResultSet`. See the [benchmark guide](documentation/Benchmark.md).
+CQEngine is an indexed Java collection: add indexes to the fields of your objects, then run SQL-like or type-safe
+programmatic queries that answer from those indexes instead of scanning every object. Collections can live on-heap,
+off-heap or on disk, and full MVCC transaction isolation is available when needed.
 
-Supports on-heap persistence, off-heap persistence, disk persistence, and supports MVCC transaction isolation.
+CQEngine is [Niall Gallagher's](https://github.com/npgall) creation, and the credit for its design and
+implementation is his. CQEngine 4.0 is a maintained continuation of
+[the original project](https://github.com/npgall/cqengine), which last released 3.6.0. It preserves the
+`com.googlecode.cqengine` API and module identity as a drop-in replacement, compiles to Java 21 bytecode, and is
+verified on Java 21 and Java 25.
+
+Suitable indexes can reduce the work required for selective queries and can avoid repeated database lookups. Actual
+latency, throughput, allocation and memory use depend on the data, query, indexes, result cardinality, persistence
+mode and how fully callers consume and close each `ResultSet`. See the
+[benchmark guide](documentation/Benchmark.md).
 
 Reviews of the original CQEngine project:
   * [dzone.com: Comparing the search performance of CQEngine with standard Java collections](https://dzone.com/articles/comparing-search-performance)
   * [dzone.com: Getting started with CQEngine: LINQ for Java, only faster](https://dzone.com/articles/getting-started-cqengine-linq)
   * CQEngine in the wild: [excelian.com](http://www.excelian.com/exposure-and-counterparty-limit-checking) | [gravity4.com](http://gravity4.com/welcome-gravity4-engineering-blog/) | [snapdeal.com](http://engineering.snapdeal.com/how-were-building-a-system-to-scale-for-billions-of-requests-per-day-201601/) (3-5 billion requests/day)
+
+## How This Continuation Is Verified ##
+
+Every push to this repository is verified publicly in GitHub Actions:
+
+  * [CI](https://github.com/shuaibrao/cqengine/actions/workflows/ci.yml) builds the library and runs the unit,
+    functional and persistence test matrix on Java 21 and Java 25, the isolated consumer tests, and the source,
+    binary and exported-package compatibility baselines against upstream 3.6.0
+  * [CodeQL](https://github.com/shuaibrao/cqengine/actions/workflows/codeql.yml) runs static security analysis on
+    every push, with findings public under
+    [code scanning](https://github.com/shuaibrao/cqengine/security/code-scanning)
+  * [Dependency security](https://github.com/shuaibrao/cqengine/actions/workflows/security.yml) runs live NVD and
+    OSV vulnerability scans, CycloneDX SBOM generation and the runtime licence policy against the locked dependency
+    graph
+  * [Performance](https://github.com/shuaibrao/cqengine/actions/workflows/performance.yml) runs the benchmark
+    discovery and smoke gates; full measured evidence comes from an approved host, described in the
+    [Benchmarks](#benchmarks) section below
+
+Every dependency, plugin and piece of build metadata is version-locked and SHA-256 verified. A release additionally
+requires a long-running local qualification — the cross-runtime test matrix, JCStress concurrency qualification, a
+sustained concurrent read/write soak and the complete JMH evidence — and the
+[release workflow](RELEASING.md) refuses to sign unless a clean rebuild reproduces the qualified publication
+byte for byte. The committed evidence behind each release lives under
+[release-evidence/](release-evidence/).
 
 ## The Limits of Iteration ##
 The classic way to retrieve objects matching some criteria from a collection, is to iterate through the collection and apply some tests to each object. If the object matches the criteria, then it is added to a result set. This is repeated for every object in the collection.
@@ -632,8 +666,7 @@ often return database entities in Java collections, so CQEngine can provide inde
 
 ## Using CQEngine artifacts ##
 
-The unreleased 4.0 final will use the `io.github.shuaibrao:cqengine` coordinate shown below. The current local release
-release is `4.0.0`; use that version when consuming artifacts staged by this checkout.
+CQEngine 4.0 uses the `io.github.shuaibrao:cqengine` coordinate shown below; the current version is `4.0.0`.
 
 ```kotlin
 dependencies {

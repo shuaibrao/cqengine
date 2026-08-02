@@ -286,12 +286,14 @@ jobs:
           # different keyring on runners that carry more than one.
           printf '%s' "$SIGNING_KEY" | tr -d '\r' | env -u SIGNING_KEY gpg --batch --import
           unset SIGNING_KEY
-          echo "GNUPGHOME=$GNUPGHOME" >> "$GITHUB_ENV"
-          # The MSYS runtime rewrites POSIX-looking environment values when bash launches a
-          # native program, which would turn this home back into the D:/ form the MSYS gpg
-          # mis-parses once native Python re-spawns it; exclude it from that conversion.
-          echo "MSYS2_ENV_CONV_EXCL=GNUPGHOME" >> "$GITHUB_ENV"
-          echo "CQENGINE_GPG_EXECUTABLE=$(cygpath -m "$gpg_executable" 2>/dev/null || printf '%s' "$gpg_executable")" >> "$GITHUB_ENV"
+          # MSYS2_ENV_CONV_EXCL: the MSYS runtime rewrites POSIX-looking environment values when
+          # bash launches a native program, which would turn this home back into the D:/ form the
+          # MSYS gpg mis-parses once native Python re-spawns it; exclude it from that conversion.
+          {
+            echo "GNUPGHOME=$GNUPGHOME"
+            echo "MSYS2_ENV_CONV_EXCL=GNUPGHOME"
+            echo "CQENGINE_GPG_EXECUTABLE=$(cygpath -m "$gpg_executable" 2>/dev/null || printf '%s' "$gpg_executable")"
+          } >> "$GITHUB_ENV"
 
       - name: Prepare signed Central Portal bundle from the exact rebuilt bytes
         env:
