@@ -4973,6 +4973,12 @@ dependencies {
     upstreamApiBaseline("com.googlecode.cqengine:cqengine:3.6.0")
     upstreamApiRuntime("com.googlecode.cqengine:cqengine:3.6.0")
     upstreamOsgiBaseline("com.googlecode.cqengine:cqengine:3.6.0")
+    // The Bnd plugin's own "baseline" configuration is unused (the baseline task compares against
+    // upstreamOsgiBaseline), but when left empty it defaults to a range over this project's published
+    // coordinate. That range matches the released 4.0.0 on Maven Central, whose artifacts are
+    // intentionally absent from the dependency-verification metadata, so resolution anywhere in the
+    // build would fail verification. Declaring the same upstream baseline keeps the default inert.
+    "baseline"("com.googlecode.cqengine:cqengine:3.6.0")
 
     constraints {
         testImplementation(libs.byte.buddy) {

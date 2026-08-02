@@ -746,7 +746,8 @@ CQEngine should generally be compatible with other JVM languages besides Java to
 
 ## Project Status ##
 
-  * CQEngine 4.0 continues from the original CQEngine 3.6.0 release and is currently unreleased
+  * CQEngine 4.0.0, continuing from the original CQEngine 3.6.0 release, was released to Maven Central on
+    2 August 2026 as `io.github.shuaibrao:cqengine:4.0.0`
   * [Release notes](documentation/ReleaseNotes.md) contain the complete CQEngine release history and 4.0 upgrade notes
   * The build and consumer matrix supports Java 21 and Java 25
   * Generate current API documentation with `./gradlew javadoc`; the entry point is then `build/docs/javadoc/index.html`

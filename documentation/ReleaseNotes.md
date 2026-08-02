@@ -1,6 +1,6 @@
 # CQEngine Release Notes #
 
-## Version 4.0.0 — Unreleased ###
+## Version 4.0.0 — Released 2 August 2026 ###
 
 CQEngine 4.0 continues from CQEngine 3.6.0 with a supported Java baseline, current dependencies, a reproducible
 Gradle build and additional correctness, resource-safety and security controls. Existing
