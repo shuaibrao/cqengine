@@ -87,7 +87,13 @@ def reject_symbolic_path(path: Path, root: Path) -> None:
 
 
 def verify_repository_inventory(project: Path, repository: Path, version: str) -> dict[str, tuple[str, str]]:
-    inventory_path = project / "build/reports/publication/inventory.txt"
+    # A rebuild regenerates the inventory with fresh maven-metadata timestamps, so the qualified
+    # inventory must come from evidence: the staged copy the release workflow provides, or the
+    # qualification's own report when the bundle is prepared on the machine that qualified.
+    # Either source must hash-match the readiness manifest, so they are interchangeable in trust.
+    staged_inventory = project / "build/local-release-evidence/qualification/publication-inventory.txt"
+    generated_inventory = project / "build/reports/publication/inventory.txt"
+    inventory_path = staged_inventory if staged_inventory.is_file() else generated_inventory
     readiness_path = project / "build/local-release-evidence/qualification/local-readiness-manifest.txt"
     expected_inventory_sha256, expected_inventory_sha512 = manifest_evidence(
         readiness_path, "root:reports/publication/inventory.txt"
@@ -128,6 +134,11 @@ def verify_repository_inventory(project: Path, repository: Path, version: str) -
         expected_hashes = recorded.get(relative)
         if expected_hashes is None:
             raise BundleError(f"qualified repository file is absent from its inventory: {relative}")
+        # maven-metadata.xml and its sidecars are repository bookkeeping: every publish stamps a
+        # fresh lastUpdated wall clock into them, they never reach the Central bundle, and so they
+        # are checked for presence and shape but not byte identity.
+        if entry.name.startswith("maven-metadata.xml"):
+            continue
         if (digest(entry, "sha256"), digest(entry, "sha512")) != expected_hashes:
             raise BundleError(f"qualified repository file differs from its inventory: {relative}")
     if actual != set(recorded):
@@ -270,17 +281,18 @@ def gpg_sign(gpg: str, key_id: str, source: Path, signature: Path) -> tuple[str,
     child_environment = os.environ.copy()
     child_environment.pop("CQENGINE_GPG_PASSPHRASE", None)
     child_environment.pop("CQENGINE_GPG_KEY_ID", None)
-    stdin: str | None = None
+    stdin: bytes | None = None
     if passphrase is not None:
         if "\n" in passphrase or "\r" in passphrase:
             raise BundleError("CQENGINE_GPG_PASSPHRASE must not contain line breaks")
         command[2:2] = ["--pinentry-mode", "loopback", "--passphrase-fd", "0"]
-        stdin = passphrase + "\n"
+        # Bytes, not text: text-mode stdin turns the newline into CRLF on Windows and gpg
+        # rejects the CR-suffixed passphrase as bad.
+        stdin = (passphrase + "\n").encode("utf-8")
     subprocess.run(
         command,
         check=True,
         input=stdin,
-        text=True,
         stdout=subprocess.DEVNULL,
         env=child_environment,
     )
@@ -361,8 +373,10 @@ def main() -> int:
     key_id = args.gpg_key_id or ""
     if not FINGERPRINT.fullmatch(key_id):
         raise BundleError("CQENGINE_GPG_KEY_ID must be a 40-64 digit hexadecimal fingerprint")
-    gpg = shutil.which("gpg")
-    if not gpg:
+    # The release workflow pins the executable it imported the key with, so signing cannot resolve
+    # a second gpg installation with a different keyring on runners that carry more than one.
+    gpg = os.environ.get("CQENGINE_GPG_EXECUTABLE") or shutil.which("gpg")
+    if not gpg or not Path(gpg).is_file():
         raise BundleError("gpg is required to create Central signatures")
 
     version, repository_inventory, qualification_mode, skipped_gates = verify_qualification(

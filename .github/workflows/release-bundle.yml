@@ -28,12 +28,17 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  release:
-    name: Verify, sign, and hand off to Central
+  # The rebuild must byte-match artifacts produced by the qualification host. ANTLR, javadoc and
+  # Gradle's POM writer all end lines in the style of the operating system they run on, so the
+  # release job runs on whatever platform the committed readiness manifest records - Windows
+  # evidence rebuilds on a Windows runner, Linux evidence on a Linux runner. runs-on cannot be
+  # computed inside a job, so this job derives the label and hands it over.
+  select-platform:
+    name: Select the rebuild platform from the qualification evidence
     runs-on: ubuntu-24.04
-    timeout-minutes: 150
-    environment: maven-central
-
+    timeout-minutes: 10
+    outputs:
+      runner: ${{ steps.select.outputs.runner }}
     steps:
       - name: Verify the run ref matches the release tag
         env:
@@ -50,6 +55,50 @@ jobs:
             echo "::error::Release bundle for version $RELEASE_VERSION must run from tag v$RELEASE_VERSION, but this run is on $GITHUB_REF. Create the release tag and re-run this workflow with that tag selected as the ref."
             exit 1
           fi
+
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Select the runner recorded by the qualification evidence
+        id: select
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          manifest="release-evidence/$RELEASE_VERSION/local-readiness-manifest.txt"
+          if [ ! -f "$manifest" ]; then
+            echo "::error::committed qualification evidence is missing: $manifest"
+            exit 1
+          fi
+          qualified_os=$(sed -n 's/^os=//p' "$manifest")
+          case "$qualified_os" in
+            Windows*) runner=windows-2025 ;;
+            Linux*|Ubuntu*) runner=ubuntu-24.04 ;;
+            *)
+              echo "::error::the readiness manifest records unsupported qualification platform '$qualified_os'"
+              exit 1
+              ;;
+          esac
+          echo "runner=$runner" >> "$GITHUB_OUTPUT"
+          echo "Qualification ran on '$qualified_os'; rebuilding on $runner"
+
+  release:
+    name: Verify, sign, and hand off to Central
+    needs: select-platform
+    runs-on: ${{ needs.select-platform.outputs.runner }}
+    timeout-minutes: 150
+    environment: maven-central
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      # Git for Windows on hosted runners defaults to core.autocrlf=true, which rewrites every
+      # checked-out text file to CRLF. The qualification checkout stores and checks out LF bytes,
+      # so the rebuild checkout must keep them. Harmless on Linux runners.
+      - name: Force LF checkout
+        run: git config --global core.autocrlf false
 
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -80,8 +129,9 @@ jobs:
           evidence="release-evidence/$RELEASE_VERSION"
           completion="$evidence/qualification-completion.properties"
           readiness="$evidence/local-readiness-manifest.txt"
-          if [ ! -f "$completion" ] || [ ! -f "$readiness" ]; then
-            echo "::error::committed qualification evidence is missing under $evidence/ - run ./gradlew qualifyLocally, commit its qualification-completion.properties and local-readiness-manifest.txt there, then tag."
+          inventory="$evidence/publication-inventory.txt"
+          if [ ! -f "$completion" ] || [ ! -f "$readiness" ] || [ ! -f "$inventory" ]; then
+            echo "::error::committed qualification evidence is missing under $evidence/ - run ./gradlew qualifyLocally, commit its qualification-completion.properties, local-readiness-manifest.txt and publication inventory there, then tag."
             exit 1
           fi
           grep -Fxq 'status=passed' "$completion" || { echo "::error::qualification completion record is not successful"; exit 1; }
@@ -101,8 +151,71 @@ jobs:
             exit 1
           fi
           mkdir -p "$RUNNER_TEMP/qualification"
-          cp "$completion" "$readiness" "$RUNNER_TEMP/qualification/"
+          cp "$completion" "$readiness" "$inventory" "$RUNNER_TEMP/qualification/"
           echo "QUALIFIED_COMMIT=$source_commit" >> "$GITHUB_ENV"
+
+      # The byte-identity gate compares the rebuilt publication against artifacts produced by the
+      # qualification toolchains, so the rebuild must install exactly those JDKs, not a floating
+      # patch. This runs before the workspace switches to the qualified commit because the composite
+      # action resolves from the workspace, and the qualified commit predates its toolchain input.
+      - name: Select the qualification toolchains from the readiness manifest
+        run: |
+          manifest="$RUNNER_TEMP/qualification/local-readiness-manifest.txt"
+          qualified_os=$(sed -n 's/^os=//p' "$manifest")
+          case "$RUNNER_OS:$qualified_os" in
+            Windows:Windows*|Linux:Linux*|Linux:Ubuntu*) ;;
+            *)
+              echo "::error::runner platform $RUNNER_OS does not match qualification platform '$qualified_os'"
+              exit 1
+              ;;
+          esac
+          resolve() {
+            local record
+            record=$(sed -n "s/^$1=//p" "$manifest")
+            if [ "$(printf '%s\n' "$record" | wc -l)" != 1 ] || [ -z "$record" ]; then
+              echo "::error::readiness manifest must record exactly one $1 toolchain"
+              exit 1
+            fi
+            local vendor="${record% *}"
+            local version="${record##* }"
+            version="${version%%+*}"
+            if [[ ! "$version" =~ ^[0-9]+([.][0-9]+)*$ ]]; then
+              echo "::error::cannot derive a JDK version from $1=$record"
+              exit 1
+            fi
+            local distribution
+            case "$vendor" in
+              "Azul Zulu") distribution=zulu ;;
+              "Eclipse Temurin"|"Temurin") distribution=temurin ;;
+              *) echo "::error::unsupported qualification JDK vendor in $1=$record"; exit 1 ;;
+            esac
+            printf '%s %s\n' "$distribution" "$version"
+          }
+          toolchain21=$(resolve java21)
+          toolchain25=$(resolve java25)
+          dist21=${toolchain21% *}
+          version21=${toolchain21##* }
+          dist25=${toolchain25% *}
+          version25=${toolchain25##* }
+          if [ "$dist21" != "$dist25" ]; then
+            echo "::error::qualification used different JDK vendors for Java 21 and Java 25; the rebuild installs one distribution"
+            exit 1
+          fi
+          echo "QUALIFIED_JDK_DISTRIBUTION=$dist21" >> "$GITHUB_ENV"
+          {
+            echo 'QUALIFIED_JAVA_VERSIONS<<EOF'
+            echo "$version21"
+            echo "$version25"
+            echo 'EOF'
+          } >> "$GITHUB_ENV"
+          echo "Rebuilding with $dist21 $version21 and $version25, as the qualification evidence records"
+
+      - name: Set up build environment
+        uses: ./.github/actions/setup-build-env
+        with:
+          cache-read-only: "true"
+          java-distribution: ${{ env.QUALIFIED_JDK_DISTRIBUTION }}
+          java-versions: ${{ env.QUALIFIED_JAVA_VERSIONS }}
 
       - name: Check out the exact qualified commit
         env:
@@ -115,26 +228,22 @@ jobs:
             exit 1
           fi
 
-      - name: Set up build environment
-        uses: ./.github/actions/setup-build-env
-        with:
-          cache-read-only: "true"
-
+      # This step exists to produce the publication and its inventory, which the byte-identity gate
+      # then compares against the committed qualification evidence. Identical bytes cannot behave
+      # differently, so the test, consumer and API gates the qualified bytes already passed are
+      # deliberately not re-run here; re-executing them on a slow release runner added hours and
+      # environment flakes without adding evidence. verifyPublishedJars rides along because it
+      # shares the build graph and validates the jar contracts of exactly what was built.
+      # --no-build-cache is load-bearing: the byte-identity gate must verify bytes produced by the
+      # pinned qualification toolchains, not cache entries replayed from ordinary CI builds that
+      # used a different JDK.
       - name: Rebuild and verify the qualified publication
-        env:
-          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
         run: >-
           ./gradlew
-          check
           verifyPublishedJars
           verifyPublication
-          consumerTest
-          apiCompatibility
-          baseline
-          integrationTest
-          jmhSmoke
-          concurrencySmoke
           --no-daemon
+          --no-build-cache
           --dependency-verification strict
           --console=plain
 
@@ -143,7 +252,13 @@ jobs:
           mkdir -p build/local-release-evidence/qualification
           cp "$RUNNER_TEMP/qualification/qualification-completion.properties" \
              "$RUNNER_TEMP/qualification/local-readiness-manifest.txt" \
+             "$RUNNER_TEMP/qualification/publication-inventory.txt" \
              build/local-release-evidence/qualification/
+          # The workspace is detached at the qualified commit, so scripts resolve from that older
+          # tree, like the composite action would have. The bundle contract lives at the release
+          # tag, so restore the tag's script now that the rebuild no longer needs the pristine
+          # qualified worktree.
+          git checkout "$GITHUB_SHA" -- scripts/prepare-central-bundle.py
 
       - name: Import the protected signing key
         env:
@@ -153,17 +268,40 @@ jobs:
             echo "::error::SIGNING_KEY is required in the maven-central environment"
             exit 1
           fi
-          export GNUPGHOME="$RUNNER_TEMP/cqengine-gnupg"
-          mkdir -m 700 "$GNUPGHOME"
-          printf '%s' "$SIGNING_KEY" | env -u SIGNING_KEY gpg --batch --import
+          # The runner's gpg is the MSYS build, which treats a GNUPGHOME that does not start with
+          # a slash as relative and prepends the working directory, so the home must be in POSIX
+          # form (/d/a/_temp/...). cygpath -u produces it; on Linux cygpath is absent and the
+          # plain path is already correct.
+          temp_root="$(cygpath -u "$RUNNER_TEMP" 2>/dev/null || printf '%s' "$RUNNER_TEMP")"
+          export GNUPGHOME="$temp_root/cqengine-gnupg"
+          mkdir "$GNUPGHOME"
+          # NTFS has no POSIX modes and chmod fails there; gpg on Windows does not require 700.
+          if [ "$RUNNER_OS" != "Windows" ]; then
+            chmod 700 "$GNUPGHOME"
+          fi
+          gpg_executable="$(command -v gpg)"
+          gpg --version | head -n 2
+          # The CR strip guards against a secret pasted with Windows line endings, and pinning the
+          # executable stops the bundle script resolving a second gpg installation with a
+          # different keyring on runners that carry more than one.
+          printf '%s' "$SIGNING_KEY" | tr -d '\r' | env -u SIGNING_KEY gpg --batch --import
           unset SIGNING_KEY
           echo "GNUPGHOME=$GNUPGHOME" >> "$GITHUB_ENV"
+          # The MSYS runtime rewrites POSIX-looking environment values when bash launches a
+          # native program, which would turn this home back into the D:/ form the MSYS gpg
+          # mis-parses once native Python re-spawns it; exclude it from that conversion.
+          echo "MSYS2_ENV_CONV_EXCL=GNUPGHOME" >> "$GITHUB_ENV"
+          echo "CQENGINE_GPG_EXECUTABLE=$(cygpath -m "$gpg_executable" 2>/dev/null || printf '%s' "$gpg_executable")" >> "$GITHUB_ENV"
 
       - name: Prepare signed Central Portal bundle from the exact rebuilt bytes
         env:
           CQENGINE_GPG_KEY_ID: ${{ secrets.SIGNING_KEY_ID }}
           CQENGINE_GPG_PASSPHRASE: ${{ secrets.SIGNING_PASSWORD }}
-        run: scripts/prepare-central-bundle.py
+        # Prefer python: Windows runners provide it as a real executable while their python3 can be a
+        # Store stub, and Ubuntu runner images provide both.
+        run: |
+          PYTHON=$(command -v python || command -v python3)
+          "$PYTHON" scripts/prepare-central-bundle.py
 
       - name: Retain signed bundle and verification evidence
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -194,7 +332,8 @@ jobs:
             *) publishing_type=USER_MANAGED ;;
           esac
           bundle="build/central/cqengine-$RELEASE_VERSION-central-bundle.zip"
-          deployment_id=$(python3 scripts/central-portal.py upload \
+          PYTHON=$(command -v python || command -v python3)
+          deployment_id=$("$PYTHON" scripts/central-portal.py upload \
             "$bundle" \
             "cqengine-$RELEASE_VERSION-$GITHUB_RUN_ID" \
             "$publishing_type")
@@ -214,15 +353,16 @@ jobs:
           central_username=$CENTRAL_TOKEN_USERNAME
           central_password=$CENTRAL_TOKEN_PASSWORD
           unset CENTRAL_TOKEN_USERNAME CENTRAL_TOKEN_PASSWORD
+          PYTHON=$(command -v python || command -v python3)
           for attempt in $(seq 1 120); do
             response=$(CENTRAL_TOKEN_USERNAME="$central_username" \
               CENTRAL_TOKEN_PASSWORD="$central_password" \
-              python3 scripts/central-portal.py status "$DEPLOYMENT_ID")
-            state=$(python3 -c 'import json,sys; d=json.load(sys.stdin); s=d["deploymentState"]; p=d.get("purls", []); d.get("deploymentId") == sys.argv[1] or sys.exit("different deployment"); (not p or p == [sys.argv[2]]) or sys.exit("different coordinate"); print(s)' "$DEPLOYMENT_ID" "$expected_purl" <<<"$response")
+              "$PYTHON" scripts/central-portal.py status "$DEPLOYMENT_ID")
+            state=$("$PYTHON" -c 'import json,sys; d=json.load(sys.stdin); s=d["deploymentState"]; p=d.get("purls", []); d.get("deploymentId") == sys.argv[1] or sys.exit("different deployment"); (not p or p == [sys.argv[2]]) or sys.exit("different coordinate"); print(s)' "$DEPLOYMENT_ID" "$expected_purl" <<<"$response")
             echo "[$attempt/120] deploymentState=$state"
             case "$state" in
               FAILED)
-                printf '%s\n' "$response" | python3 -m json.tool >&2
+                printf '%s\n' "$response" | "$PYTHON" -m json.tool >&2
                 echo "::error::Central Portal validation failed; see the errors above."
                 exit 1
                 ;;
@@ -250,7 +390,13 @@ jobs:
       - name: Remove imported signing material
         if: always()
         run: |
-          if [ -n "${GNUPGHOME:-}" ] && [[ "$GNUPGHOME" == "$RUNNER_TEMP"/* ]]; then
-            gpgconf --kill all || true
-            rm -rf -- "$GNUPGHOME"
+          # GNUPGHOME may be in cygpath-POSIX form, so match the fixed directory name rather than
+          # the RUNNER_TEMP prefix spelling; the name is only ever created by this workflow.
+          if [ -n "${GNUPGHOME:-}" ] && [ -d "$GNUPGHOME" ]; then
+            case "$GNUPGHOME" in
+              */cqengine-gnupg)
+                gpgconf --kill all || true
+                rm -rf -- "$GNUPGHOME"
+                ;;
+            esac
           fi

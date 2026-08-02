@@ -8,6 +8,13 @@ inputs:
     default: |
       21
       25
+  java-distribution:
+    description: >-
+      setup-java distribution to install. Ordinary CI stays on floating Temurin so a new JDK patch
+      surfaces early; the release rebuild passes the exact distribution the qualification evidence
+      records, because the byte-identity gate compares against artifacts built with it.
+    required: false
+    default: temurin
   cache-read-only:
     description: Whether this job may only read the shared Gradle cache.
     required: false
@@ -19,7 +26,7 @@ runs:
     - name: Set up Java toolchains
       uses: actions/setup-java@0f481fcb613427c0f801b606911222b5b6f3083a # v5.5.0
       with:
-        distribution: temurin
+        distribution: ${{ inputs.java-distribution }}
         java-version: ${{ inputs.java-versions }}
 
     - name: Validate Gradle wrapper

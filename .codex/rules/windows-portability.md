@@ -23,6 +23,9 @@ These defaults silently weaken fail-closed checks; each one has already produced
 - `Set-StrictMode` rejects `.Count` on a scalar, so a pipeline that yields one item breaks a length check. Wrap pipeline results in `@()`.
 - Resolve system executables by absolute path when the script narrows `PATH`; `cmd.exe`, `reg.exe` and `powershell.exe` are otherwise unreachable.
 - MSYS tools inherit POSIX path parsing. GNU `tar` reads `C:\path` as a `host:path` remote spec and tries to resolve the drive letter as a hostname, so pass `--force-local` and convert separators to `/`; `--force-local` alone still fails on backslashes.
+- MSYS `gpg` treats a `GNUPGHOME` that does not start with `/` as relative and prepends the working directory, so `D:/...` and `D:\...` spellings both fail with `keyblock resource ... No such file or directory`; give it the `cygpath -u` POSIX form.
+- MSYS bash rewrites POSIX-looking environment values back to `D:/` form whenever it launches a native program, so a POSIX path that must survive a bash → native → MSYS process chain (for example `GNUPGHOME` through Python back into `gpg`) needs `MSYS2_ENV_CONV_EXCL=<NAME>` to cross the native boundary verbatim.
+- Python `subprocess` text-mode stdin translates `\n` to `\r\n` on Windows, so a piped secret such as a gpg loopback passphrase gains a trailing CR and is rejected as wrong. Pipe exact-byte payloads as `bytes`, never through `text=True`.
 - Emit progress with `Write-Host`, not `Write-Output`: inside a function the latter joins the return value.
 - `2>$null` on a native command discards its stdout as well, so a captured probe silently returns nothing. Set `$ErrorActionPreference` around the call instead of redirecting.
 - Keep quote characters out of `-c`/`-e` snippets passed to interpreters; build the interesting part of the string on the PowerShell side so no host re-quotes it.

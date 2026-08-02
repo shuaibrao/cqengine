@@ -160,7 +160,26 @@ commit does not misrepresent the measured library bytes.
 Signing and the Central Portal hand-off run on a GitHub-hosted runner via `.github/workflows/release-bundle.yml`.
 The workflow never re-runs the multi-hour qualification; it proves the runner's rebuild reproduces the qualified
 bytes by hashing the rebuilt publication inventory against the committed readiness manifest, and refuses to sign
-on any mismatch.
+on any mismatch. Its rebuild produces the publication and its inventory and validates the jar content
+contracts; nothing else is re-executed there. Identical bytes cannot behave differently, so the test, consumer
+and API gates the qualified bytes already passed during qualification — re-confirmed by CI on every push — would
+add hours of release-runner time without adding evidence. To make that reproduction possible, the rebuild environment is driven by the qualification
+evidence rather than by a floating CI default:
+
+- the workflow reads the `java21` and `java25` toolchain records from the committed readiness manifest and
+  installs exactly that JDK distribution and those versions, because a different compiler patch level can
+  legitimately emit different bytes;
+- a first job reads the `os` record from the manifest and selects the matching runner — Windows evidence
+  rebuilds on a Windows runner, Linux evidence on a Linux runner — because ANTLR-generated sources, javadoc
+  HTML and Gradle's generated POM all end lines in the style of the operating system that produces them, and
+  a guard inside the release job re-checks the pairing;
+- the runner checkout forces `core.autocrlf=false` so checked-out text keeps the LF bytes Git stores; and
+- the rebuild passes `--no-build-cache` so every artifact is produced by the pinned toolchains rather than
+  replayed from cache entries that ordinary CI built with different ones.
+
+`maven-metadata.xml` and its checksums are compared for presence but not byte identity: every publish stamps
+a fresh `lastUpdated` wall clock into them, and they are local-repository bookkeeping that never enters the
+Central bundle.
 
 1. Qualify the release commit locally with the wrapper for your platform (above). The commit qualified is the commit
    whose bytes are published. The bundle inventory records which wrapper produced the evidence in
@@ -172,8 +191,13 @@ on any mismatch.
    cp build/local-release-evidence/qualification/qualification-completion.properties \
       build/local-release-evidence/qualification/local-readiness-manifest.txt \
       release-evidence/<version>/
+   cp build/reports/publication/inventory.txt release-evidence/<version>/publication-inventory.txt
    git add release-evidence/<version> && git commit
    ```
+
+   The publication inventory is already bound by hash inside the readiness manifest; committing the file
+   itself lets the workflow compare the rebuilt repository per artifact while excluding the
+   timestamp-bearing `maven-metadata.xml`.
 
    Evidence-only commits after the qualified commit are safe: the workflow checks out and rebuilds the qualified
    `sourceCommit` itself (which must be an ancestor of the tag), so the published bytes are still the qualified ones.
