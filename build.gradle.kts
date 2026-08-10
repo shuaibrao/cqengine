@@ -5949,7 +5949,7 @@ val expectedRuntimeCoordinates = listOf(
     "com.googlecode.concurrent-trees:concurrent-trees:2.6.1",
     "org.antlr:antlr4-runtime:4.13.2",
     "org.javassist:javassist:3.32.0-GA",
-    "org.objenesis:objenesis:3.4",
+    "org.objenesis:objenesis:3.6",
     "org.xerial:sqlite-jdbc:3.53.2.1",
 )
 val expectedDirectRuntimeDependencyCoordinates = listOf(
@@ -5962,7 +5962,7 @@ val expectedDirectRuntimeDependencyCoordinates = listOf(
 val expectedRuntimeDependencyEdges = listOf(
     "com.esotericsoftware:kryo:5.6.2 -> com.esotericsoftware:minlog:1.3.1",
     "com.esotericsoftware:kryo:5.6.2 -> com.esotericsoftware:reflectasm:1.11.9",
-    "com.esotericsoftware:kryo:5.6.2 -> org.objenesis:objenesis:3.4",
+    "com.esotericsoftware:kryo:5.6.2 -> org.objenesis:objenesis:3.6",
 )
 
 val expectedRuntimeArtifactNameByCoordinate = linkedMapOf(
@@ -5972,7 +5972,7 @@ val expectedRuntimeArtifactNameByCoordinate = linkedMapOf(
     "com.googlecode.concurrent-trees:concurrent-trees:2.6.1" to "concurrent-trees-2.6.1.jar",
     "org.antlr:antlr4-runtime:4.13.2" to "antlr4-runtime-4.13.2.jar",
     "org.javassist:javassist:3.32.0-GA" to "javassist-3.32.0-GA.jar",
-    "org.objenesis:objenesis:3.4" to "objenesis-3.4.jar",
+    "org.objenesis:objenesis:3.6" to "objenesis-3.6.jar",
     "org.xerial:sqlite-jdbc:3.53.2.1" to "sqlite-jdbc-3.53.2.1.jar",
 )
 val expectedDependencyCheckArtifactNames = expectedRuntimeArtifactNameByCoordinate.values.toList()
@@ -5983,7 +5983,7 @@ val expectedRuntimeLicenseIdsByCoordinate = linkedMapOf(
     "com.googlecode.concurrent-trees:concurrent-trees:2.6.1" to "Apache-2.0",
     "org.antlr:antlr4-runtime:4.13.2" to "BSD-3-Clause",
     "org.javassist:javassist:3.32.0-GA" to "Apache-2.0,LGPL-2.1-only,MPL-1.1",
-    "org.objenesis:objenesis:3.4" to "Apache-2.0",
+    "org.objenesis:objenesis:3.6" to "Apache-2.0",
     "org.xerial:sqlite-jdbc:3.53.2.1" to "Apache-2.0",
 )
 
