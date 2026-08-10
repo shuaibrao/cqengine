@@ -4,7 +4,7 @@ bnd = "7.3.0"
 byteBuddy = { strictly = "1.18.5" }
 concurrentTrees = "2.6.1"
 cyclonedx = "3.3.0"
-dependencyCheck = "12.2.2"
+dependencyCheck = "13.0.0"
 equalsverifier = "4.5"
 findsecbugs = "1.14.0"
 jacoco = "0.8.15"
