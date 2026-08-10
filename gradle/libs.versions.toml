@@ -19,7 +19,7 @@ licenseReport = "3.1.4"
 mockito = "5.23.0"
 objenesis = { strictly = "3.4" }
 spotbugs = "4.10.2"
-spotbugsPlugin = "6.5.9"
+spotbugsPlugin = "6.5.10"
 sqlite = "3.53.2.1"
 
 [libraries]
