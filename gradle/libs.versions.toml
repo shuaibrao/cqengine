@@ -3,7 +3,7 @@ antlr = "4.13.2"
 bnd = "7.3.0"
 byteBuddy = { strictly = "1.18.5" }
 concurrentTrees = "2.6.1"
-cyclonedx = "3.3.0"
+cyclonedx = "3.4.1"
 dependencyCheck = "12.2.2"
 equalsverifier = "4.5"
 findsecbugs = "1.14.0"
